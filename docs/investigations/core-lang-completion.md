@@ -271,8 +271,7 @@ Focused SDK probes distinguish `[+1]`, `[+(1)]`, and `[+(-1)]` (available early)
 from `[-(1)]`, `[-(-1)]`, `[~1]`, and `[!false]` (runtime). Direct negative
 Long/Double tokens are available early; scalar `+(2l)`, `4l+5l`, and
 `"a"+"b"` are runtime initializers. A stored `true ? "yes" : "no"` also compiles
-and observes Null through an earlier alias in the SDK. Our shared-initializer
-straight-line restriction currently rejects this conditional; see the plan.
+and observes Null through an earlier alias in the SDK.
 
 A separate signed-Long observation needs care: `module P { const NEG=-7l; }`
 prints `4294967289` through `System.println(P.NEG)` in this SDK configuration.
@@ -286,8 +285,7 @@ expected lines. In focused SDK probes, early aliases of
 `1+2`, `1.5f+2.25f`, `2<2.5f`, `(true and false) or true`, and `true ? 7:8`
 all observe Null. These calculated scalar declarations are runtime initializers
 at `-O 0`, not literal defaults. The specimen covers arithmetic/comparisons and
-native enum constants using ordinary initializer operations; logical/conditional
-initializers still require the planned control-flow support.
+native enum constants using ordinary initializer operations.
 
 Another SDK probe uses `const EARLY=ALIAS; const ALIAS=LITERAL; const LITERAL=7;`:
 EARLY is Null while ALIAS becomes 7. `const SELF=SELF; const A=B; const B=A;`
@@ -306,6 +304,28 @@ reads, another module's initializer, startup access, and class allocation throug
 a reopened cross-file module. SDK and generated programs match its 23 expected
 console lines. Scalar members use the ordinary shared lookup so
 module effects and owner activation checks remain visible to the toolchain.
+
+The [branching initializer specimen](../../examples/compiler-branch-initializers/README.md)
+uses the same SDK/target/settings. Trace calls distinguish selected and skipped
+operands for both logical spellings and nested conditionals. Unselected division
+by zero remains unevaluated, Array aliases share their selected container, and
+a conditional native constant retains its NumberFormat contract. SDK and
+generated programs match its 33 expected console lines.
+
+A variant declares `const CAPTURED=LATER==null ? LATER : Trace.array(95,0);`
+before LATER in both owners and prints each `CAPTURED==null` during `onStart`.
+SDK 9.2.0 fails with this error (reflowed):
+
+```text
+Cannot invoke
+"com.garmin.monkeybrains.compiler2.ir.types.Type.getId()"
+because "type2" is null
+```
+
+Removing those declarations and prints restores a successful build. This records
+a compiler failure involving the forward nullable Array conditional; it does
+not establish that the expression is forbidden by the language. The retained
+specimen omits it.
 
 [constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 

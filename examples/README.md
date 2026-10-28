@@ -73,6 +73,8 @@ and future Rust toolchain experiments.
   arithmetic/comparison initialization, Null alias cycles, and native enum types.
 - [compiler-module-literals](compiler-module-literals/README.md): lazy module
   activation through scalar literals, same-owner defaults, and cross-file reads.
+- [compiler-branch-initializers](compiler-branch-initializers/README.md): nested
+  conditional/short-circuit initialization, skipped effects, and shared aliases.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural

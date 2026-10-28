@@ -10,7 +10,7 @@ owning files for the definition to read or change.
 | Concern | Implementation entry points | Contract |
 |---|---|---|
 | Source syntax and names | [parser.rs], [names.rs] | [Source grammar] |
-| Constant evaluation and storage | [constants.rs], [parser.rs], [unit.rs], [source_ir.rs] | [Constants] |
+| Constant storage and initialization | [constants.rs], [parser.rs], [unit.rs], [source_ir.rs], [control_flow.rs] | [Constants] |
 | Source receiver member candidates | [source_calls.rs] | [Source identities] |
 | Source → IR candidates | [source_ir.rs], [source_types.rs], [unchecked.rs] | [Source semantics] |
 | Source ambiguity reporting | [type_check.rs] | [Checking policy] |
@@ -116,7 +116,9 @@ before bodies, retrying unresolved dependencies without placeholder types.
 Source initialization separates literal defaults from runtime expression order.
 The same order determines pre-assignment Null views during type inference and
 body construction; unit validation rechecks those views and summarizes reads
-and owner activation across calls. Class constants retain readonly field
+and owner activation across calls. Shared initializer assignment proofs use CFG
+dataflow, tracking unwritten/written paths independently of physical block order.
+Class constants retain readonly field
 contracts and a checked allocation initializer. Source construction uses private allocation/completion
 builders to preserve allocation before user argument effects.
 Typedef targets reuse annotation parsing with cached closed terms and guarded

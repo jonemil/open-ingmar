@@ -1,4 +1,4 @@
-//! Block structure, reachability, and definite local initialization for semantic IR.
+//! Block structure, reachability, and definite initialization for semantic IR.
 use crate::{BlockId, IrError, LocalId, LocatedOperation, Operation};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -169,6 +169,102 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
         predecessors.get_mut(&to).unwrap().push(from);
     }
     Ok(Structure::new(explicit, blocks, predecessors))
+}
+
+/// Possible assignment states immediately before an initializer operation.
+/// Both flags hold when incoming paths disagree about whether a write occurred.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct SharedWriteState {
+    pub unwritten: bool,
+    pub written: bool,
+}
+
+/// Track shared writes over the checked CFG, rejecting repeatable writes and
+/// returns without an assignment. Disconnected validation components start
+/// unwritten too; they cannot borrow a proof from entry-reachable code.
+/// Target ownership and read contracts remain compilation-unit obligations.
+pub(crate) fn shared_write_states(
+    operations: &[LocatedOperation],
+) -> Result<Vec<SharedWriteState>, IrError> {
+    let structure = validate(operations)?;
+    let writes = operations
+        .iter()
+        .enumerate()
+        .filter_map(|(at, op)| {
+            matches!(op.operation, Operation::SharedAssign { .. }).then_some(structure.blocks[at])
+        })
+        .collect::<BTreeSet<_>>();
+    let mut inputs = structure
+        .blocks
+        .iter()
+        .map(|block| (*block, SharedWriteState::default()))
+        .collect::<BTreeMap<_, _>>();
+    let mut outputs = inputs.clone();
+    loop {
+        let mut changed = false;
+        for (block, input) in &mut inputs {
+            let mut incoming = SharedWriteState {
+                unwritten: structure.roots.contains(block),
+                written: false,
+            };
+            for predecessor in structure.predecessors.get(block).into_iter().flatten() {
+                let previous = outputs[predecessor];
+                incoming.unwritten |= previous.unwritten;
+                incoming.written |= previous.written;
+            }
+            let outgoing = if writes.contains(block) && (incoming.unwritten || incoming.written) {
+                SharedWriteState {
+                    unwritten: false,
+                    written: true,
+                }
+            } else {
+                incoming
+            };
+            changed |= *input != incoming || outputs[block] != outgoing;
+            *input = incoming;
+            outputs.insert(*block, outgoing);
+        }
+        if !changed {
+            break;
+        }
+    }
+    let mut states = Vec::with_capacity(operations.len());
+    let mut reachable_write = false;
+    for (at, located) in operations.iter().enumerate() {
+        let block = structure.blocks[at];
+        let state = inputs.get_mut(&block).unwrap();
+        states.push(*state);
+        let message = match located.operation {
+            Operation::SharedAssign { .. } if state.written => {
+                Some("shared initializer may assign its binding more than once")
+            }
+            Operation::SharedAssign { .. } => {
+                reachable_write |= structure.reachable(block);
+                *state = SharedWriteState {
+                    unwritten: false,
+                    written: true,
+                };
+                None
+            }
+            Operation::ReturnVoid | Operation::Return { .. } if state.unwritten => {
+                Some("shared binding is not initialized on every returning path")
+            }
+            _ => None,
+        };
+        if let Some(message) = message {
+            return Err(IrError {
+                operation: Some(at),
+                message: message.into(),
+            });
+        }
+    }
+    if !reachable_write {
+        return Err(IrError {
+            operation: None,
+            message: "shared initializer requires an entry-reachable assignment".into(),
+        });
+    }
+    Ok(states)
 }
 
 /// Compute the locals definitely initialized at each block entry. The greatest

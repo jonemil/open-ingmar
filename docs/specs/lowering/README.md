@@ -396,6 +396,10 @@ initializer frame. They reuse existing VM operations and field-symbol aliases.
 Pre-assignment Null snapshots retain the same lookup instructions; their checked
 IR result view does not replace the read with a literal or change VM encoding.
 Readonly bindings are enforced by unit contracts; no readonly VM flag is assumed.
+When a conditional or short-circuit initializer produces an incoming block
+value, stage it in a temporary local before pushing the shared write's receiver
+and field. Nested expressions reuse the same staging rules. Branches, frame
+loads/stores, and field writes use the existing VM instruction encodings.
 
 Owner allocation hooks invoke reserved shared initializer methods with
 `getselfv; invokemz; popv` in the unit's initialization order, then return. Each initializer

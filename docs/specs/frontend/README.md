@@ -784,8 +784,12 @@ Literal defaults initialize before runtime expressions. Within those phases,
 source-file and declaration order are retained. Stored constants
 require compilation-unit mode.
 
-A shared initializer must assign its binding once through a straight-line
-prefix. Owner re-entry and potentially shutting down calls are rejected,
+A shared initializer must assign its binding exactly once on every returning
+path. Conditional expressions and Boolean `&&`/`and` and `||`/`or` use their
+ordinary short-circuit semantics, including when nested inside other expressions.
+Only the selected operands execute; the resulting value is staged before the
+shared write's receiver setup. Owner re-entry and potentially shutting down
+calls before all owner bindings are initialized are rejected,
 including dependencies reached through source helpers,
 constructors, and lazy module initialization. Ordinary functions reload their
 lexical owner, so calling a function in the initializing owner is re-entry even
@@ -806,9 +810,8 @@ binding initializes; it does not create a live alias to the slot. Reads after
 assignment use the completed binding contract. Reads through another owner
 activate that owner and use its initialized contract. Direct self-reads and
 same-owner alias cycles can therefore capture Null without reactivating the
-owner. Initializers requiring expression branches, including logical
-short-circuit and conditional expressions, remain outside the current
-straight-line profile.
+owner. Readiness and effect checks cover all CFG paths without using literal
+conditions to waive an unsafe owner re-entry or shutdown effect.
 
 All files contribute declarations before resolution. Stored contracts are
 resolved across global, module, and class scopes before initializer bodies or
@@ -863,7 +866,8 @@ See the [scalar example](../../../examples/compiler-constants/README.md),
 [Null snapshot example](../../../examples/compiler-null-snapshots/README.md),
 [default eligibility example](../../../examples/compiler-constant-defaults/README.md),
 [scalar initializer example](../../../examples/compiler-scalar-initializers/README.md),
-[module activation example](../../../examples/compiler-module-literals/README.md), and
+[module activation example](../../../examples/compiler-module-literals/README.md),
+[branching initializer example](../../../examples/compiler-branch-initializers/README.md), and
 [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
 ### Type aliases

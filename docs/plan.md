@@ -36,10 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Support Boolean logical/conditional and other control-flow-producing
-  global/module initializers, preserving short-circuit evaluation:
-  stage merged values before shared writes and prove assignment exactly once
-  on every returning path without weakening owner re-entry/shutdown checks.
 - [ ] Support constant declaration annotations and comma-separated declarations.
 - [ ] Parse named/anonymous `enum` declarations, implicit/explicit values, member
   lookup, and enum annotations.

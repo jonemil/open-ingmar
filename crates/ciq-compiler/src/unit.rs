@@ -2858,8 +2858,17 @@ impl CompilationUnit {
                 .enumerate()
                 .find(|(_, (o, f))| *o == owner && f.name() == name)
                 .unwrap();
-            let mut written = false;
+            let states = crate::control_flow::shared_write_states(function.operations())
+                .map_err(|error| fail(Some(index), error.operation, &error.message))?;
             for (operation, op) in function.operations().iter().enumerate() {
+                let state = states[operation];
+                let binding_ready = |module: &Option<String>, field: &String| {
+                    ready.contains(&(module.clone(), field.clone()))
+                        || (*module == constant.module
+                            && *field == constant.name
+                            && state.written
+                            && !state.unwritten)
+                };
                 let mut required = SharedReads::default();
                 if let Operation::SharedRead {
                     module,
@@ -2876,8 +2885,19 @@ impl CompilationUnit {
                             "shared read requires a declared binding",
                         )
                     })?;
-                    let snapshot =
-                        target == owner && !ready.contains(&(module.clone(), field.clone()));
+                    if *module == constant.module
+                        && *field == constant.name
+                        && state.written
+                        && state.unwritten
+                        && declaration.value_type != ReturnType::Null
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "shared read requires a definite initialized or Null slot view",
+                        ));
+                    }
+                    let snapshot = target == owner && !binding_ready(module, field);
                     let expected = if snapshot {
                         &ReturnType::Null
                     } else {
@@ -2910,7 +2930,7 @@ impl CompilationUnit {
                     ));
                 }
                 if required.fields.iter().any(|(module, field)| {
-                    *module == constant.module && !ready.contains(&(module.clone(), field.clone()))
+                    *module == constant.module && !binding_ready(module, field)
                 }) {
                     return Err(fail(
                         Some(index),
@@ -2918,10 +2938,10 @@ impl CompilationUnit {
                         "shared initializer reads an incomplete binding or initialization cycle",
                     ));
                 }
-                let pending = self.shared.iter().any(|c| {
-                    c.module == constant.module
-                        && !ready.contains(&(c.module.clone(), c.name.clone()))
-                });
+                let pending = self
+                    .shared
+                    .iter()
+                    .any(|c| c.module == constant.module && !binding_ready(&c.module, &c.name));
                 if pending
                     && (requests_exit(&op.operation)
                         || erased_callbacks(function, &op.operation)
@@ -2937,39 +2957,17 @@ impl CompilationUnit {
                         "initialize shared bindings before calls that may request shutdown",
                     ));
                 }
-                match &op.operation {
-                    Operation::SharedAssign { module, field, .. } => {
-                        if written || *module != constant.module || *field != constant.name {
-                            return Err(fail(
-                                Some(index),
-                                Some(operation),
-                                "shared initializer must assign its binding exactly once",
-                            ));
-                        }
-                        written = true;
-                        ready.insert((module.clone(), field.clone()));
-                    }
-                    Operation::Branch { .. }
-                    | Operation::Jump { .. }
-                    | Operation::JumpValue { .. }
-                        if !written =>
-                    {
+                if let Operation::SharedAssign { module, field, .. } = &op.operation {
+                    if *module != constant.module || *field != constant.name {
                         return Err(fail(
                             Some(index),
                             Some(operation),
-                            "shared initialization requires a straight-line assignment prefix",
+                            "shared initializer may assign only its declared binding",
                         ));
                     }
-                    Operation::ReturnVoid if !written => {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            "shared binding is not initialized",
-                        ));
-                    }
-                    _ => {}
                 }
             }
+            ready.insert((constant.module.clone(), constant.name.clone()));
         }
         for (index, (owner, function)) in bodies.iter().enumerate() {
             if function.name().starts_with("__ciq_initialize_shared_")

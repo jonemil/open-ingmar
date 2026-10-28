@@ -38,7 +38,6 @@ fn readonly_writes_hidden_calls_and_initialization_dependencies_are_checked() {
         "const X=f();const Y=[1];function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return Y;}",
         "const X=M.f();module M{const Y=g();function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return Y;}}function g() as Toybox.Lang.Array<Toybox.Lang.Number>{return X;}",
         "const X=f();function f() as Toybox.Lang.Array<Toybox.Lang.Number>{Toybox.System.exit();return [1];}",
-        "const X=true ? [1] : [2];function f(){}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }

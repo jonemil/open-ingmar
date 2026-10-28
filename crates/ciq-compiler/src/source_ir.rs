@@ -3347,8 +3347,11 @@ impl Builder<'_> {
             let expected = self.calls.shared_fields
                 [&(self.calls.current_module.clone(), name.clone())]
                 .clone();
-            let value =
-                self.value_with_context(value, locals, construction_type(&expected.api_type()))?;
+            let value = self.value_for_setup_with_context(
+                value,
+                locals,
+                construction_type(&expected.api_type()),
+            )?;
             self.push(
                 Operation::SharedAssign {
                     module: self.calls.current_module.clone(),
