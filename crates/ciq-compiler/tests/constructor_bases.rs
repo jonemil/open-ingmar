@@ -29,7 +29,7 @@ fn unit_rejects_a_constructor_projection_that_disagrees_with_its_class() {
     let changed = text
         .lines()
         .map(|line| {
-            if line.starts_with(".new-source ") {
+            if line.starts_with(".new-source ") || line.starts_with(".begin-source ") {
                 line.replace("HelloView WatchUi.View", "MinimalConsoleApp WatchUi.View")
             } else if line.starts_with(".function getInitialView ") {
                 line.replace("tuple(source(HelloView@WatchUi.View))", "tuple(view)")
@@ -47,7 +47,9 @@ fn unit_rejects_a_constructor_projection_that_disagrees_with_its_class() {
 fn standalone_constructor_requires_an_explicit_supported_projection() {
     let prefix = "ciq-ir\n.function f\n";
     let suffix = "\n.return %0\n.end\n";
-    let valid = format!("{prefix}.new-source %0 HelloView WatchUi.View{suffix}");
+    let valid = format!(
+        "{prefix}.begin-source &0 HelloView WatchUi.View\n.new-source %0 HelloView WatchUi.View &0{suffix}"
+    );
     let function = parse_function_ir(&valid).unwrap();
     assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     for constructor in [

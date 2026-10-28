@@ -183,9 +183,24 @@ constant Array contents. Its type table marks String, Long, and Double as heap
 values. The retained readable snapshot is
 `scratch/official-docs/language-reference-module.readable.txt`.
 
-Our [constant profile](../specs/frontend/README.md#constants) supports immediate
-values; heap storage and remaining initializer forms are explicit plan items.
-SDK/compiler executables were not inspected.
+The [stored-class specimen](../../examples/compiler-class-constants/README.md)
+uses the same SDK/target/settings. SDK and generated simulator runs match its
+expected output, covering String identity, Long/Double values, container aliasing
+and mutation, source-object storage, differing union-member values, application
+constants, and constructor effects. A focused SDK probe with
+`const A = Trace.build()` printing 1 and `initialize()` printing 2 yields
+`1, 2, 2, 7` after allocation, an explicit second `initialize()`, and an element
+read. Adding an argument expression that prints 3 yields `1, 3, 2, 2, 7`:
+allocation initialization precedes user argument evaluation and is not repeated
+by user `initialize()`.
+
+The authored SDK PRG's allocation hooks have no ordinary argument-count
+prologue. Tail-transferring into a generated ordinary initializer with
+`argcincsp` crashed before onStart; invoking it through a reserved method slot
+provides a working call frame. This is evidence about application allocation
+entry conventions, not inspection of SDK/compiler executables. The
+[constant profile](../specs/frontend/README.md#constants) owns implemented
+contracts and limits.
 
 [constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 

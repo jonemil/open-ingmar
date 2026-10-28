@@ -1,4 +1,4 @@
-//! Definite completion of private container builders across control-flow joins.
+//! Definite completion of private construction builders across control-flow joins.
 use crate::{
     ArrayElement, BlockId, BuilderId, DictionaryType, IrError, LocatedOperation, Operation,
     control_flow::Structure,
@@ -9,6 +9,10 @@ use std::collections::{BTreeMap, VecDeque};
 pub(crate) enum Contract {
     Array(ArrayElement),
     ByteArray,
+    Source {
+        class: String,
+        base: crate::ClassBase,
+    },
     Dictionary(DictionaryType),
     Record(BTreeMap<String, crate::api::Type>),
 }
@@ -20,7 +24,7 @@ impl Contract {
                 crate::api::Type::named("Toybox.Lang.Number"),
                 crate::api::Type::named("Toybox.Lang.Char"),
             ])),
-            Self::Dictionary(_) | Self::Record(_) => None,
+            Self::Dictionary(_) | Self::Record(_) | Self::Source { .. } => None,
         }
     }
     pub(crate) fn dictionary(&self) -> Option<DictionaryType> {
@@ -124,11 +128,36 @@ pub(crate) fn validate(
             }
         }
     }
+    for (index, op) in operations.iter().enumerate() {
+        if let Operation::SourceBegin {
+            builder,
+            ref class,
+            base,
+        } = op.operation
+        {
+            if declarations
+                .insert(
+                    builder,
+                    (
+                        Contract::Source {
+                            class: class.clone(),
+                            base,
+                        },
+                        0,
+                    ),
+                )
+                .is_some()
+            {
+                return Err(fail(index, "duplicate construction builder declaration"));
+            }
+        }
+    }
     if declarations.is_empty()
         && !operations.iter().any(|o| {
             matches!(
                 o.operation,
-                Operation::DictionaryFill { .. }
+                Operation::SourceNew { .. }
+                    | Operation::DictionaryFill { .. }
                     | Operation::DictionaryFinish { .. }
                     | Operation::ArrayFill { .. }
                     | Operation::ArrayFillMany { .. }
@@ -153,12 +182,33 @@ pub(crate) fn validate(
         let mut successors = vec![];
         for &index in &blocks[&block] {
             match operations[index].operation {
-                Operation::DictionaryBegin { builder, .. }
+                Operation::SourceBegin { builder, .. }
+                | Operation::DictionaryBegin { builder, .. }
                 | Operation::RecordBegin { builder, .. }
                 | Operation::ArrayBegin { builder, .. }
                 | Operation::ByteArrayBegin { builder, .. } => {
                     if active.insert(builder, 0).is_some() {
                         return Err(fail(index, "container builder restarted before completion"));
+                    }
+                }
+                Operation::SourceNew {
+                    builder,
+                    ref class,
+                    base,
+                    ..
+                } => {
+                    if !matches!(declarations.get(&builder), Some((Contract::Source { class: owner, base: native }, _)) if owner == class && *native == base)
+                    {
+                        return Err(fail(
+                            index,
+                            "source completion requires its matching allocation builder",
+                        ));
+                    }
+                    if active.remove(&builder).is_none() {
+                        return Err(fail(
+                            index,
+                            "source completion requires an active allocation builder",
+                        ));
                     }
                 }
                 Operation::ArrayFill {

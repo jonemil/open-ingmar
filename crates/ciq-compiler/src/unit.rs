@@ -89,6 +89,14 @@ fn tuple_callback_elements(tuple: &crate::TupleType) -> bool {
         .any(|slot| slot.source_contract().is_some() || callback_value_type(&slot.api_type()))
 }
 
+fn effect_callees<'a>(owner: Owner<'a>, operation: &'a Operation) -> Vec<(Owner<'a>, &'a str)> {
+    let mut calls = source_callees(owner, operation);
+    if let Operation::SourceBegin { class, .. } = operation {
+        calls.push((Owner::Class(class), FIELD_INITIALIZER));
+    }
+    calls
+}
+
 /// Check erased value contracts that can expose source equality or observer
 /// callbacks. Native/source base erasure does not prove a pure implementation.
 fn callback_value_type(ty: &crate::api::Type) -> bool {
@@ -258,7 +266,7 @@ fn exit_callers<'a>(bodies: &[(Owner<'a>, &'a Function)]) -> BTreeSet<(Owner<'a>
             if function.operations().iter().any(|located| {
                 requests_exit(&located.operation)
                     || erased_callbacks(function, &located.operation)
-                    || source_callees(owner, &located.operation)
+                    || effect_callees(owner, &located.operation)
                         .iter()
                         .any(|key| exits.contains(key))
                     || comparator_callee(function, &located.operation, bodies)
@@ -302,6 +310,9 @@ impl FunctionDeclaration {
         }
     }
 }
+
+/// Allocation-only field initialization body, excluded from callable members.
+pub(crate) const FIELD_INITIALIZER: &str = "__ciq_initialize_fields";
 
 /// Supported native superclass identity, independent of an import-table index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -463,6 +474,11 @@ impl ScalarFieldType {
 /// A supported field's default and initialization requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldKind {
+    /// A readonly binding populated once by the allocation initializer.
+    /// Its referenced contents may remain mutable; metadata starts as Null.
+    /// Requires an instance method named `__ciq_initialize_fields` with no
+    /// parameters and a Void result; unit checks require exactly one assignment.
+    Constant { value_type: ReturnType },
     /// A supported value contract with a Null metadata slot. Contracts admitting
     /// Null have that default; others require constructor initialization.
     Value { value_type: ReturnType },
@@ -650,7 +666,9 @@ pub struct InstanceField {
 impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
-            FieldKind::Value { value_type } => value_type.clone(),
+            FieldKind::Constant { value_type } | FieldKind::Value { value_type } => {
+                value_type.clone()
+            }
             FieldKind::Number(_) => ReturnType::Integer,
             FieldKind::LangObject { nullable } => {
                 if *nullable {
@@ -857,6 +875,16 @@ impl CompilationUnit {
                             operation: None,
                             message: "unsupported field value contract".into(),
                         })?;
+                } else if let FieldKind::Constant { value_type } = &field.kind {
+                    field.kind = FieldKind::Constant {
+                        value_type: FieldKind::value_contract(value_type.clone()).ok_or_else(
+                            || UnitError {
+                                declaration: None,
+                                operation: None,
+                                message: "unsupported constant field contract".into(),
+                            },
+                        )?,
+                    };
                 }
             }
         }
@@ -1079,6 +1107,22 @@ impl CompilationUnit {
                     "required fields require a source initializer".into(),
                 ));
             }
+            let has_constants = class
+                .fields
+                .iter()
+                .any(|field| matches!(field.kind, FieldKind::Constant { .. }));
+            if has_constants
+                != class
+                    .methods
+                    .iter()
+                    .any(|method| method.name() == FIELD_INITIALIZER)
+            {
+                return Err(fail(
+                    Some(at),
+                    None,
+                    "constant fields require an allocation initializer".into(),
+                ));
+            }
             if class.methods.is_empty() {
                 return Err(fail(
                     None,
@@ -1180,6 +1224,89 @@ impl CompilationUnit {
                 .iter()
                 .filter(|op| matches!(op.operation, Operation::NativeBaseInitialize { .. }))
                 .count();
+            if function.name() == FIELD_INITIALIZER {
+                if !matches!(owner, Owner::Class(_))
+                    || function.parameter_count() != 0
+                    || function.return_type() != ReturnType::Void
+                    || base_calls != 0
+                {
+                    return Err(fail(
+                        Some(index), None,
+                        "allocation initializer requires an instance, no parameters, Void, and no native base initialization".into(),
+                    ));
+                }
+                let declaration = self
+                    .classes
+                    .iter()
+                    .find(|class| owner == Owner::Class(class.name.as_str()))
+                    .unwrap();
+                let mut pending = declaration
+                    .fields
+                    .iter()
+                    .filter(|field| matches!(field.kind, FieldKind::Constant { .. }))
+                    .map(|field| field.name.as_str())
+                    .collect::<BTreeSet<_>>();
+                let unreadable = declaration
+                    .fields
+                    .iter()
+                    .filter(|field| field.kind.requires_initialization())
+                    .map(|field| field.name.as_str())
+                    .collect::<BTreeSet<_>>();
+                for (operation, located) in function.operations().iter().enumerate() {
+                    if (!pending.is_empty() || !unreadable.is_empty())
+                        && (requests_exit(&located.operation)
+                            || erased_callbacks(function, &located.operation)
+                            || effect_callees(owner, &located.operation)
+                                .iter()
+                                .any(|key| exit_callers.contains(key))
+                            || comparator_callee(function, &located.operation, &bodies)
+                                .is_some_and(|key| exit_callers.contains(&key)))
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "initialize constant fields before calls that may request shutdown"
+                                .into(),
+                        ));
+                    }
+                    let message = match &located.operation {
+                        Operation::SelfFieldAssign { field, .. }
+                            if !pending.remove(field.as_str()) =>
+                        {
+                            Some("allocation initializer must assign each constant exactly once")
+                        }
+                        Operation::SelfFieldRead { field, .. }
+                            if pending.contains(field.as_str())
+                                || unreadable.contains(field.as_str()) =>
+                        {
+                            Some("field read before allocation initialization")
+                        }
+                        Operation::SelfValue { .. }
+                        | Operation::SelfCall { .. }
+                        | Operation::SelfCallStatement { .. }
+                            if !pending.is_empty() || !unreadable.is_empty() =>
+                        {
+                            Some(
+                                "initialize required fields before exposing the allocation receiver",
+                            )
+                        }
+                        Operation::Branch { .. } | Operation::Jump { .. }
+                            if !pending.is_empty() =>
+                        {
+                            Some(
+                                "constant allocation initialization requires a straight-line prefix",
+                            )
+                        }
+                        Operation::ReturnVoid if !pending.is_empty() => {
+                            Some("constant is not initialized on allocation")
+                        }
+                        _ => None,
+                    };
+                    if let Some(message) = message {
+                        return Err(fail(Some(index), Some(operation), message.into()));
+                    }
+                }
+            }
             if matches!(owner, Owner::Class(_)) && function.name() == "initialize" {
                 let first = function
                     .operations()
@@ -1217,7 +1344,7 @@ impl CompilationUnit {
                     if !pending.is_empty()
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
-                            || source_callees(owner, &located.operation)
+                            || effect_callees(owner, &located.operation)
                                 .iter()
                                 .any(|key| exit_callers.contains(key))
                             || comparator_callee(function, &located.operation, &bodies)
@@ -1393,6 +1520,57 @@ impl CompilationUnit {
                 })
                 .collect::<BTreeMap<_, _>>();
             for (operation, located) in function.operations().iter().enumerate() {
+                if let Operation::SelfFieldAssign { field, .. } = &located.operation {
+                    if function.name() != FIELD_INITIALIZER
+                        && self
+                            .classes
+                            .iter()
+                            .filter(|class| owner == Owner::Class(class.name.as_str()))
+                            .flat_map(|class| &class.fields)
+                            .any(|decl| {
+                                decl.name == *field
+                                    && matches!(decl.kind, FieldKind::Constant { .. })
+                            })
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "cannot rebind a constant field".into(),
+                        ));
+                    }
+                }
+                if let Operation::MemberWrite {
+                    receiver, member, ..
+                } = &located.operation
+                {
+                    if origins.contract(*receiver).is_some_and(|contract| {
+                        contract.classes().iter().any(|target| {
+                            self.classes
+                                .iter()
+                                .filter(|class| class.name == target.name)
+                                .flat_map(|class| &class.fields)
+                                .any(|field| {
+                                    field.name == *member
+                                        && matches!(field.kind, FieldKind::Constant { .. })
+                                })
+                        })
+                    }) {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "cannot rebind a constant field".into(),
+                        ));
+                    }
+                }
+                if let Operation::BindMethod { selector, .. } = &located.operation {
+                    if origins.symbol(*selector) == Some(FIELD_INITIALIZER) {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "allocation initializer is not a callable member".into(),
+                        ));
+                    }
+                }
                 if let Operation::SelfValue {
                     class: Some(claimed),
                     ..
@@ -1876,7 +2054,9 @@ impl CompilationUnit {
                         }
                     }
                 }
-                if let Operation::SourceNew { class, base, .. } = &located.operation {
+                if let Operation::SourceNew { class, base, .. }
+                | Operation::SourceBegin { class, base, .. } = &located.operation
+                {
                     let declaration = self
                         .classes
                         .iter()
@@ -2005,6 +2185,13 @@ impl CompilationUnit {
                 };
                 let mut joined_result = None;
                 for key in source_callees(owner, &located.operation) {
+                    if key.1 == FIELD_INITIALIZER {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "allocation initializer is not a callable member".into(),
+                        ));
+                    }
                     if matches!(
                         located.operation,
                         Operation::SelfCall { .. } | Operation::SelfCallStatement { .. }
@@ -2401,6 +2588,11 @@ impl CompilationUnit {
                 .iter()
                 .find(|f| f.name == *name)
                 .ok_or_else(|| format!("{class} does not implement field {name}"))?;
+            if matches!(field.kind, FieldKind::Constant { .. }) {
+                return Err(format!(
+                    "{class}.{name} is readonly; interface fields require mutable bindings"
+                ));
+            }
             if !crate::structural::same_result(&field.result_type(), expected) {
                 return Err(format!(
                     "{class}.{name} does not have the invariant interface field type"
@@ -2518,6 +2710,11 @@ impl CompilationUnit {
             text.push_str(&format!(".class {} {}\n", class.name, class.base.text()));
             for field in &class.fields {
                 text.push_str(&match &field.kind {
+                    FieldKind::Constant { value_type } => format!(
+                        ".field-constant {} {}\n",
+                        field.name,
+                        crate::type_text::result_tag(value_type)
+                    ),
                     FieldKind::Value { value_type } => format!(
                         ".field-value {} {}\n",
                         field.name,
@@ -2787,6 +2984,125 @@ pub(crate) fn compile_sources_mapped(
             }
         }
     }
+    // Infer stored constant contracts before lowering consumers. Allocation
+    // initialization uses the same expression compiler and checked field writes.
+    for (source_index, parsed) in parsed_sources.iter_mut().enumerate() {
+        for class in &mut parsed.classes {
+            if class.constants.is_empty() {
+                continue;
+            }
+            let source = sources[source_index];
+            let mut initializer_calls = calls.clone();
+            initializer_calls.current_class = Some(crate::SourceClass {
+                name: class.name.clone(),
+                base: class.base,
+            });
+            initializer_calls.readonly_fields = class
+                .constants
+                .iter()
+                .map(|value| value.name.clone())
+                .collect();
+            initializer_calls.field_types = class
+                .fields
+                .iter()
+                .map(|field| (field.name.clone(), field.result_type()))
+                .collect();
+            let mut assignments = Vec::new();
+            for declaration in &class.constants {
+                let probe = parser::ParsedFunction {
+                    name: FIELD_INITIALIZER.into(),
+                    parameters: Vec::new(),
+                    parameter_types: Vec::new(),
+                    result_type: None,
+                    statements: vec![parser::Statement::Return {
+                        value: Some(declaration.initializer.clone()),
+                        span: declaration.span,
+                    }],
+                    body_span: declaration.span,
+                };
+                let probe = source_ir::build_with_calls(
+                    source,
+                    probe,
+                    context,
+                    Some(class.base),
+                    &initializer_calls,
+                )
+                .map_err(|diagnostic| SourceDiagnostic {
+                    source: source_index,
+                    diagnostic,
+                })?;
+                let value = probe
+                    .operations()
+                    .iter()
+                    .find_map(|op| {
+                        if let Operation::Return { value } = op.operation {
+                            Some(value)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap();
+                let origins = crate::source_objects::Origins::for_function(&probe)
+                    .expect("validated constant expression");
+                let mut result = origins
+                    .contract(value)
+                    .cloned()
+                    .map(crate::SourceUnion::result)
+                    .or_else(|| crate::unions::result(probe.value_types[&value].api_type()))
+                    .unwrap();
+                if matches!(result, ReturnType::Tuple(_)) {
+                    result = crate::unions::result(
+                        crate::tuples::array_contract(&[result.api_type()], &[]).map_err(
+                            |message| SourceDiagnostic {
+                                source: source_index,
+                                diagnostic: Diagnostic::at(source, declaration.span.start, message),
+                            },
+                        )?,
+                    )
+                    .unwrap();
+                }
+                let result = FieldKind::value_contract(result).ok_or_else(|| SourceDiagnostic {
+                    source: source_index,
+                    diagnostic: Diagnostic::at(
+                        source,
+                        declaration.span.start,
+                        "unsupported constant field contract",
+                    ),
+                })?;
+                class.fields.push(InstanceField {
+                    name: declaration.name.clone(),
+                    kind: FieldKind::Constant {
+                        value_type: result.clone(),
+                    },
+                });
+                initializer_calls
+                    .field_types
+                    .insert(declaration.name.clone(), result.clone());
+                calls
+                    .source_fields
+                    .get_mut(&class.name)
+                    .unwrap()
+                    .insert(declaration.name.clone(), result);
+                assignments.push(parser::Statement::FieldAssign {
+                    name: declaration.name.clone(),
+                    value: declaration.initializer.clone(),
+                    span: declaration.span,
+                });
+            }
+            assignments.push(parser::Statement::Return {
+                value: None,
+                span: class.name_span,
+            });
+            class.methods.push(parser::ParsedFunction {
+                name: FIELD_INITIALIZER.into(),
+                parameters: Vec::new(),
+                parameter_types: Vec::new(),
+                result_type: Some(ReturnType::Void),
+                statements: assignments,
+                body_span: class.name_span,
+            });
+        }
+    }
     for (source_index, parsed) in parsed_sources.into_iter().enumerate() {
         let source = sources[source_index];
         let diagnostic = |diagnostic| SourceDiagnostic {
@@ -2818,6 +3134,11 @@ pub(crate) fn compile_sources_mapped(
             }
             let mut methods = Vec::new();
             let mut method_calls = calls.clone();
+            method_calls.readonly_fields = class
+                .constants
+                .iter()
+                .map(|value| value.name.clone())
+                .collect();
             method_calls.current_class = Some(crate::SourceClass {
                 name: class.name.clone(),
                 base: class.base,
@@ -3019,7 +3340,8 @@ fn parse_unit_ir_context(
                     if parts.first().is_some_and(|part| {
                         matches!(
                             part.as_str(),
-                            ".field-value"
+                            ".field-constant"
+                                | ".field-value"
                                 | ".field-number"
                                 | ".field-object"
                                 | ".field-array"
@@ -3044,7 +3366,19 @@ fn parse_unit_ir_context(
                                 "expected a three-part field declaration before methods, at most 256 fields",
                             ));
                         }
-                        let kind = if parts[0] == ".field-value" {
+                        let kind = if parts[0] == ".field-constant" {
+                            let value_type = crate::type_text::call_result(&parts[2])
+                                .ok()
+                                .and_then(FieldKind::value_contract)
+                                .ok_or_else(|| {
+                                    Diagnostic::at(
+                                        text,
+                                        method_at,
+                                        "unsupported constant field contract",
+                                    )
+                                })?;
+                            FieldKind::Constant { value_type }
+                        } else if parts[0] == ".field-value" {
                             crate::type_text::call_result(&parts[2])
                                 .ok()
                                 .and_then(FieldKind::from_result)

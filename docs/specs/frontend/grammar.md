@@ -49,7 +49,7 @@ field-default = "null" | symbol-literal | "(" field-default ")"
 ```
 
 `constant` uses the expression rules below; its initializer must satisfy the
-[immediate constant profile](README.md#constants). Constants are declarations,
+[scope-specific constant profile](README.md#constants). Constants are declarations,
 not function statements. Evaluation restrictions do not create a second
 expression grammar.
 

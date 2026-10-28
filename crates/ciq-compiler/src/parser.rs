@@ -1,53 +1,54 @@
 /// Classify source keywords independently of the implemented grammar subset.
 /// IR/assembly identifiers have their own rules and do not use this restriction.
 fn reserved_word(name: &str) -> bool {
-    matches!(
-        name,
-        "alias"
-            | "and"
-            | "as"
-            | "break"
-            | "case"
-            | "catch"
-            | "class"
-            | "const"
-            | "continue"
-            | "default"
-            | "do"
-            | "else"
-            | "enum"
-            | "extends"
-            | "false"
-            | "finally"
-            | "for"
-            | "function"
-            | "has"
-            | "hidden"
-            | "if"
-            | "import"
-            | "instanceof"
-            | "me"
-            | "module"
-            | "NaN"
-            | "native"
-            | "new"
-            | "null"
-            | "or"
-            | "private"
-            | "protected"
-            | "public"
-            | "return"
-            | "self"
-            | "static"
-            | "switch"
-            | "throw"
-            | "true"
-            | "try"
-            | "typedef"
-            | "using"
-            | "var"
-            | "while"
-    )
+    name == crate::unit::FIELD_INITIALIZER
+        || matches!(
+            name,
+            "alias"
+                | "and"
+                | "as"
+                | "break"
+                | "case"
+                | "catch"
+                | "class"
+                | "const"
+                | "continue"
+                | "default"
+                | "do"
+                | "else"
+                | "enum"
+                | "extends"
+                | "false"
+                | "finally"
+                | "for"
+                | "function"
+                | "has"
+                | "hidden"
+                | "if"
+                | "import"
+                | "instanceof"
+                | "me"
+                | "module"
+                | "NaN"
+                | "native"
+                | "new"
+                | "null"
+                | "or"
+                | "private"
+                | "protected"
+                | "public"
+                | "return"
+                | "self"
+                | "static"
+                | "switch"
+                | "throw"
+                | "true"
+                | "try"
+                | "typedef"
+                | "using"
+                | "var"
+                | "while"
+        )
 }
 
 use crate::{Diagnostic, Span};
@@ -262,16 +263,19 @@ pub(crate) enum CasePattern {
     Default,
 }
 
+#[derive(Clone)]
 pub(crate) struct Expression {
     pub kind: ExpressionKind,
     pub span: Span,
 }
 /// Zero-argument native constructor targets, separate from expression value types.
+#[derive(Clone)]
 pub(crate) enum NativeConstructor {
     Object(crate::NativeClass),
     WeakReference,
 }
 
+#[derive(Clone)]
 pub(crate) enum ExpressionKind {
     MemberRead {
         receiver: Box<Expression>,
@@ -475,7 +479,8 @@ impl Expression {
     pub(crate) fn needs_materialization(&self) -> bool {
         match &self.kind {
             ExpressionKind::MemberRead { receiver, .. } => receiver.needs_materialization(),
-            ExpressionKind::Conditional { .. }
+            ExpressionKind::SourceNew { .. }
+            | ExpressionKind::Conditional { .. }
             | ExpressionKind::Logical { .. }
             | ExpressionKind::ArrayLiteral(_)
             | ExpressionKind::ByteArrayLiteral(_)
@@ -512,8 +517,7 @@ impl Expression {
             ExpressionKind::UnqualifiedCall { arguments, .. }
             | ExpressionKind::GlobalCall { arguments, .. }
             | ExpressionKind::OwnerCall { arguments, .. }
-            | ExpressionKind::ModuleCall { arguments, .. }
-            | ExpressionKind::SourceNew { arguments, .. } => {
+            | ExpressionKind::ModuleCall { arguments, .. } => {
                 arguments.iter().any(Self::needs_materialization)
             }
             _ => false,
@@ -587,7 +591,17 @@ pub(crate) struct Declarations<'a> {
 
 impl Declarations<'_> {
     pub(crate) fn immediate_constants(&self) -> Rc<BTreeMap<String, crate::constants::Immediate>> {
-        Rc::new(self.constant_values.borrow().clone())
+        Rc::new(
+            self.constant_values
+                .borrow()
+                .iter()
+                .filter(|(key, _)| {
+                    !key.split_once('.')
+                        .is_some_and(|(owner, _)| self.classes.contains(owner))
+                })
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        )
     }
 
     pub(crate) fn validate_constant_members(
@@ -627,6 +641,9 @@ impl Declarations<'_> {
                 })?;
         }
         for (key, declaration) in &self.constants {
+            if !self.constant_values.borrow().contains_key(key) {
+                continue;
+            }
             context
                 .check_type(
                     crate::api::core(),
@@ -1124,6 +1141,17 @@ pub(crate) fn collect_declarations<'a>(
                 .constant_value(key.rsplit('.').next().unwrap(), declaration.name_at)
                 .map(|_| ())
         };
+        if declaration
+            .owner
+            .as_ref()
+            .is_some_and(|owner| aliases.classes.contains(owner))
+        {
+            // Stored expressions are checked during field inference, but value
+            // name collisions are invalid independently of their initializer.
+            if !aliases.owners.contains(key) && !aliases.value_names.contains(key) {
+                continue;
+            }
+        }
         result.map_err(|diagnostic| crate::SourceDiagnostic {
             source: declaration.source_index,
             diagnostic,
@@ -3564,7 +3592,13 @@ pub(crate) struct ParsedUnit {
     pub functions: Vec<(Option<String>, ParsedFunction)>,
     pub classes: Vec<ParsedClass>,
 }
+pub(crate) struct ParsedConstant {
+    pub name: String,
+    pub initializer: Expression,
+    pub span: Span,
+}
 pub(crate) struct ParsedClass {
+    pub constants: Vec<ParsedConstant>,
     pub name: String,
     pub name_span: Span,
     pub base: crate::ClassBase,
@@ -3639,9 +3673,34 @@ pub(crate) fn declarations<'a>(
             parser.imports()?;
             let mut methods = Vec::new();
             let mut fields = Vec::new();
+            let mut constants = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
                 if parser.peek()? == Kind::Word("const") {
-                    parser.skip_constant()?;
+                    if is_class {
+                        parser.token()?;
+                        let token = parser.identifier()?;
+                        let Kind::Word(name) = token.kind else {
+                            unreachable!()
+                        };
+                        parser.expect(Kind::Punctuation('='), "'=' after constant name")?;
+                        let mut initializer = parser.expression(0)?;
+                        parser.expect(Kind::Punctuation(';'), "';' after constant")?;
+                        if let Some(value) =
+                            parser.declarations.constant_values.borrow().get(&format!(
+                                "{name_owner}.{name}",
+                                name_owner = parser.owner.as_ref().unwrap()
+                            ))
+                        {
+                            initializer = value.expression(initializer.span);
+                        }
+                        constants.push(ParsedConstant {
+                            name: name.into(),
+                            initializer,
+                            span: token.span,
+                        });
+                    } else {
+                        parser.skip_constant()?;
+                    }
                     continue;
                 }
                 if parser.peek()? == Kind::Word("typedef") {
@@ -3753,6 +3812,7 @@ pub(crate) fn declarations<'a>(
             }
             if is_class {
                 unit.classes.push(ParsedClass {
+                    constants,
                     name: name.into(),
                     name_span: token.span,
                     base: class_base.unwrap(),

@@ -34,7 +34,8 @@ ciq-ir
 .boolean %20 true
 .call %21 Dynamic condition result=boolean %20
 .println %21
-.new-source %22 Token Lang.Object
+.begin-source &0 Token Lang.Object
+.new-source %22 Token Lang.Object &0
 .call %23 Dynamic custom result=any %22
 .println %23
 .string %24 "%d"

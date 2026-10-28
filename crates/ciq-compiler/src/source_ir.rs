@@ -141,6 +141,9 @@ fn emit(
     operations: &mut Vec<LocatedOperation>,
     calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
+    if let Some(field) = calls.field_expression(&expression, locals, parameters) {
+        return emit(source, field, locals, parameters, operations, calls);
+    }
     if let Some(value) = calls.constant(&expression, locals, parameters) {
         return emit(
             source,
@@ -233,24 +236,6 @@ fn emit_member_chain(
     }
     let mut receiver = emit(source, base, locals, parameters, operations, calls)?;
     for (member, span) in members.into_iter().rev() {
-        if let Some(value) = calls
-            .instance_constant(operations, receiver, &member)
-            .map_err(|message| Diagnostic::at(source, span.start, message))?
-        {
-            operations.push(LocatedOperation {
-                operation: Operation::Discard { value: receiver },
-                span: Some(span),
-            });
-            receiver = emit(
-                source,
-                value.expression(span),
-                locals,
-                parameters,
-                operations,
-                calls,
-            )?;
-            continue;
-        }
         let result = ValueId(operations.len() as u32);
         let field_type = calls
             .source_field(operations, receiver, &member)
@@ -327,31 +312,8 @@ fn emit_non_call(
                 declared_type: tracked.then_some(declared),
             }
         }
-        parser::ExpressionKind::SourceNew { class, arguments } => {
-            let base = calls.class_bases.get(&class).copied().ok_or_else(|| {
-                Diagnostic::at(
-                    source,
-                    expression.span.start,
-                    "source constructor requires a declared class",
-                )
-            })?;
-            if locals.contains_key(&class) || parameters.contains_key(&class) {
-                return Err(Diagnostic::at(
-                    source,
-                    expression.span.start,
-                    "source construction class is shadowed",
-                ));
-            }
-            let arguments = arguments
-                .into_iter()
-                .map(|argument| emit(source, argument, locals, parameters, operations, calls))
-                .collect::<Result<Vec<_>, _>>()?;
-            Operation::SourceNew {
-                result: ValueId(operations.len() as u32),
-                class,
-                base,
-                arguments,
-            }
+        parser::ExpressionKind::SourceNew { .. } => {
+            unreachable!("source construction must be materialized")
         }
         parser::ExpressionKind::NativeConstant {
             module,
@@ -738,6 +700,7 @@ fn emit_call(
             if locals.contains_key(&module)
                 || parameters.contains_key(&module)
                 || calls.constant_named(&module, locals, parameters).is_some()
+                || calls.readonly_fields.contains(&module)
             {
                 (
                     Some(parser::Expression {
@@ -1990,6 +1953,62 @@ impl Builder<'_> {
         })
     }
 
+    /// Allocate a private instance before staging its initializer arguments,
+    /// then publish the initialized value. Keep construction temporaries outside
+    /// recursive expression dispatch so the source nesting budget stays usable.
+    fn source_construction(
+        &mut self,
+        class: String,
+        arguments: Vec<parser::Expression>,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<parser::Expression, Diagnostic> {
+        let base = self.calls.class_bases.get(&class).copied().ok_or_else(|| {
+            Diagnostic::at(
+                self.source,
+                span.start,
+                "source constructor requires a declared class",
+            )
+        })?;
+        if locals.contains_key(&class) || self.parameters.contains_key(&class) {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "source construction class is shadowed",
+            ));
+        }
+        let builder = crate::BuilderId(self.local_id(span)?.0);
+        self.push(
+            Operation::SourceBegin {
+                builder,
+                class: class.clone(),
+                base,
+            },
+            Some(span),
+        );
+        let expected = self.call_argument_context(&class, "initialize");
+        let arguments = self.snapshot_arguments(arguments, locals, &expected)?;
+        let arguments = arguments
+            .into_iter()
+            .map(|arg| self.value(arg, locals))
+            .collect::<Result<Vec<_>, _>>()?;
+        let result = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::SourceNew {
+                result,
+                builder,
+                class,
+                base,
+                arguments,
+            },
+            Some(span),
+        );
+        Ok(parser::Expression {
+            kind: parser::ExpressionKind::Joined(result),
+            span,
+        })
+    }
+
     /// Prepare children needing flow or construction in source order, snapshotting
     /// operands before emitting their parent in the final block.
     fn prepare(
@@ -1997,6 +2016,12 @@ impl Builder<'_> {
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<parser::Expression, Diagnostic> {
+        if let Some(field) = self
+            .calls
+            .field_expression(&expression, locals, &self.parameters)
+        {
+            return self.prepare(field, locals);
+        }
         if let Some(value) = self.calls.constant(&expression, locals, &self.parameters) {
             return Ok(value.expression(expression.span));
         }
@@ -2085,11 +2110,7 @@ impl Builder<'_> {
                 right: Box::new(self.snapshot(*right, locals)?),
             },
             E::SourceNew { class, arguments } => {
-                let expected = self.call_argument_context(&class, "initialize");
-                E::SourceNew {
-                    class,
-                    arguments: self.snapshot_arguments(arguments, locals, &expected)?,
-                }
+                return self.source_construction(class, arguments, span, locals);
             }
             E::ValueCall {
                 receiver,
@@ -2174,7 +2195,8 @@ impl Builder<'_> {
                 member,
                 arguments,
             } => {
-                let receiver = if locals.contains_key(&module)
+                let receiver = if self.calls.readonly_fields.contains(&module)
+                    || locals.contains_key(&module)
                     || self.parameters.contains_key(&module)
                     || self
                         .calls
@@ -3156,6 +3178,85 @@ impl Builder<'_> {
         Ok(terminated)
     }
 
+    /// Reject writes to lexical constant bindings before lowering their targets.
+    /// Unit checks enforce readonly source fields once receiver types are known.
+    fn check_constant_rebinding(
+        &self,
+        statement: &parser::Statement,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<(), Diagnostic> {
+        use parser::{Expression, ExpressionKind as E, Statement as S};
+        let span = statement.span();
+        if let S::Assign { name, .. } = statement {
+            if self.calls.readonly_fields.contains(name)
+                && !locals.contains_key(name)
+                && !self.parameters.contains_key(name)
+            {
+                return Err(Diagnostic::at(
+                    self.source,
+                    span.start,
+                    "cannot rebind a constant field",
+                ));
+            }
+        }
+        let target = match statement {
+            S::Assign { name, .. } => Some(Expression {
+                kind: E::Local(name.clone()),
+                span,
+            }),
+            S::FieldAssign { name, .. } => Some(Expression {
+                kind: E::SelfField(name.clone()),
+                span,
+            }),
+            S::Update { target, .. } | S::PlaceCompound { target, .. } => {
+                if self
+                    .calls
+                    .constant(target, locals, &self.parameters)
+                    .is_some()
+                {
+                    return Err(Diagnostic::at(
+                        self.source,
+                        span.start,
+                        "cannot rebind a constant",
+                    ));
+                }
+                None
+            }
+            S::MemberAssign {
+                receiver, member, ..
+            } => {
+                let constant = crate::constants::path(receiver).and_then(|path| {
+                    let root = path.split('.').next()?;
+                    if locals.contains_key(root) || self.parameters.contains_key(root) {
+                        return None;
+                    }
+                    self.calls.constants.get(&format!("{path}.{member}"))
+                });
+                if constant.is_some() {
+                    return Err(Diagnostic::at(
+                        self.source,
+                        span.start,
+                        "cannot rebind a constant",
+                    ));
+                }
+                None
+            }
+            _ => None,
+        };
+        if target.as_ref().is_some_and(|target| {
+            self.calls
+                .constant(target, locals, &self.parameters)
+                .is_some()
+        }) {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "cannot rebind a constant",
+            ));
+        }
+        Ok(())
+    }
+
     /// Emit a statement sequence and report whether all paths terminate the
     /// current block with return, break, or continue. Declarations stay scoped
     /// to the supplied name map; controls select a loop latch or structured exit.
@@ -3174,62 +3275,7 @@ impl Builder<'_> {
                     "unreachable statement after all paths terminate",
                 ));
             }
-            use parser::{Expression, ExpressionKind as E, Statement as S};
-            let target = match &statement {
-                S::Assign { name, .. } => Some(Expression {
-                    kind: E::Local(name.clone()),
-                    span,
-                }),
-                S::FieldAssign { name, .. } => Some(Expression {
-                    kind: E::SelfField(name.clone()),
-                    span,
-                }),
-                S::Update { target, .. } | S::PlaceCompound { target, .. } => {
-                    if self
-                        .calls
-                        .constant(target, locals, &self.parameters)
-                        .is_some()
-                    {
-                        return Err(Diagnostic::at(
-                            self.source,
-                            span.start,
-                            "cannot rebind a constant",
-                        ));
-                    }
-                    None
-                }
-                S::MemberAssign {
-                    receiver, member, ..
-                } => {
-                    let constant = crate::constants::path(receiver).and_then(|path| {
-                        let root = path.split('.').next()?;
-                        if locals.contains_key(root) || self.parameters.contains_key(root) {
-                            return None;
-                        }
-                        self.calls.constants.get(&format!("{path}.{member}"))
-                    });
-                    if constant.is_some() {
-                        return Err(Diagnostic::at(
-                            self.source,
-                            span.start,
-                            "cannot rebind a constant",
-                        ));
-                    }
-                    None
-                }
-                _ => None,
-            };
-            if target.as_ref().is_some_and(|target| {
-                self.calls
-                    .constant(target, locals, &self.parameters)
-                    .is_some()
-            }) {
-                return Err(Diagnostic::at(
-                    self.source,
-                    span.start,
-                    "cannot rebind a constant",
-                ));
-            }
+            self.check_constant_rebinding(&statement, locals)?;
             match statement {
                 parser::Statement::Block { body, .. } => {
                     terminated = self.sequence(body, &mut locals.clone())?;
@@ -3522,6 +3568,7 @@ impl Builder<'_> {
                             .calls
                             .constant_named(&module, locals, &self.parameters)
                             .is_some()
+                        || self.calls.readonly_fields.contains(&module)
                         || locals.contains_key(&module)
                         || self.parameters.contains_key(&module)
                         || (module == "self"
@@ -3709,6 +3756,7 @@ pub(crate) struct CallSignature {
 /// Collected callee contracts and the current body's parameter contracts.
 #[derive(Clone, Default)]
 pub(crate) struct CallContext {
+    pub(crate) readonly_fields: std::collections::BTreeSet<String>,
     pub(crate) constants: std::rc::Rc<BTreeMap<String, crate::constants::Immediate>>,
     pub(crate) unchecked: bool,
     signatures: BTreeMap<(String, String), CallSignature>,
@@ -3720,6 +3768,23 @@ pub(crate) struct CallContext {
     pub(crate) current_class: Option<crate::SourceClass>,
 }
 impl CallContext {
+    fn field_expression(
+        &self,
+        expression: &parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        parameters: &BTreeMap<String, usize>,
+    ) -> Option<parser::Expression> {
+        let parser::ExpressionKind::Local(name) = &expression.kind else {
+            return None;
+        };
+        (self.readonly_fields.contains(name)
+            && !locals.contains_key(name)
+            && !parameters.contains_key(name))
+        .then(|| parser::Expression {
+            kind: parser::ExpressionKind::SelfField(name.clone()),
+            span: expression.span,
+        })
+    }
     fn constant_named(
         &self,
         name: &str,
@@ -3738,39 +3803,6 @@ impl CallContext {
             parameters,
         )
     }
-    fn instance_constant(
-        &self,
-        ops: &[LocatedOperation],
-        receiver: ValueId,
-        member: &str,
-    ) -> Result<Option<&crate::constants::Immediate>, String> {
-        if self.constants.is_empty() {
-            return Ok(None);
-        }
-        let Some(contract) =
-            crate::source_objects::contract(ops, receiver, self.parameter_types.clone())
-        else {
-            return Ok(None);
-        };
-        let values = contract
-            .classes()
-            .iter()
-            .map(|class| self.constants.get(&format!("{}.{member}", class.name)))
-            .collect::<Option<Vec<_>>>();
-        let Some(values) = values else {
-            return Ok(None);
-        };
-        let Some(first) = values.first() else {
-            return Ok(None);
-        };
-        if contract.nullable() || !contract.native().is_empty() {
-            return Err("constant member requires a proven source instance".into());
-        }
-        if values.iter().any(|value| *value != *first) {
-            return Err("constant member alternatives need runtime field storage".into());
-        }
-        Ok(Some(first))
-    }
     fn constant(
         &self,
         expression: &parser::Expression,
@@ -3778,6 +3810,12 @@ impl CallContext {
         parameters: &BTreeMap<String, usize>,
     ) -> Option<&crate::constants::Immediate> {
         if self.constants.is_empty() {
+            return None;
+        }
+        if self
+            .field_expression(expression, locals, parameters)
+            .is_some()
+        {
             return None;
         }
         let path = crate::constants::path(expression)?;

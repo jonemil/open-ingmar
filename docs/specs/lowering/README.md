@@ -379,6 +379,22 @@ respectively; the class alias is `__ciq_native_BehaviorDelegate` for delegate
 construction. See [constructor
 evidence](../../investigations/compiler-native-views.md).
 
+### Source allocation and initialization
+
+`SourceBegin` selects the source class with `getmv`, allocates with `newc`, and
+stores the private instance in a builder frame slot. Its allocation hook runs
+before user argument effects. `SourceNew` loads and clears that slot, retains
+the instance on the stack, selects `initialize` with `getsv`, then invokes it
+with the ordered argument values. Popping the initializer result leaves the
+completed instance. Staging arguments across branches does not move allocation
+after their effects.
+
+Stored class constants use ordinary Null-initialized DATA slots and existing
+field writes; no readonly VM flag is assumed. The allocation hook retains native
+base setup, then invokes the reserved checked field initializer through its
+internal DATA method slot. This gives the initializer's locals a normal call
+frame. User `initialize()` is a separate call and does not repeat those writes.
+
 ### Positional result construction
 
 Lowering pushes the tuple length, allocates with `newa`, then emits

@@ -755,39 +755,59 @@ widening is introduced. See the
 
 ### Constants
 
-`const NAME = expression;` declares an immutable binding at global, module, or
-class scope. Function-local constants are rejected. The implemented profile
-covers non-heap Number, Float, Boolean, Char, Symbol, and Null values. Supported
-initializers are literals, other supported constants, unary numeric `+`/`-`,
-Boolean `!`, Number `~`, and Number arithmetic, bitwise operations, and shifts.
-Number arithmetic wraps at 32 bits; shifts mask the count to five bits. Division
-or remainder by zero is rejected. Other initializer expressions, including
-String, Long, Double, allocation, native API constants, and calls, require
-separate support and are diagnosed even in unused declarations.
+`const NAME = expression;` declares a readonly binding at global, module, or
+class scope. Function-local constants are rejected. Assignments, compound
+assignments, and updates cannot rebind a constant; referenced container contents
+remain mutable. Declarations cannot duplicate constants or collide with
+functions, fields, classes/modules, inherited methods, or constructors in their
+value scope.
 
-All files contribute declarations before resolution. Forward/cross-file
-references retain their declaration's owner and native-name environment. Bare
-names select the current owner's constant before a global constant; locals and
-parameters shadow those value names. Module constants support `Module.NAME`.
-Within the module body, immediate constant lookup also supports `self.NAME`.
-Class constants require `self.NAME`, a bare owner reference, or a proven source
-instance; `Class.NAME` is rejected. Instance receiver effects are evaluated once
-even when the member value becomes a literal. Source-class union alternatives
-must provide the same immediate value; differing values require runtime storage.
+Global/module constants support non-heap Number, Float, Boolean, Char, Symbol,
+and Null values. Initializers accept literals, other supported constants, unary
+numeric `+`/`-`, Boolean `!`, Number `~`, and Number arithmetic, bitwise
+operations, and shifts. Number arithmetic wraps at 32 bits; shifts mask the count
+to five bits. Division/remainder by zero and unsupported initializer forms fail
+even in unused declarations. Shared global/module storage for String, Long,
+Double, containers, objects, and runtime expressions is not implemented.
+Validated global/module constants become ordinary literal expressions before IR
+construction; saved IR retains their values without declaration records.
 
-Declarations cannot duplicate constants or collide with functions, fields,
-classes/modules, inherited methods, or constructors in their value scope.
-Assignments, compound assignments, and updates cannot rebind a constant.
-The unit permits 256 constants and a dependency depth of 64; cycles and missing
-dependencies fail. API checks include unused declarations, including Char's
-introduction requirement.
+All files contribute declarations before resolution. Immediate dependencies
+retain their declaration's owner and native-name environment, including forward
+and cross-file references. Bare names select the owner's constant before a
+global constant; locals and parameters shadow those names. Module constants
+support `Module.NAME` and owner-relative `self.NAME`. The unit permits 256
+constants and an immediate dependency depth of 64; cycles and missing
+dependencies fail. API checks include unused declarations.
 
-Validated immediate constants become ordinary literal expressions before IR
-construction; saved IR retains values rather than source constant names or
-binding declarations. This does not authorize repeated allocation of heap-backed
-constant values. Their storage and initialization remain in the plan. See the
-[example](../../../examples/compiler-constants/README.md) and
-[evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
+Class constants use per-instance fields for both immediate and heap-backed
+values. Initializers may produce String, Long, Double, supported containers,
+source instances, or other supported field values through typed runtime
+expressions. Their inferred contracts follow ordinary field restrictions.
+Array literals receive ordinary Array element contracts so mutation changes
+contents without rebinding a positional field view. A stored alias shares its
+initializer's reference; another instance evaluates its own initializer.
+
+Class constants use `self.NAME`, a bare owner reference, or a proven source
+instance; `Class.NAME` is rejected. Reads evaluate the receiver once and access
+its actual field. Source-class union alternatives may contain differing values
+under compatible field contracts. Readonly fields cannot satisfy mutable
+structural-interface field requirements.
+
+Allocation initializes constants in declaration order, before evaluating user
+constructor arguments and calling `initialize()`. Application-owned constants
+also initialize during allocation. Calling user `initialize()` again leaves
+constant bindings intact. Initializers may read earlier initialized constants;
+forward references within the immediate expression profile remain supported.
+Forward heap-field references and direct constant dependency cycles are rejected. The
+current allocation initializer requires a straight-line assignment prefix:
+branches, incomplete-field reads, receiver exposure, and calls that may request
+shutdown are rejected until required fields are initialized. Non-null mutable
+fields are still initialized separately by user `initialize()`.
+
+See the [scalar example](../../../examples/compiler-constants/README.md),
+[stored class example](../../../examples/compiler-class-constants/README.md),
+and [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
 ### Type aliases
 

@@ -110,7 +110,7 @@ pub struct ValueId(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalId(pub u32);
 
-/// Private container-construction identity, separate from values and ordinary locals.
+/// Private construction identity, separate from values and ordinary locals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BuilderId(pub u32);
 
@@ -1471,10 +1471,18 @@ pub enum Operation {
         module: String,
         member: String,
     },
-    /// Allocate a supported source object and invoke its initializer with ordered arguments.
-    /// Unit validation resolves the class and checks its initializer contract.
+    /// Allocate a source instance into private storage before evaluating user
+    /// initializer arguments. The instance cannot escape until SourceNew.
+    SourceBegin {
+        builder: BuilderId,
+        class: String,
+        base: ClassBase,
+    },
+    /// Invoke a private source allocation's user initializer and expose the
+    /// completed instance. Unit validation resolves the initializer contract.
     SourceNew {
         result: ValueId,
+        builder: BuilderId,
         class: String,
         /// Native base projection; unit validation checks the class declaration.
         base: ClassBase,
@@ -1927,7 +1935,8 @@ impl Operation {
             | Self::LocalInitialize { .. }
             | Self::LocalAssign { .. }
             | Self::Return { .. }
-            | Self::ReturnVoid => None,
+            | Self::ReturnVoid
+            | Self::SourceBegin { .. } => None,
         }
     }
 }
@@ -3278,11 +3287,26 @@ impl Function {
                     );
                     (Some(result), vec![])
                 }
+                Operation::SourceBegin {
+                    ref class, base, ..
+                } => {
+                    validate_call_names(None, class).map_err(fail)?;
+                    let ty = base
+                        .constructed_type()
+                        .ok_or_else(|| fail("unsupported source allocation base"))?;
+                    if let Some(context) = context {
+                        context
+                            .check_type(api::core(), &ty)
+                            .map_err(|message| fail(&message))?;
+                    }
+                    (None, vec![])
+                }
                 Operation::SourceNew {
                     result,
                     ref class,
                     base,
                     ref arguments,
+                    ..
                 } => {
                     validate_call_names(None, class).map_err(fail)?;
                     let ty = base.constructed_type().ok_or_else(|| {
@@ -4410,6 +4434,7 @@ impl Function {
                     | Operation::TupleNew { .. }
                     | Operation::TupleWrite { .. }
                     | Operation::TupleAppend { .. }
+                    | Operation::SourceBegin { .. }
                     | Operation::SourceNew { .. }
                     | Operation::NativeCallStatement { .. }
                     | Operation::NativeCall { .. }
@@ -4457,6 +4482,7 @@ impl Function {
                     } => vec![*array, *index, *value],
                     Operation::LocalVariable { value: None, .. }
                     | Operation::LocalDeclare { .. }
+                    | Operation::SourceBegin { .. }
                     | Operation::DictionaryBegin { .. }
                     | Operation::RecordBegin { .. }
                     | Operation::ArrayBegin { .. }
@@ -4891,8 +4917,14 @@ impl Function {
                     ref module,
                     ref member,
                 } => format!(".constant %{} {module} {member}", result.0),
+                Operation::SourceBegin {
+                    builder,
+                    ref class,
+                    base,
+                } => format!(".begin-source &{} {class} {}", builder.0, base.text()),
                 Operation::SourceNew {
                     result,
+                    builder,
                     ref class,
                     base,
                     ref arguments,
@@ -4901,7 +4933,12 @@ impl Function {
                         .iter()
                         .map(|value| format!(" %{}", value.0))
                         .collect::<String>();
-                    format!(".new-source %{} {class} {}{args}", result.0, base.text())
+                    format!(
+                        ".new-source %{} {class} {} &{}{args}",
+                        result.0,
+                        base.text(),
+                        builder.0
+                    )
                 }
                 Operation::ObjectCall {
                     result,

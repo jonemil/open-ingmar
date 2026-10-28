@@ -49,6 +49,7 @@ enum Directive {
     TupleAddAll,
     ArrayAdd,
     ArrayAddAll,
+    BeginSource,
     NewSource,
     Constant,
     CallNativeDiscard,
@@ -354,6 +355,7 @@ pub(crate) fn parse_function_ir_context(
             Some(".tuple-add-all") => (Directive::TupleAddAll, 4),
             Some(".array-add") => (Directive::ArrayAdd, 4),
             Some(".array-add-all") => (Directive::ArrayAddAll, 4),
+            Some(".begin-source") => (Directive::BeginSource, 4),
             Some(".new-source") => (Directive::NewSource, call_width()),
             Some(".constant") => (Directive::Constant, 4),
             Some(".call-native-discard") => (Directive::CallNativeDiscard, call_width()),
@@ -581,15 +583,27 @@ pub(crate) fn parse_function_ir_context(
                     field: fields[1].clone(),
                     value: parse_value(&fields[2])?,
                 },
+                Directive::BeginSource => Operation::SourceBegin {
+                    builder: parse_builder(&fields[1])?,
+                    class: fields[2].clone(),
+                    base: match fields[3].as_str() {
+                        "Lang.Object" => crate::ClassBase::LangObject,
+                        "WatchUi.View" => crate::ClassBase::WatchUiView,
+                        "WatchUi.BehaviorDelegate" => crate::ClassBase::WatchUiBehaviorDelegate,
+                        "Application.AppBase" => crate::ClassBase::ApplicationAppBase,
+                        _ => return Err(fail(*at, "unsupported source construction base")),
+                    },
+                },
                 Directive::NewSource => {
-                    if width < 4 {
+                    if width < 5 {
                         return Err(fail(
                             *at,
-                            "expected .new-source result class base [arguments]",
+                            "expected .new-source result class base builder [arguments]",
                         ));
                     }
                     Operation::SourceNew {
                         result: parse_value(&fields[1])?,
+                        builder: parse_builder(&fields[4])?,
                         class: fields[2].clone(),
                         base: match fields[3].as_str() {
                             "Lang.Object" => crate::ClassBase::LangObject,
@@ -598,7 +612,7 @@ pub(crate) fn parse_function_ir_context(
                             "Application.AppBase" => crate::ClassBase::ApplicationAppBase,
                             _ => return Err(fail(*at, "unsupported source construction base")),
                         },
-                        arguments: fields[4..width]
+                        arguments: fields[5..width]
                             .iter()
                             .map(|field| parse_value(field))
                             .collect::<Result<_, _>>()?,

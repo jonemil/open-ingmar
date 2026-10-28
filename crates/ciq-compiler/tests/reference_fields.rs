@@ -152,11 +152,11 @@ fn constructor_arguments_use_declared_context_and_order_checks() {
         );
     let unit = compile_sources(&["function f() { var v = new HelloView(); var c = new ViewController(v, []); System.println(c.current()); }", &constructor, VIEW]).unwrap();
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
-    let bad = "ciq-ir\n.function f\n.new-source %0 HelloView WatchUi.View\n.local $0 %0\n.read %1 $0\n.call-object %2 %1 HelloView current\n.new-source %3 ViewController WatchUi.View %2\n.return %3\n.end\n";
+    let bad = "ciq-ir\n.function f\n.begin-source &0 HelloView WatchUi.View\n.new-source %0 HelloView WatchUi.View &0\n.local $0 %0\n.begin-source &1 ViewController WatchUi.View\n.read %1 $0\n.call-object %2 %1 HelloView current\n.new-source %3 ViewController WatchUi.View &1 %2\n.return %3\n.end\n";
     // The function carries a constructor declaration obligation; unit checking
     // rejects the Number argument for the declared source reference parameter.
     assert!(parse_function_ir(bad).is_ok());
-    let wrong_order = "ciq-ir\n.function f\n.new-source %0 HelloView WatchUi.View\n.local $0 %0\n.read %1 $0\n.call-object %2 %1 HelloView current\n.read %3 $0\n.new-source %4 ViewController WatchUi.View %3 %2\n.return %4\n.end\n";
+    let wrong_order = "ciq-ir\n.function f\n.begin-source &0 HelloView WatchUi.View\n.new-source %0 HelloView WatchUi.View &0\n.local $0 %0\n.begin-source &1 ViewController WatchUi.View\n.read %1 $0\n.call-object %2 %1 HelloView current\n.read %3 $0\n.new-source %4 ViewController WatchUi.View &1 %3 %2\n.return %4\n.end\n";
     assert!(
         parse_function_ir(wrong_order)
             .unwrap_err()

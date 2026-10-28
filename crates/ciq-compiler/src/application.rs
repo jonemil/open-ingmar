@@ -77,7 +77,8 @@ fn instance_field(
             initial: Some(name),
             ..
         } => (8, ids[name]),
-        crate::FieldKind::Value { .. }
+        crate::FieldKind::Constant { .. }
+        | crate::FieldKind::Value { .. }
         | crate::FieldKind::Symbol { initial: None, .. }
         | crate::FieldKind::Numeric { .. }
         | crate::FieldKind::Scalar { .. }
@@ -460,6 +461,52 @@ pub fn build_console_application(
             instruction(Opcode::Invokemz, vec![]),
             instruction(Opcode::Return, vec![]),
         ]);
+    }
+    // Allocation hooks have no ordinary function prologue. Invoke the checked
+    // field initializer through a reserved slot to give its locals a call frame.
+    for source_class in unit.classes().iter().filter(|class| {
+        class
+            .methods
+            .iter()
+            .any(|f| f.name() == crate::unit::FIELD_INITIALIZER)
+    }) {
+        let ctor = if source_class.base == crate::ClassBase::ApplicationAppBase {
+            "__ciq_constructor".to_owned()
+        } else {
+            format!("__ciq_ctor_{}", source_class.name)
+        };
+        let start = items
+            .iter()
+            .position(|item| matches!(item,Item::Label(label) if label==&ctor))
+            .unwrap();
+        let at = (start + 1..items.len())
+            .find(|&at| {
+                matches!(
+                    &items[at],
+                    Item::Instruction {
+                        opcode: Opcode::Return,
+                        ..
+                    }
+                )
+            })
+            .unwrap();
+        let mut initialize = Vec::new();
+        if source_class.base != crate::ClassBase::LangObject {
+            initialize.push(instruction(Opcode::Popv, vec![]));
+        }
+        initialize.extend([
+            instruction(
+                Opcode::Getselfv,
+                vec![sym(&format!(
+                    "__ciq_member_{}",
+                    crate::unit::FIELD_INITIALIZER
+                ))],
+            ),
+            instruction(Opcode::Invokemz, vec![]),
+            instruction(Opcode::Popv, vec![]),
+            instruction(Opcode::Return, vec![]),
+        ]);
+        items.splice(at..=at, initialize);
     }
     items.extend(unit.lower().items().iter().cloned());
     let assembly = Program::new(items).map_err(error)?;

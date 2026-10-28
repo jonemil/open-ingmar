@@ -10,7 +10,7 @@ owning files for the definition to read or change.
 | Concern | Implementation entry points | Contract |
 |---|---|---|
 | Source syntax and names | [parser.rs], [names.rs] | [Source grammar] |
-| Immediate constant evaluation | [constants.rs], [parser.rs], [source_ir.rs] | [Constants] |
+| Constant evaluation and storage | [constants.rs], [parser.rs], [unit.rs], [source_ir.rs] | [Constants] |
 | Source receiver member candidates | [source_calls.rs] | [Source identities] |
 | Source → IR candidates | [source_ir.rs], [source_types.rs], [unchecked.rs] | [Source semantics] |
 | Source ambiguity reporting | [type_check.rs] | [Checking policy] |
@@ -26,7 +26,7 @@ owning files for the definition to read or change.
 | Lexical assertions | [casts.rs] | [Assertions] |
 | Operators | [operators.rs] | [Expressions] |
 | IR text and shared type tags | [ir_text.rs], [type_text.rs] | [IR grammar] |
-| Private container construction | [builders.rs] | [IR containers] |
+| Private construction | [builders.rs] | [IR containers] |
 | SDK declarations and member profiles | [api.rs], [native.rs] | [SDK contracts] |
 | Pinned VM API identities | [native_bindings.rs] | [SDK contracts] |
 | Literal and Symbol operand binding | [bindings.rs] | [Assembly] |
@@ -106,8 +106,10 @@ remain deferred in [the plan](plan.md).
 
 The declaration parser returns one `ParsedUnit` per source file. Shared
 `Declarations` collect typedef and constant environments across files. Immediate
-constants are resolved and cached once, with lexical lookup and rebinding checks
-before literal IR construction. Heap-backed values require declaration storage.
+global/module constants are resolved and cached once before literal IR
+construction. Class constants retain readonly field contracts and a checked
+allocation initializer. Source construction uses private allocation/completion
+builders to preserve allocation before user argument effects.
 Typedef targets reuse annotation parsing with cached closed terms and guarded
 recursion/depth checks. Recursive types retain finite binders; value operations unfold one
 constructor rather than erasing or repeatedly expanding a cycle. Contract

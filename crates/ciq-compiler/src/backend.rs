@@ -178,7 +178,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
                 );
             }
-            Operation::DictionaryBegin { builder, .. }
+            Operation::SourceBegin { builder, .. }
+            | Operation::DictionaryBegin { builder, .. }
             | Operation::RecordBegin { builder, .. }
             | Operation::ArrayBegin { builder, .. }
             | Operation::ByteArrayBegin { builder, .. } => {
@@ -208,6 +209,22 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
     });
     for located in function.operations() {
         match located.operation {
+            Operation::SourceBegin {
+                builder, ref class, ..
+            } => {
+                items.extend([
+                    instruction(
+                        Opcode::Getmv,
+                        vec![
+                            Operand::Symbol("__ciq_source_globals".into()),
+                            Operand::Symbol(format!("__ciq_class_{class}")),
+                        ],
+                    ),
+                    instruction(Opcode::Newc, vec![]),
+                    instruction(Opcode::Lputv, vec![Operand::Bits(builders[&builder])]),
+                ]);
+                continue;
+            }
             Operation::DictionaryBegin {
                 builder, length, ..
             }
@@ -736,17 +753,12 @@ fn expression(
                     (Opcode::Ipush1, vec![Operand::Bits(value as u64)])
                 }
                 Operation::SourceNew {
-                    class, arguments, ..
+                    builder, arguments, ..
                 } => {
                     items.extend([
-                        instruction(
-                            Opcode::Getmv,
-                            vec![
-                                Operand::Symbol("__ciq_source_globals".into()),
-                                Operand::Symbol(format!("__ciq_class_{class}")),
-                            ],
-                        ),
-                        instruction(Opcode::Newc, vec![]),
+                        instruction(Opcode::Lgetv, vec![Operand::Bits(builders[builder])]),
+                        instruction(Opcode::Npush, vec![]),
+                        instruction(Opcode::Lputv, vec![Operand::Bits(builders[builder])]),
                         instruction(Opcode::Dup, vec![Operand::Bits(0)]),
                         instruction(
                             Opcode::Getsv,

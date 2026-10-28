@@ -35,7 +35,7 @@ mandatory model validation; it does not replay source-only policy diagnostics.
 ### Semantic model
 
 Value IDs identify computations; local IDs identify stored state; parameters
-identify positions; private container builders identify incomplete construction.
+identify positions; private builders identify incomplete construction.
 None selects a VM slot, native symbol/import ID, or section address. Source
 spans carry diagnostic provenance. Immutable validated models are the boundary
 between source checking and VM instruction selection.
@@ -1258,7 +1258,9 @@ Dictionary.
 
 ### Private container checks
 
-Array and Dictionary builders share one identity namespace and lifetime checker.
+Container and source-allocation builders share one identity namespace and
+lifetime checker. See [source construction](#source-construction-and-native-constants)
+for allocation/completion operands.
 Begin declarations are unique within a function; operations cannot substitute
 one builder kind for the other. Every CFG join requires identical active-builder
 progress on incoming paths, including backedges. Returns cannot leave builders
@@ -2123,6 +2125,23 @@ instead track every exact body as specified above. Field contracts retain these
 same alternatives; explicit union assertions retain their target identities
 without checking runtime compatibility.
 
+`FieldKind::Constant { value_type }` / `.field-constant name tag` retains a
+readonly field binding under an ordinary value contract. DATA starts as Null;
+the reserved instance method `__ciq_initialize_fields` assigns every constant
+exactly once during allocation. It takes no parameters, returns Void, and has no
+native-base initialization. It may read earlier initialized fields, but cannot
+read incomplete fields, expose an incomplete receiver, branch before completing
+the assignment prefix, or call potentially shutting-down bodies while required
+fields remain incomplete. Ordinary methods, including user `initialize()`,
+cannot rebind constants. Container contents remain mutable. Mutable structural
+interface fields require mutable implementation bindings.
+
+The reserved allocation method must exist exactly when constants exist. Unit
+validation rejects explicit source/IR calls and known-selector Method binding to
+it. Source identifiers cannot use its reserved name. Application generation
+provides an internal DATA method slot for the allocation hook's ordinary call;
+its locals require a separate call frame. It is not user `initialize()`.
+
 `FieldKind::Value { value_type: ReturnType }` carries field contracts without an
 existing specialized storage form, including general unions and nullable
 container references. `.field-value name tag` uses the ordinary saved value tag.
@@ -2173,9 +2192,15 @@ Symbol fields use [`.field-symbol`](../frontend/README.md#symbol-fields),
 retaining literal default names and explicit Symbol/nullability read contracts.
 Standalone method parsing leaves that unit obligation unresolved.
 
-`.new-source` allocates and initializes a source object. Supported bases are
-`Lang.Object`, `WatchUi.View`, and `WatchUi.BehaviorDelegate`; for example,
-`.new-source %0 HelloView WatchUi.View %1` passes one argument. The base is
+`.begin-source &0 HelloView WatchUi.View` allocates a private source instance
+before user argument evaluation. `.new-source %0 HelloView WatchUi.View &0 %1`
+consumes that builder, invokes user `initialize()` with one argument, and
+publishes the completed instance. Builder declarations are unique within the
+function, and each completion must match its class/native base and an active
+allocation on every incoming path. Builders cannot escape as values, be used as
+container builders, or remain incomplete at return. Argument branches preserve
+the private allocation with empty-stack CFG edges. Supported bases are
+`Lang.Object`, `WatchUi.View`, and `WatchUi.BehaviorDelegate`. The base is
 required and defines the native value projection: Object, View, or
 BehaviorDelegate. Source class identity remains separate from that projection.
 Construction is order-sensitive. Function validation checks the identifier,

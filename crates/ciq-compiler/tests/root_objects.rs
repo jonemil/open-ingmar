@@ -115,10 +115,7 @@ fn constructor_identity_scope_and_view_specific_contracts_stay_checked() {
     let collision = text.replace(".field-number count 1", ".field-number Object 1");
     assert!(collision != text);
     assert!(parse_unit_ir(&collision).is_err());
-    let bad = text.replace(
-        ".new-source %1 Counter Lang.Object",
-        ".new-source %1 Counter WatchUi.View",
-    );
+    let bad = text.replace("Counter Lang.Object", "Counter WatchUi.View");
     assert!(bad != text);
     assert!(parse_unit_ir(&bad).is_err());
 }

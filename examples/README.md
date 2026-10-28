@@ -59,6 +59,8 @@ and future Rust toolchain experiments.
   containers, nullable source identities, fields, and casts.
 - [compiler-constants](compiler-constants/README.md): immediate constant bindings,
   scoped/forward references, receiver effects, and lexical shadowing.
+- [compiler-class-constants](compiler-class-constants/README.md): per-instance
+  readonly bindings, heap identity, mutable contents, and allocation order.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural

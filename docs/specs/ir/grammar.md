@@ -54,7 +54,8 @@ checks](README.md#compilation-units-and-classes).
 
 ```text
 field-record = field-body newline
-field-body = ".field-value" identifier call-result-tag
+field-body = ".field-constant" identifier call-result-tag
+           | ".field-value" identifier call-result-tag
            | ".field-number" identifier signed-decimal-i32
            | ".field-scalar" identifier scalar-field-tag
            | ".field-numeric" identifier numeric-alias-tag
@@ -75,7 +76,9 @@ Scalar field tags are `integer`, `long`, `float`, `double`, `boolean`, `char`,
 `string`, and their nullable forms. Alias tags are `integer-union`, `decimal`,
 `numeric`, and nullable forms. Interface tags are `comparable`, `comparator`,
 and nullable forms. Field records do not carry spans or arbitrary default
-expressions. `.field-value` carries the full ordinary value contract, including
+expressions. `.field-constant` retains a readonly binding and requires a checked
+allocation initializer; its value contract uses the same restrictions as
+`.field-value`. `.field-value` carries the full ordinary value contract, including
 native/source/mixed unions, tuples, and nullable container references. Void and
 Graphics.Dc are excluded, including as union alternatives. Parsing and typed
 construction canonicalize contracts with an existing specialized field form to
@@ -218,7 +221,8 @@ field-entry-metadata = "declared=" call-result-tag
 source-field-metadata = "field=" call-result-tag
 member-read-metadata = source-field-metadata | "view=" call-result-tag
 object-operation = ".new-native" value-id class-path
-                 | ".new-source" value-id identifier native-base value-id*
+                 | ".begin-source" builder-id identifier native-base
+                 | ".new-source" value-id identifier native-base builder-id value-id*
                  | ".base-initialize" native-base
                  | ".tuple-new" value-id value-id*
                  | ".tuple-write" value-id value-id value-id value-id
