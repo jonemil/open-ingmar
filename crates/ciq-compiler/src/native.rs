@@ -786,19 +786,27 @@ pub(crate) fn accepts_boundary(expected: &api::Type, actual: &api::Type) -> bool
 /// This positional adaptation also applies inside nested Array element domains.
 /// Any crosses value boundaries dynamically; Void remains separate from values.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
-    // Recursive references preserve invariant contracts. Compare two closed
-    // terms coinductively before unfolding; structural width checks must not
-    // restart the same unequal pair indefinitely through record/tuple fields.
-    if matches!(expected, api::Type::Recursive(_)) && matches!(actual, api::Type::Recursive(_)) {
-        return crate::structural::same_type(expected, actual);
-    }
-    if expected != actual {
-        if let Some(unfolded) = crate::recursive::unfold(expected) {
-            return accepts(&unfolded, actual);
-        }
-        if let Some(unfolded) = crate::recursive::unfold(actual) {
-            return accepts(expected, &unfolded);
-        }
+    accepts_in(expected, actual, &crate::recursive::Comparison::default())
+}
+fn accepts_in(
+    expected: &api::Type,
+    actual: &api::Type,
+    comparison: &crate::recursive::Comparison,
+) -> bool {
+    comparison
+        .scoped(expected, actual, || {
+            accepts_step(expected, actual, comparison)
+        })
+        .unwrap_or(true)
+}
+fn accepts_step(
+    expected: &api::Type,
+    actual: &api::Type,
+    comparison: &crate::recursive::Comparison,
+) -> bool {
+    let accepts = |e: &api::Type, a: &api::Type| accepts_in(e, a, comparison);
+    if matches!(expected, api::Type::Recursive(_)) || matches!(actual, api::Type::Recursive(_)) {
+        return crate::tuples::matches_with(expected, actual, &accepts);
     }
 
     if let (api::Type::Dictionary { key, value }, api::Type::Options(fields)) = (expected, actual) {
@@ -821,8 +829,13 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     }
     if let api::Type::SourceValue(expected) = expected {
         return match actual {
-            api::Type::SourceValue(actual) => expected.accepts(actual),
-            _ => expected.accepts_api(actual),
+            api::Type::SourceValue(actual) => expected.accepts_using(actual, &accepts, |_, ty| {
+                matches!(
+                    crate::ValueType::from_api_type(ty),
+                    Some(crate::ValueType::Interface(_))
+                )
+            }),
+            _ => accepts(&expected.native_type(), actual),
         };
     }
     if let api::Type::SourceValue(actual) = actual {
@@ -855,17 +868,19 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
         return types.iter().any(|ty| accepts(ty, actual));
     }
     if let (api::Type::Array(expected), api::Type::Array(actual)) = (expected, actual) {
-        return crate::tuples::array_elements_match(expected, actual);
+        return crate::tuples::array_elements_match_with(expected, actual, &accepts);
     }
     if let api::Type::TupleValue(expected) = expected {
         return match actual {
             api::Type::TupleValue(actual) => {
                 expected.slots().len() == actual.slots().len()
-                    && expected
-                        .slots()
-                        .iter()
-                        .zip(actual.slots())
-                        .all(|(e, a)| crate::tuples::accepts(e, a))
+                    && expected.slots().iter().zip(actual.slots()).all(|(e, a)| {
+                        crate::tuples::matches_with(
+                            &crate::tuples::exact_type(e),
+                            &crate::tuples::exact_type(a),
+                            &accepts,
+                        )
+                    })
             }
             api::Type::Tuple(actual) => {
                 expected.slots().len() == actual.len()
@@ -951,6 +966,33 @@ pub(crate) fn structural_api(
     actual: &api::Type,
     context: Option<api::ApiContext>,
 ) -> Result<(), String> {
+    structural_api_in(
+        expected,
+        actual,
+        context,
+        &crate::recursive::Comparison::default(),
+    )
+}
+fn structural_api_in(
+    expected: &api::Type,
+    actual: &api::Type,
+    context: Option<api::ApiContext>,
+    comparison: &crate::recursive::Comparison,
+) -> Result<(), String> {
+    comparison
+        .scoped(expected, actual, || {
+            structural_api_step(expected, actual, context, comparison)
+        })
+        .unwrap_or(Ok(()))
+}
+fn structural_api_step(
+    expected: &api::Type,
+    actual: &api::Type,
+    context: Option<api::ApiContext>,
+    comparison: &crate::recursive::Comparison,
+) -> Result<(), String> {
+    let structural_api =
+        |e: &api::Type, a: &api::Type, context| structural_api_in(e, a, context, comparison);
     if crate::structural::same_type(expected, actual) {
         if let Some(context) = context {
             context.check_type(api::core(), expected)?;
@@ -991,6 +1033,12 @@ pub(crate) fn structural_api(
             }
         }
         return Err(last.unwrap_or_else(|| "native structural witness is unavailable".into()));
+    }
+    if let (api::Type::Options(expected), api::Type::Options(actual)) = (expected, actual) {
+        return actual
+            .iter()
+            .filter_map(|(key, ty)| expected.get(key).map(|required| (required, ty)))
+            .try_for_each(|(e, a)| structural_api(e, a, Some(context)));
     }
     if let api::Type::TupleValue(actual) = actual {
         let expected_slots = match expected {

@@ -79,7 +79,7 @@ four policies. The [source contract][checking] states our current limits.
 **Experimentally observed**, 2026-10-27: SDK 9.2.0, `fr265`, minimum API
 5.0.0, strict checking, `-O 0` accepts the
 [recursive-contract specimen](../../examples/compiler-recursive-contracts/README.md).
-SDK and independently generated PRGs both produce its eighteen expected lines.
+SDK and independently generated PRGs both produce its 23 expected lines.
 The specimen exercises Array/Dictionary recursion, nullable values, interface
 method chaining, and an interface stored in a source field. Structured
 reconstruction succeeds for both programs without CODE/DATA fallback.
@@ -130,10 +130,17 @@ source. Our constructor restriction is checked independently by the
 
 The same strict SDK scaffold accepts `typedef A as {:next as A}; typedef B as
 {:next as B, :z as Lang.Number}; function f(x as B) as A { return x; }`.
-Our recursive-contract comparison currently rejects this width match. A
-regression test ensures it terminates rather than overflowing while repeatedly
-comparing the `next` fields. This probe establishes compiler acceptance only;
-it does not establish recursive record mutation or runtime alias behavior.
+The specimen extends that check with matching recursive `:label` fields and
+an extra optional `:extra` field. Both strict compilers accept it. SDK and
+independently generated simulator runs produce the same final five lines:
+`41`, `41`, `42`, `43`, `43`. They cover a narrower function result, an asserted
+record view, a shared child mutated through another reference, a parent write
+through the narrower view, and a `:next` link to the parent itself. No record
+copy or conversion is needed; both PRGs reconstruct without CODE/DATA fallback.
+Conflicting shared fields and mismatched exact source fields fail our boundary
+checks; the tests also retain API requirements and invalidate stale field proofs
+after a write through an asserted view. Current matching and heap-view rules
+belong in the [IR reference](../specs/ir/README.md#recursive-contracts).
 
 ## Checking off
 

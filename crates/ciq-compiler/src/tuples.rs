@@ -227,21 +227,6 @@ pub(crate) fn value_contract(
         .ok_or("unsupported tuple slot contract")
 }
 
-/// Check slot assignability without substituting a native base for an exact
-/// source identity. Any retains its ordinary gradual boundary behavior.
-pub(crate) fn accepts(expected: &ReturnType, actual: &ReturnType) -> bool {
-    if *actual == ReturnType::Any {
-        return true;
-    }
-    if let Some(expected) = expected.source_contract() {
-        return actual.source_contract().map_or_else(
-            || expected.accepts_api(&actual.api_type()),
-            |actual| expected.accepts(&actual),
-        );
-    }
-    crate::native::accepts(&expected.api_type(), &actual.api_type())
-}
-
 /// Retain exact source identities when adapting a slot to the shared type model.
 pub(crate) fn exact_type(contract: &ReturnType) -> Type {
     contract
@@ -253,6 +238,7 @@ pub(crate) fn exact_type(contract: &ReturnType) -> Type {
 /// Report positional contracts that may carry source witnesses at a boundary.
 pub(crate) fn contains(ty: &Type) -> bool {
     match ty {
+        Type::Recursive(body) => contains(body),
         Type::TupleValue(_) | Type::Options(_) => true,
         Type::Array(element) => contains(element),
         Type::Union(parts) => parts.iter().any(contains),
@@ -269,28 +255,66 @@ pub(crate) fn matches_with(
     actual: &Type,
     leaf: &impl Fn(&Type, &Type) -> bool,
 ) -> bool {
+    matches_in(
+        expected,
+        actual,
+        leaf,
+        &crate::recursive::Comparison::default(),
+    )
+}
+
+fn matches_in(
+    expected: &Type,
+    actual: &Type,
+    leaf: &impl Fn(&Type, &Type) -> bool,
+    comparison: &crate::recursive::Comparison,
+) -> bool {
+    comparison
+        .scoped(expected, actual, || {
+            matches_step(expected, actual, leaf, comparison)
+        })
+        .unwrap_or(true)
+}
+fn matches_step(
+    expected: &Type,
+    actual: &Type,
+    leaf: &impl Fn(&Type, &Type) -> bool,
+    comparison: &crate::recursive::Comparison,
+) -> bool {
+    if let Some(body) = crate::recursive::unfold(expected) {
+        return matches_in(&body, actual, leaf, comparison);
+    }
+    if let Some(body) = crate::recursive::unfold(actual) {
+        return matches_in(expected, &body, leaf, comparison);
+    }
     if *actual == Type::Any || *expected == Type::Any {
         return crate::native::accepts(expected, actual);
     }
     if let Type::Union(parts) = actual {
-        return parts.iter().all(|part| matches_with(expected, part, leaf));
+        return parts
+            .iter()
+            .all(|part| matches_in(expected, part, leaf, comparison));
     }
     if let Type::Union(parts) = expected {
         // A source contract may contain several classes plus Null/native arms.
         // Its leaf proof distributes those arms across the expected union.
         if !matches!(actual, Type::SourceValue(_)) {
-            return parts.iter().any(|part| matches_with(part, actual, leaf));
+            return parts
+                .iter()
+                .any(|part| matches_in(part, actual, leaf, comparison));
         }
     }
     match (expected, actual) {
         (Type::Dictionary { key, value }, Type::Options(fields)) => {
             crate::native::accepts(key, &Type::named("Toybox.Lang.Symbol"))
-                && fields.values().all(|ty| matches_with(value, ty, leaf))
+                && fields
+                    .values()
+                    .all(|ty| matches_in(value, ty, leaf, comparison))
         }
         (Type::Options(expected), Type::Options(actual)) => actual.iter().all(|(key, ty)| {
             expected
                 .get(key)
-                .is_none_or(|required| matches_with(required, ty, leaf))
+                .is_none_or(|required| matches_in(required, ty, leaf, comparison))
         }),
         (Type::TupleValue(expected), Type::TupleValue(actual)) => {
             expected.slots().len() == actual.slots().len()
@@ -298,12 +322,12 @@ pub(crate) fn matches_with(
                     .slots()
                     .iter()
                     .zip(actual.slots())
-                    .all(|(e, a)| matches_with(&exact_type(e), &exact_type(a), leaf))
+                    .all(|(e, a)| matches_in(&exact_type(e), &exact_type(a), leaf, comparison))
         }
         (Type::Array(element), Type::TupleValue(actual)) => actual
             .slots()
             .iter()
-            .all(|slot| matches_with(element, &exact_type(slot), leaf)),
+            .all(|slot| matches_in(element, &exact_type(slot), leaf, comparison)),
         (Type::Array(expected), Type::Array(actual)) => {
             array_elements_match_with(expected, actual, leaf)
         }
@@ -338,11 +362,7 @@ pub(crate) fn read_contract(
 /// Compare invariant Array element domains while permitting nested tuple-to-Array
 /// views. Every alternative on each side must be represented; ordinary scalar
 /// or source element domains cannot widen through this adaptation.
-pub(crate) fn array_elements_match(expected: &Type, actual: &Type) -> bool {
-    array_elements_match_with(expected, actual, &crate::native::accepts)
-}
-
-fn array_elements_match_with(
+pub(crate) fn array_elements_match_with(
     expected: &Type,
     actual: &Type,
     leaf: &impl Fn(&Type, &Type) -> bool,

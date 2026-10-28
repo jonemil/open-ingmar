@@ -100,12 +100,21 @@ saved metadata cannot introduce an unbound reference.
 Value operations unfold one constructor, substituting the closed recursive term
 for bound references in its children. Thus indexing a recursive Array or calling
 a recursive interface method returns another usable closed contract. Structural
-comparison remembers pairs already compared so equivalent recursive shapes can
-be checked finitely. Two recursive contracts require that equality rather than
-recursive record-width or tuple-slot widening; mutable containers retain
-invariant contracts and exact source identities. Null refinement and API checks
-remain applicable. These are
-static contracts, not runtime object cycles or new VM operations.
+equality compares recursive shapes finitely. Value matching uses the ordinary
+record/tuple rules after unfolding and treats a repeated recursive pair on the
+current proof path as an obligation already being checked. Failed alternatives
+retain no assumed proof. Shared record fields must still match, including exact
+source identities and API requirements; absent/extra optional fields follow the
+[record contract](../frontend/README.md#symbol-keyed-records). Mutable Array and
+Dictionary parameters remain invariant. Null refinement remains applicable.
+These are static contracts, not new VM operations or a requirement that runtime
+records form an acyclic tree.
+
+Record flow unfolds outer recursive schemas lazily and retains closed recursive
+field contracts. It tracks the ordinary alias/view roots for casts, reads,
+writes, and CFG edges. When a child view revisits an active root, it retains the
+closed field contract instead of expanding the runtime cycle. Existing bounds
+and conservative invalidation still apply to unresolved heap effects.
 
 ### Source interface contracts
 

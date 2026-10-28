@@ -35,7 +35,6 @@ fn recursive_guards_mutual_aliases_and_closed_text_are_checked() {
         "typedef A as A;function f(){}",
         "typedef A as B;typedef B as A;function f(){}",
         "typedef A as A or Null;function f(){}",
-        "typedef A as {:next as A};typedef B as {:next as B,:z as Toybox.Lang.Number};function f(x as B) as A{return x;}",
         "using Toybox.Lang;typedef Tree as Lang.Array<Tree>;function f(t as Tree) as Lang.Number{return t[0];}",
         "using Toybox.Lang;typedef R as interface{function next() as R;function value() as Lang.Number;};function f(x as R) as Lang.String{return x.next().value();}",
     ] {
@@ -226,4 +225,56 @@ fn nested_dictionary_values_preserve_lookup_and_enumeration_contracts() {
         }
     "#;
     common::pipeline(compile_sources(&[source]).unwrap());
+}
+
+#[test]
+fn recursive_record_width_checks_are_finite_and_keep_shared_fields() {
+    let aliases = "typedef A as {:next as A};typedef B as {:next as B,:z as Toybox.Lang.Number};";
+    for body in [
+        "function f(x as B) as A{return x;}",
+        "function f(x as A) as B{return x;}",
+        "function f(x as B) as A or Null{return x[:next];}",
+    ] {
+        common::pipeline(compile_sources(&[&format!("{aliases}{body}")]).unwrap());
+    }
+    let same_source = "class Token{}typedef A as {:next as A,:token as Token};typedef B as {:next as B,:token as Token,:extra as Toybox.Lang.Number};function f(x as B) as A{return x;}";
+    common::pipeline(compile_sources(&[same_source]).unwrap());
+    assert!(
+        compile_sources(&[&same_source
+            .replace("class Token{}", "class Token{}class Other{}")
+            .replace(":token as Token,:extra", ":token as Other,:extra")])
+        .is_err()
+    );
+    for body in [
+        "typedef A as {:next as A,:z as Toybox.Lang.Number};typedef B as {:next as B,:z as Toybox.Lang.String};function f(x as B) as A{return x;}",
+        "typedef A as {:next as A,:z as Toybox.Lang.Number};typedef B as {:next as B,:z as Toybox.Lang.Number or Toybox.Lang.String};function f(x as B) as A{return x;}",
+        "typedef A as {:next as A};typedef B as {:next as B,:z as Toybox.Lang.Number};function f(x as Toybox.Lang.Array<B>) as Toybox.Lang.Array<A>{return x;}",
+    ] {
+        assert!(compile_sources(&[body]).is_err(), "{body}");
+    }
+    let changed = "typedef A as {:next as A};typedef B as {:next as B,:z as Toybox.Lang.Number};function f(x as B) as Toybox.Lang.Number{var r=x as A;r[:z]=\"bad\";var v=x[:z];if(v==null){return 0;}return v;}";
+    assert!(
+        ciq_compiler::compile_sources_with_options(
+            &[changed],
+            ciq_compiler::CompileOptions {
+                type_check: ciq_compiler::TypeCheckLevel::Strict,
+                ..Default::default()
+            }
+        )
+        .is_err()
+    );
+    let api_source = "typedef Character as interface{function toChar() as Toybox.Lang.Char;};typedef A as {:next as A,:value as Character};typedef B as {:next as B,:value as Toybox.Lang.Number};function f(x as B) as A{return x;}";
+    let early = ciq_compiler::api::ApiContext::new(
+        ciq_compiler::api::ApiLevel(1, 2, 0),
+        ciq_compiler::api::ApiLevel(1, 2, 0),
+    )
+    .unwrap();
+    let current = ciq_compiler::api::ApiContext::new(
+        ciq_compiler::api::ApiLevel(1, 3, 0),
+        ciq_compiler::api::ApiLevel(1, 3, 0),
+    )
+    .unwrap();
+    assert!(ciq_compiler::compile_sources_with_api(&[api_source], early).is_err());
+    let unit = ciq_compiler::compile_sources_with_api(&[api_source], current).unwrap();
+    assert!(ciq_compiler::parse_unit_ir_with_api(&unit.to_ir_text(), early).is_err());
 }

@@ -3879,6 +3879,14 @@ same contract. Nonempty literals containing only literal Symbol keys infer a
 record from their value contracts; `{}` requires a destination contract.
 Construction checks known fields and preserves evaluation order.
 
+Guarded recursive aliases use these same optional-field rules. For example,
+`typedef A as {:next as A};` and `typedef B as {:next as B, :z as Number};`
+can match at a value boundary: only shared supplied keys impose field
+obligations, and recursive `:next` comparisons close finitely. Conflicting
+shared field types still fail. This does not make `Array<A>` and `Array<B>`
+interchangeable. Narrower asserted views and ordinary aliases retain the same
+Dictionary reference; writes update or invalidate affected live field views.
+
 Indexed reads and `get(:name)` produce the declared field type joined with Null.
 Unknown or dynamic keys produce Any. Records retain source-class identities and
 nested container contracts through annotations and saved IR. Assignment checks

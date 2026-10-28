@@ -107,8 +107,10 @@ The declaration parser returns one `ParsedUnit` per source file. Typedef
 collection captures owner/file environments across the supplied files; targets
 reuse annotation parsing with cached closed terms and guarded recursion/depth
 checks. Recursive types retain finite binders; value operations unfold one
-constructor rather than erasing or repeatedly expanding a cycle. Unit
-compilation resolves declarations before calls. The isolated-function entry
+constructor rather than erasing or repeatedly expanding a cycle. Contract
+matching shares proof-path recursion guards across native, tuple/record,
+source-identity, and API witness checks; record heap views unfold lazily and stop
+at repeated roots. Unit compilation resolves declarations before calls. The isolated-function entry
 selects a body from the same parser, retaining external-call binding without
 unit ownership/signature validation. Base-expression and postfix frames keep
 the expression-depth budget stable.

@@ -29,15 +29,31 @@ pub(crate) struct State {
     escaped: Roots,
 }
 
+/// Unfold only the outer value alternatives; recursive fields stay closed.
+fn parts(ty: &Type) -> std::borrow::Cow<'_, [Type]> {
+    if let Some(body) = crate::recursive::unfold(ty) {
+        return std::borrow::Cow::Owned(parts(&body).into_owned());
+    }
+    if let Type::Union(parts_) = ty {
+        if parts_.iter().any(|part| matches!(part, Type::Recursive(_))) {
+            return std::borrow::Cow::Owned(
+                parts_
+                    .iter()
+                    .flat_map(|ty| parts(ty).into_owned())
+                    .collect(),
+            );
+        }
+    }
+    std::borrow::Cow::Borrowed(crate::unions::alternatives(ty))
+}
 pub(crate) fn has_view(ty: &Type) -> bool {
-    crate::unions::alternatives(ty)
-        .iter()
-        .any(|t| matches!(t, Type::Options(_)))
+    parts(ty).iter().any(|t| matches!(t, Type::Options(_)))
 }
 fn schema(ty: &Type) -> Option<BTreeMap<String, Type>> {
+    let parts = parts(ty);
     let mut result = BTreeMap::new();
     let mut found = false;
-    for part in crate::unions::alternatives(ty) {
+    for part in parts.iter() {
         if let Type::Options(fields) = part {
             found = true;
             for (key, ty) in fields {
@@ -49,7 +65,7 @@ fn schema(ty: &Type) -> Option<BTreeMap<String, Type>> {
         }
     }
     for (key, value) in &mut result {
-        if crate::unions::alternatives(ty)
+        if parts
             .iter()
             .any(|part| matches!(part,Type::Options(fields) if !fields.contains_key(key)))
         {
@@ -59,7 +75,7 @@ fn schema(ty: &Type) -> Option<BTreeMap<String, Type>> {
     found.then_some(result)
 }
 fn other_parts(ty: &Type) -> Vec<Type> {
-    crate::unions::alternatives(ty)
+    parts(ty)
         .iter()
         .filter(|t| !matches!(t, Type::Options(_)))
         .cloned()
@@ -198,6 +214,13 @@ impl State {
     }
 
     fn view(&self, roots: &Roots, depth: usize) -> Option<Type> {
+        self.view_in(roots, depth, &Roots::new())
+    }
+    fn view_in(&self, roots: &Roots, depth: usize, active: &Roots) -> Option<Type> {
+        if roots.iter().any(|root| active.contains(root)) {
+            return None;
+        }
+        let active = active.union(roots).cloned().collect();
         if roots.is_empty() || depth > 64 {
             return None;
         }
@@ -207,9 +230,9 @@ impl State {
                 let mut ty = ty.clone();
                 if schema(&ty).is_some() {
                     if let Some(children) = self.children.get(&(root.clone(), key.clone())) {
-                        if let Some(child) = self.view(children, depth + 1) {
+                        if let Some(child) = self.view_in(children, depth + 1, &active) {
                             ty = crate::unions::normalize(
-                                crate::unions::alternatives(&ty)
+                                parts(&ty)
                                     .iter()
                                     .map(|part| {
                                         if matches!(part, Type::Options(_)) {
@@ -737,6 +760,7 @@ impl State {
 pub(crate) fn needed(ops: &[LocatedOperation], parameters: &[ParameterType]) -> bool {
     fn includes(ty: &Type) -> bool {
         match ty {
+            Type::Recursive(body) => includes(body),
             Type::Options(_) => true,
             Type::Array(t) => includes(t),
             Type::Dictionary { key, value } => includes(key) || includes(value),

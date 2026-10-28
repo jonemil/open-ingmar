@@ -12,7 +12,21 @@ typedef AppContract as interface {
     function ownValue() as Lang.Number;
     function again() as AppContract;
 };
+typedef Record as {:next as Record, :label as Lang.Number};
+typedef WideRecord as {:next as WideRecord, :label as Lang.Number, :extra as Lang.Number};
 module Checks {
+    function makeRecord() as WideRecord { return {:label=>41, :extra=>7}; }
+    function narrowRecord(value as WideRecord) as Record { return value; }
+    function recordLabel(value as Record) as Lang.Number {
+        var label = value[:label];
+        if (label == null) { return -1; }
+        return label;
+    }
+    function nextRecordLabel(value as Record) as Lang.Number {
+        var next = value[:next];
+        if (next == null) { return -1; }
+        return Checks.recordLabel(next);
+    }
     function eraseApp(app as Application.AppBase) as Application.AppBase { return app; }
     function actualAppValue(object as Lang.Object) as Lang.Number {
         if (object instanceof MinimalConsoleApp) { return object.ownValue(); }
@@ -114,6 +128,18 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(self.savedValue());
         System.println(Checks.actualAppValue(Checks.eraseApp(self)));
         System.println(Checks.actualAppValue(new Node()));
+        var wide = Checks.makeRecord();
+        var record = wide as Record;
+        System.println(Checks.recordLabel(Checks.narrowRecord(wide)));
+        var child = Checks.makeRecord();
+        wide[:next] = child;
+        System.println(Checks.nextRecordLabel(record));
+        child[:label] = 42;
+        System.println(Checks.nextRecordLabel(record));
+        record[:label] = 43;
+        System.println(Checks.recordLabel(wide));
+        wide[:next] = wide;
+        System.println(Checks.nextRecordLabel(record));
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

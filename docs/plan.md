@@ -4,13 +4,12 @@
 
 Priority order:
 
-1. [Language inference, unions, and storage](#1-inference-unions-and-storage).
-2. [Declarations, namespaces, and member storage](#2-declarations-namespaces-and-member-storage).
-3. [Source inheritance and construction](#3-source-inheritance-and-construction).
-4. [Operators, calls, and control flow](#4-operators-calls-and-control-flow).
-5. [Toybox.Lang](#toyboxlang-worklist), with classes ordered within the module.
-6. [Exception handling](#exceptions).
-7. [Lexical compatibility and annotations](#lexical-compatibility-and-annotations).
+1. [Declarations, namespaces, and member storage](#1-declarations-namespaces-and-member-storage).
+2. [Source inheritance and construction](#2-source-inheritance-and-construction).
+3. [Operators, calls, and control flow](#3-operators-calls-and-control-flow).
+4. [Toybox.Lang](#toyboxlang-worklist), with classes ordered within the module.
+5. [Exception handling](#exceptions).
+6. [Lexical compatibility and annotations](#lexical-compatibility-and-annotations).
 
 Items within each scope are also prioritized. Implement a named prerequisite
 before its consumer, and batch related items when they share implementation and
@@ -35,13 +34,7 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ## Core language worklist
 
-### 1. Inference, unions, and storage
-
-- [ ] Support SDK-accepted recursive option-record width matches, including
-  returning `B = {:next as B, :z as Number}` as `A = {:next as A}`. Compare
-  recursive field obligations finitely while preserving record identity/views.
-
-### 2. Declarations, namespaces, and member storage
+### 1. Declarations, namespaces, and member storage
 
 - [ ] Parse `const` declarations and bind constant references; reject rebinding
   while allowing mutation of referenced containers.
@@ -71,7 +64,7 @@ implemented contracts; investigations retain evidence, not another backlog.
 - [ ] Enforce `public`, `private`, `protected`, and `hidden` on declarations and
   inherited/member access, including access across source files.
 
-### 3. Source inheritance and construction
+### 2. Source inheritance and construction
 
 - [ ] Resolve source superclass chains and reject cycles; retain assignable
   superclass/subclass identities in source and saved IR.
@@ -91,7 +84,7 @@ implemented contracts; investigations retain evidence, not another backlog.
   required-field initialization is proven on every relevant path, replacing the
   current mandatory straight-line initialization prefix.
 
-### 4. Operators, calls, and control flow
+### 3. Operators, calls, and control flow
 
 - [ ] Implement non-Boolean conditions for `if`, `while`, `for`, `do`, and `?:`;
   probe truth values for Null, zero/nonzero numbers, and reference values.

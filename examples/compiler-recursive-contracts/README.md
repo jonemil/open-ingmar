@@ -11,6 +11,10 @@ exact source, and recursive interface contracts, then recovers its source type
 after native erasure with `instanceof`. Its startup-created identity survives
 without source construction of the application class.
 
+Recursive Symbol-keyed records exercise optional-field width matching, asserted
+views, nested shared records, mutation through aliases, and a cyclic `:next`
+link. These use ordinary Dictionary references and do not copy the record.
+
 From the repository root, using new output paths:
 
 ```sh

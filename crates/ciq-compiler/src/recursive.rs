@@ -1,6 +1,35 @@
 //! Finite, lexically bound recursive contracts. References count enclosing binders.
 use crate::api::Type;
 
+/// Track assumptions only along the current proof path. A repeated pair closes
+/// a guarded recursive obligation; failed alternatives leave no cached proof.
+#[derive(Default)]
+pub(crate) struct Comparison(std::cell::RefCell<Vec<(Type, Type)>>);
+impl Comparison {
+    pub(crate) fn scoped<T>(
+        &self,
+        expected: &Type,
+        actual: &Type,
+        step: impl FnOnce() -> T,
+    ) -> Option<T> {
+        if !matches!(expected, Type::Recursive(_)) && !matches!(actual, Type::Recursive(_)) {
+            return Some(step());
+        }
+        if self
+            .0
+            .borrow()
+            .iter()
+            .any(|(e, a)| e == expected && a == actual)
+        {
+            return None;
+        }
+        self.0.borrow_mut().push((expected.clone(), actual.clone()));
+        let result = step();
+        self.0.borrow_mut().pop();
+        Some(result)
+    }
+}
+
 fn result_type(ty: Type) -> Option<crate::ReturnType> {
     if ty == Type::Void {
         Some(crate::ReturnType::Void)

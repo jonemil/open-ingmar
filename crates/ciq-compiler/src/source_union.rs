@@ -21,11 +21,39 @@ pub(crate) fn matches_type_with(
     source: &impl Fn(&SourceClass, &Type) -> bool,
     native: &impl Fn(&Type, &Type) -> bool,
 ) -> bool {
+    matches_in(
+        expected,
+        actual,
+        source,
+        native,
+        &crate::recursive::Comparison::default(),
+    )
+}
+fn matches_in(
+    expected: &Type,
+    actual: &Type,
+    source: &impl Fn(&SourceClass, &Type) -> bool,
+    native: &impl Fn(&Type, &Type) -> bool,
+    comparison: &crate::recursive::Comparison,
+) -> bool {
+    comparison
+        .scoped(expected, actual, || {
+            matches_step(expected, actual, source, native, comparison)
+        })
+        .unwrap_or(true)
+}
+fn matches_step(
+    expected: &Type,
+    actual: &Type,
+    source: &impl Fn(&SourceClass, &Type) -> bool,
+    native: &impl Fn(&Type, &Type) -> bool,
+    comparison: &crate::recursive::Comparison,
+) -> bool {
     if let Some(body) = crate::recursive::unfold(expected) {
-        return matches_type_with(&body, actual, source, native);
+        return matches_in(&body, actual, source, native, comparison);
     }
     if let Some(body) = crate::recursive::unfold(actual) {
-        return matches_type_with(expected, &body, source, native);
+        return matches_in(expected, &body, source, native, comparison);
     }
 
     let class_matches = |target: &Type, class: &SourceClass| {
@@ -46,24 +74,23 @@ pub(crate) fn matches_type_with(
         &|expected, actual| match (expected, actual) {
             (Type::SourceValue(expected), Type::SourceValue(actual)) => {
                 (expected.nullable() || !actual.nullable())
-                    && actual
-                        .native()
-                        .iter()
-                        .all(|ty| matches_type_with(&expected.native_type(), ty, source, native))
+                    && actual.native().iter().all(|ty| {
+                        matches_in(&expected.native_type(), ty, source, native, comparison)
+                    })
                     && actual.classes().iter().all(|class| {
                         expected.classes().contains(class)
                             || expected.native().iter().any(|ty| class_matches(ty, class))
                     })
             }
             (Type::SourceValue(expected), actual) => {
-                matches_type_with(&expected.native_type(), actual, source, native)
+                matches_in(&expected.native_type(), actual, source, native, comparison)
             }
             (expected, Type::SourceValue(actual)) => {
                 (!actual.nullable() || native(expected, &Type::Null))
                     && actual
                         .native()
                         .iter()
-                        .all(|ty| matches_type_with(expected, ty, source, native))
+                        .all(|ty| matches_in(expected, ty, source, native, comparison))
                     && actual.classes().iter().all(|class| {
                         crate::unions::alternatives(expected)
                             .iter()
@@ -208,29 +235,32 @@ impl SourceUnion {
     pub(crate) fn accepts_api(&self, actual: &Type) -> bool {
         crate::native::accepts(&self.native_type(), actual)
     }
-    /// Check assignability, leaving structural class/interface witnesses to the
-    /// unit. Native base projection alone is not an interface implementation.
-    pub(crate) fn accepts(&self, actual: &Self) -> bool {
-        self.accepts_with(actual, |_, ty| {
-            matches!(
-                crate::ValueType::from_api_type(ty),
-                Some(crate::ValueType::Interface(_))
-            )
-        })
-    }
     pub(crate) fn accepts_with(
         &self,
         actual: &Self,
         witness: impl Fn(&SourceClass, &Type) -> bool,
     ) -> bool {
+        self.accepts_using(actual, &crate::native::accepts, witness)
+    }
+    /// Match exact/native alternatives while preserving the caller's recursive
+    /// proof context and its separate source-interface witness obligation.
+    pub(crate) fn accepts_using(
+        &self,
+        actual: &Self,
+        native: &impl Fn(&Type, &Type) -> bool,
+        witness: impl Fn(&SourceClass, &Type) -> bool,
+    ) -> bool {
         (self.nullable || !actual.nullable)
-            && actual.native.iter().all(|ty| self.accepts_api(ty))
+            && actual
+                .native
+                .iter()
+                .all(|ty| native(&self.native_type(), ty))
             && actual.classes.iter().all(|c| {
                 self.classes.contains(c)
-                    || self.native.iter().any(|ty| {
-                        crate::native::accepts(ty, &Type::named(c.base.api_name()))
-                            || witness(c, ty)
-                    })
+                    || self
+                        .native
+                        .iter()
+                        .any(|ty| native(ty, &Type::named(c.base.api_name())) || witness(c, ty))
             })
     }
     /// Accept a runtime boundary with a shared class/Null alternative, native
