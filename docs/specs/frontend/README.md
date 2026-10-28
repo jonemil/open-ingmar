@@ -775,8 +775,9 @@ String, Long, Double, supported containers, source objects, WeakReference,
 Method, and supported typed runtime expressions retain their ordinary field
 contracts. Aliases share references, and repeated reads preserve identity.
 Global storage initializes during startup; module storage initializes on first
-module access. Within an owner, stored declarations initialize in source-file
-and declaration order. Stored constants require compilation-unit mode.
+module access. Literal defaults initialize before runtime expressions. Within
+those phases, source-file and declaration order are retained. Stored constants
+require compilation-unit mode.
 
 A shared initializer must assign its binding once through a straight-line
 prefix. Reads of incomplete bindings, owner re-entry, and potentially shutting
@@ -784,11 +785,24 @@ down calls are rejected, including dependencies reached through source helpers,
 constructors, and lazy module initialization. Ordinary functions reload their
 lexical owner, so calling a function in the initializing owner is re-entry even
 if it reads no fields. Calls into an independently initialized owner are allowed.
-Forward stored dependencies remain unsupported; immediate forward references
-retain their existing profile. Pure scalar initializer forms outside that
-profile, including native API constants, still require separate support.
+Forward aliases to later String/Long/Double literal defaults are supported.
+Global/module flat Array and ByteArray literals also provide defaults, including
+supported immediate scalar expressions in their elements. References to stored
+values inside aggregate literals are runtime expressions. Dictionary literals,
+nested Arrays, and calls are not literal defaults. Forward reads that would
+observe default Null remain rejected by the current readiness profile. Pure
+scalar initializer forms outside the immediate profile, including native API
+constants, still require separate support.
 
-All files contribute declarations before resolution. Immediate dependencies
+All files contribute declarations before resolution. Stored contracts are
+resolved across global, module, and class scopes before initializer bodies or
+consumers are compiled. A later source class can therefore supply a constant
+field contract to an earlier consumer. Resolution publishes only checked types,
+retries blocked dependencies after progress, and reports an unresolved or cyclic
+dependency rather than supplying a placeholder type. This type-resolution order
+does not authorize reordering runtime effects.
+
+Immediate dependencies
 retain their declaration's owner and native-name environment, including forward
 and cross-file references. Bare names select the owner's constant before a
 global constant; locals and parameters shadow those names. Module constants
@@ -810,12 +824,16 @@ its actual field. Source-class union alternatives may contain differing values
 under compatible field contracts. Readonly fields cannot satisfy mutable
 structural-interface field requirements.
 
-Allocation initializes constants in declaration order, before evaluating user
-constructor arguments and calling `initialize()`. Application-owned constants
+Allocation initializes scalar literal defaults first, then other constant
+expressions in declaration order, before evaluating user constructor arguments
+and calling `initialize()`. Application-owned constants
 also initialize during allocation. Calling user `initialize()` again leaves
 constant bindings intact. Initializers may read earlier initialized constants;
-forward references within the immediate expression profile remain supported.
-Forward heap-field references and direct constant dependency cycles are rejected.
+forward scalar literal references and the immediate expression profile remain
+supported. A forward alias through another runtime alias is not a literal
+default. Class Array/ByteArray forward reads remain rejected, matching the SDK's
+class readiness check; literal storage availability alone does not relax it.
+Uninitialized reads and constant dependency cycles fail.
 The current allocation initializer requires a straight-line assignment prefix:
 branches, incomplete-field reads, receiver exposure, and calls that may request
 shutdown are rejected until required fields are initialized. Non-null mutable
@@ -823,7 +841,8 @@ fields are still initialized separately by user `initialize()`.
 
 See the [scalar example](../../../examples/compiler-constants/README.md),
 [stored class example](../../../examples/compiler-class-constants/README.md),
-[shared example](../../../examples/compiler-shared-constants/README.md), and [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
+[shared example](../../../examples/compiler-shared-constants/README.md),
+[forward example](../../../examples/compiler-forward-constants/README.md), and [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
 ### Type aliases
 

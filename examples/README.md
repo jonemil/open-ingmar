@@ -63,6 +63,8 @@ and future Rust toolchain experiments.
   readonly bindings, heap identity, mutable contents, and allocation order.
 - [compiler-shared-constants](compiler-shared-constants/README.md): global/module
   shared storage, alias identity, mutable contents, and lazy module startup.
+- [compiler-forward-constants](compiler-forward-constants/README.md): later
+  literal defaults, cross-class contracts, and preserved runtime initializer order.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural

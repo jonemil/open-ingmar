@@ -32,8 +32,6 @@ fn readonly_writes_hidden_calls_and_initialization_dependencies_are_checked() {
         "const X=[1];const X=[2];function f(){}",
         "const X=[1];function X(){}",
         "const X=missing;function f(){}",
-        "const X=Y;const Y=[1];function f(){}",
-        "module M{const X=Y;const Y=[1];function f(){}}",
         "const X=f();function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return X;}",
         "const X=f();function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return [1];}",
         "module M{const X=f();function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return [1];}}",

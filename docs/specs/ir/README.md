@@ -277,7 +277,12 @@ reads require completed initialization. A referenced container remains mutable.
 
 Each shared binding requires a reserved ordinary function named
 `__ciq_initialize_shared_<name>` in the same owner, taking no parameters and
-returning Void. The owner hook invokes these functions in declaration order.
+returning Void. The owner hook invokes these functions in the order of shared declarations.
+Source compilation places supported literal defaults before runtime initializers;
+class initializer bodies use the same scalar-default phase. The source
+[constant rules](../frontend/README.md#constants) define default eligibility and
+SDK readiness restrictions. Saved IR retains the selected order and contracts,
+not an implicit dependency scheduler.
 They inherit the hook's receiver instead of looking up the initializing owner.
 Separate functions preserve each source file's diagnostic spans and count toward
 the unit body limit. Explicit calls or known-selector Method bindings to these

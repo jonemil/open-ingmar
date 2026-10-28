@@ -225,6 +225,28 @@ reject initializer dependencies requiring re-entry into that owner instead of
 producing this runtime failure. This does not establish that every SDK-accepted
 initializer expression is supported.
 
+The [forward-constant specimen](../../examples/compiler-forward-constants/README.md)
+uses the same SDK/target/settings. SDK and generated programs match its expected
+output, covering later String/Long defaults, global/module flat Array and
+ByteArray defaults, later source-class field contracts, per-instance identity,
+and unchanged order of runtime initializer calls.
+
+Focused SDK probes with `const EARLY=LATE;` distinguish default availability:
+String/Long literal aliases are non-Null, and a String alias equals its literal
+binding by reference. Global/module flat Array and ByteArray aliases are
+non-Null, including a flat Long Array. Global Dictionary and nested Array aliases
+instead observe Null. For class Array and ByteArray forward reads, the SDK
+rejects access as potentially uninitialized. A class scalar alias chain also
+fails when it reads an intervening runtime alias before that alias's assignment;
+a direct reference to a later literal succeeds.
+
+**Interpretation:** resolve declaration types independently of readiness. Model
+supported literal-default availability before runtime expressions, without
+sorting arbitrary initializer dependencies or changing their effects. This does
+not establish identical SDK storage layout or support for every constant
+expression; the [source contract](../specs/frontend/README.md#constants) defines
+the implemented default profile.
+
 [constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 
 ## Checking off

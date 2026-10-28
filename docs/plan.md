@@ -36,9 +36,11 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Resolve forward heap-backed constant dependencies across global, module,
-  and class scopes, including reads of constants on source classes whose field
-  contracts are inferred later.
+- [ ] Support SDK-valid forward initializer reads that snapshot default Null
+  from computed, Dictionary, and nested Array slots instead of asserting the
+  slot's post-initialization contract.
+- [ ] Probe and implement remaining constant-expression defaults and scalar
+  references inside aggregate literals, preserving SDK alias identity and effects.
 - [ ] Extend the global/module immediate expression profile with native API
   constants retaining enum types, Float binary operations, pure scalar
   comparisons, and Boolean logical/conditional expressions; probe accepted forms.

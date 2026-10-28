@@ -170,7 +170,8 @@ Generated lifecycle behavior:
   `WatchUi.View`. This is a blank view; greeting/result output is in the console.
 - Globals and user modules without shared storage have empty initializer methods.
   Shared storage adds Null-initialized slots, reserved initializer method records,
-  and owner hooks that initialize bindings in declaration order. Globals
+  and owner hooks that follow the unit's checked initialization order. Source
+  compilation places literal defaults before runtime expressions. Globals
   initialize during startup; user modules initialize lazily on first access.
 - A leading empty bootstrap body occupies CODE offset zero before lifecycle and
   user code.

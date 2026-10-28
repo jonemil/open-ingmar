@@ -328,6 +328,13 @@ fn emit_non_call(
             field,
         },
         parser::ExpressionKind::SelfField(field) => {
+            if calls.readonly_fields.contains(&field) && !calls.field_types.contains_key(&field) {
+                return Err(Diagnostic::at(
+                    source,
+                    expression.span.start,
+                    "constant field type is unresolved; check for a cyclic dependency",
+                ));
+            }
             let declared = calls
                 .field_types
                 .get(&field)

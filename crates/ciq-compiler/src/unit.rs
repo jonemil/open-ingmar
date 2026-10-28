@@ -3419,39 +3419,42 @@ pub(crate) fn compile_sources_mapped(
         }
     }
     let mut shared = Vec::new();
-    calls.shared_pending = parsed_sources
-        .iter()
-        .flat_map(|parsed| {
-            parsed
-                .shared
-                .iter()
-                .map(|(module, c)| (module.clone(), c.name.clone()))
-        })
-        .collect();
-    for (source_index, parsed) in parsed_sources.iter().enumerate() {
+    infer_stored_constants(sources, &parsed_sources, context, &mut calls)?;
+    for parsed in &parsed_sources {
         for (module, declaration) in &parsed.shared {
-            let source = sources[source_index];
-            let mut owner_calls = calls.clone();
-            owner_calls.current_module = module.clone();
-            let value_type = infer_constant(source, declaration, context, None, &owner_calls)
-                .map_err(|diagnostic| SourceDiagnostic {
-                    source: source_index,
-                    diagnostic,
-                })?;
-            calls.shared_fields.insert(
-                (module.clone(), declaration.name.clone()),
-                value_type.clone(),
-            );
-            calls
-                .shared_pending
-                .remove(&(module.clone(), declaration.name.clone()));
             shared.push(SharedConstant {
                 module: module.clone(),
                 name: declaration.name.clone(),
-                value_type,
+                value_type: calls.shared_fields[&(module.clone(), declaration.name.clone())]
+                    .clone(),
             });
         }
     }
+    // Literal defaults precede runtime initializers, as DATA defaults do in SDK
+    // output. Preserve runtime expression order; do not topologically move calls.
+    let mut shared_order = Vec::new();
+    let owners = shared
+        .iter()
+        .map(|c| c.module.as_deref())
+        .collect::<BTreeSet<_>>();
+    for module in owners {
+        let constants = parsed_sources
+            .iter()
+            .flat_map(|unit| &unit.shared)
+            .filter(|(owner, _)| owner.as_deref() == module)
+            .map(|(_, value)| value)
+            .collect::<Vec<_>>();
+        let owner = module.map_or(Owner::Global, Owner::Module);
+        for index in constant_initialization_order(owner, &constants, &calls) {
+            shared_order.push((module.map(str::to_owned), constants[index].name.clone()));
+        }
+    }
+    shared.sort_by_key(|constant| {
+        shared_order
+            .iter()
+            .position(|key| *key == (constant.module.clone(), constant.name.clone()))
+            .unwrap()
+    });
     for (source_index, parsed) in parsed_sources.iter().enumerate() {
         for (module, declaration) in &parsed.shared {
             let source = sources[source_index];
@@ -3492,56 +3495,28 @@ pub(crate) fn compile_sources_mapped(
             });
         }
     }
-    // Infer stored constant contracts before lowering consumers. Allocation
-    // initialization uses the same expression compiler and checked field writes.
-    for (source_index, parsed) in parsed_sources.iter_mut().enumerate() {
+    // Contracts are complete before lowering any initializer or consumer.
+    // Runtime writes retain declaration order and ordinary readiness checks.
+    for parsed in &mut parsed_sources {
         for class in &mut parsed.classes {
             if class.constants.is_empty() {
                 continue;
             }
-            let source = sources[source_index];
-            let mut initializer_calls = calls.clone();
-            initializer_calls.current_class = Some(crate::SourceClass {
-                name: class.name.clone(),
-                base: class.base,
-            });
-            initializer_calls.readonly_fields = class
-                .constants
-                .iter()
-                .map(|value| value.name.clone())
-                .collect();
-            initializer_calls.field_types = class
-                .fields
-                .iter()
-                .map(|field| (field.name.clone(), field.result_type()))
-                .collect();
+            let constants = class.constants.iter().collect::<Vec<_>>();
+            let order =
+                constant_initialization_order(Owner::Class(&class.name), &constants, &calls);
             let mut assignments = Vec::new();
             for declaration in &class.constants {
-                let result = infer_constant(
-                    source,
-                    declaration,
-                    context,
-                    Some(class.base),
-                    &initializer_calls,
-                )
-                .map_err(|diagnostic| SourceDiagnostic {
-                    source: source_index,
-                    diagnostic,
-                })?;
+                let result = calls.source_fields[&class.name][&declaration.name].clone();
                 class.fields.push(InstanceField {
                     name: declaration.name.clone(),
                     kind: FieldKind::Constant {
                         value_type: result.clone(),
                     },
                 });
-                initializer_calls
-                    .field_types
-                    .insert(declaration.name.clone(), result.clone());
-                calls
-                    .source_fields
-                    .get_mut(&class.name)
-                    .unwrap()
-                    .insert(declaration.name.clone(), result);
+            }
+            for index in order {
+                let declaration = &class.constants[index];
                 assignments.push(parser::Statement::FieldAssign {
                     name: declaration.name.clone(),
                     value: declaration.initializer.clone(),
@@ -3676,6 +3651,192 @@ pub(crate) fn compile_sources_mapped(
             }
         })?;
     Ok((unit, origins))
+}
+
+/// Place literal defaults before runtime expressions. Alias assignments, calls,
+/// and other runtime initializers retain declaration order.
+/// Class aggregate forward reads remain subject to the SDK's readiness rule.
+fn constant_initialization_order(
+    owner: Owner<'_>,
+    constants: &[&parser::ParsedConstant],
+    calls: &source_ir::CallContext,
+) -> Vec<usize> {
+    use parser::ExpressionKind as E;
+    fn scalar(
+        expression: &parser::Expression,
+        owner: Owner<'_>,
+        calls: &source_ir::CallContext,
+        names: &BTreeSet<&str>,
+    ) -> bool {
+        if local_reference(expression, owner).is_some_and(|name| names.contains(name)) {
+            return false;
+        }
+        match &expression.kind {
+            E::String(_)
+            | E::Long(_)
+            | E::Double(_)
+            | E::Integer(_)
+            | E::Float(_)
+            | E::Boolean(_)
+            | E::Char(_)
+            | E::Symbol(_)
+            | E::Null
+            | E::NativeConstant { .. } => true,
+            _ => crate::constants::evaluate(expression, &mut |path, _| {
+                let local = path
+                    .strip_prefix("self.")
+                    .or_else(|| path.strip_prefix(&format!("{}.", owner.name())))
+                    .unwrap_or(path);
+                if names.contains(local) {
+                    return Err("stored binding requires an ordered read".into());
+                }
+                let path = path
+                    .strip_prefix("self.")
+                    .map(|field| format!("{}.{field}", owner.name()))
+                    .unwrap_or_else(|| path.to_owned());
+                calls
+                    .constants
+                    .get(&format!("{}.{path}", owner.name()))
+                    .or_else(|| calls.constants.get(&path))
+                    .cloned()
+                    .ok_or_else(|| "not an immediate constant".into())
+            })
+            .is_ok(),
+        }
+    }
+    fn local_reference<'a>(
+        expression: &'a parser::Expression,
+        owner: Owner<'_>,
+    ) -> Option<&'a str> {
+        match &expression.kind {
+            E::Local(name) | E::SelfField(name) => Some(name),
+            E::MemberRead { receiver, member } if matches!((&receiver.kind,owner),(E::Local(module),Owner::Module(current)) if module==current) => {
+                Some(member)
+            }
+            _ => None,
+        }
+    }
+    let names = constants
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut ready = BTreeSet::new();
+    let mut order = Vec::new();
+    for (index, constant) in constants.iter().enumerate() {
+        let expression = &constant.initializer;
+        let is_scalar = scalar(expression, owner, calls, &names);
+        let aggregate = !matches!(owner, Owner::Class(_))
+            && match &expression.kind {
+                E::ArrayLiteral(elements) | E::ByteArrayLiteral(elements) => {
+                    elements.iter().all(|e| scalar(e, owner, calls, &names))
+                }
+                _ => false,
+            };
+        if is_scalar || aggregate {
+            ready.insert(index);
+            order.push(index);
+        }
+    }
+    order.extend((0..constants.len()).filter(|index| !ready.contains(index)));
+    order
+}
+
+/// Resolve stored declaration contracts independently of evaluation order.
+/// Only successful, fully checked expression types enter the shared tables;
+/// unresolved dependencies are retried after other declarations make progress.
+fn infer_stored_constants(
+    sources: &[&str],
+    parsed: &[parser::ParsedUnit],
+    context: Option<crate::api::ApiContext>,
+    calls: &mut source_ir::CallContext,
+) -> Result<(), SourceDiagnostic> {
+    let mut pending = Vec::new();
+    let mut class_names = BTreeMap::new();
+    for (source, unit) in parsed.iter().enumerate() {
+        for (module, declaration) in &unit.shared {
+            calls
+                .shared_pending
+                .insert((module.clone(), declaration.name.clone()));
+            pending.push((
+                source,
+                module.as_deref().map_or(Owner::Global, Owner::Module),
+                declaration,
+            ));
+        }
+        for class in &unit.classes {
+            class_names.insert(
+                class.name.as_str(),
+                class
+                    .constants
+                    .iter()
+                    .map(|c| c.name.clone())
+                    .collect::<BTreeSet<_>>(),
+            );
+            pending.extend(
+                class
+                    .constants
+                    .iter()
+                    .map(|declaration| (source, Owner::Class(class.name.as_str()), declaration)),
+            );
+        }
+    }
+    while !pending.is_empty() {
+        let count = pending.len();
+        let mut unresolved = Vec::new();
+        let mut first_error = None;
+        for (source, owner, declaration) in pending {
+            let mut owner_calls = calls.clone();
+            let base = match owner {
+                Owner::Global => None,
+                Owner::Module(module) => {
+                    owner_calls.current_module = Some(module.into());
+                    None
+                }
+                Owner::Class(class) => {
+                    let base = calls.class_bases[class];
+                    owner_calls.current_class = Some(crate::SourceClass {
+                        name: class.into(),
+                        base,
+                    });
+                    owner_calls.readonly_fields = class_names[class].clone();
+                    owner_calls.field_types = calls.source_fields[class].clone();
+                    Some(base)
+                }
+            };
+            match infer_constant(sources[source], declaration, context, base, &owner_calls) {
+                Ok(value_type) => match owner {
+                    Owner::Class(class) => {
+                        calls
+                            .source_fields
+                            .get_mut(class)
+                            .unwrap()
+                            .insert(declaration.name.clone(), value_type);
+                    }
+                    _ => {
+                        let module = match owner {
+                            Owner::Module(module) => Some(module.to_owned()),
+                            _ => None,
+                        };
+                        calls
+                            .shared_pending
+                            .remove(&(module.clone(), declaration.name.clone()));
+                        calls
+                            .shared_fields
+                            .insert((module, declaration.name.clone()), value_type);
+                    }
+                },
+                Err(diagnostic) => {
+                    first_error.get_or_insert(SourceDiagnostic { source, diagnostic });
+                    unresolved.push((source, owner, declaration));
+                }
+            }
+        }
+        if unresolved.len() == count {
+            return Err(first_error.unwrap());
+        }
+        pending = unresolved;
+    }
+    Ok(())
 }
 
 /// Infer the stored value with ordinary expression IR before compiling writes.

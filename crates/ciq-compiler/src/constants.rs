@@ -121,10 +121,13 @@ pub(crate) fn evaluate(
     }
 }
 
-/// Identify expressions needing shared storage rather than immediate expansion.
-/// Pure unsupported scalar forms remain diagnostics until their profile is added.
+/// Identify explicit storage/runtime seeds for declaration dependency analysis.
+/// References acquire storage requirements through the declaration graph;
+/// unsupported pure scalar forms remain immediate-evaluation diagnostics.
 pub(crate) fn storage_expression(expression: &Expression) -> bool {
     match &expression.kind {
+        E::Local(_) | E::SelfField(_) => false,
+        E::MemberRead { receiver, .. } => storage_expression(receiver),
         E::Integer(_)
         | E::Float(_)
         | E::Boolean(_)

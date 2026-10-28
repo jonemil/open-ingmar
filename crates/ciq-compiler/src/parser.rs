@@ -1147,6 +1147,52 @@ pub(crate) fn collect_declarations<'a>(
             diagnostic,
         })?;
     }
+    // Resolve which declarations genuinely need runtime storage before trying
+    // immediate evaluation. Pure dependency-limit errors must not fall back to
+    // shared slots merely because another declaration later enters the cache.
+    let mut storage = BTreeSet::new();
+    let mut dependencies = BTreeMap::new();
+    for (key, declaration) in &aliases.constants {
+        let mut parser = Parser::new(declaration.source, aliases.clone());
+        parser.owner = declaration.owner.clone();
+        parser.names = declaration.names.clone();
+        parser.offset = declaration.target;
+        let expression = parser
+            .expression(0)
+            .map_err(|diagnostic| crate::SourceDiagnostic {
+                source: declaration.source_index,
+                diagnostic,
+            })?;
+        if crate::constants::storage_expression(&expression) {
+            storage.insert(key.clone());
+        }
+        let mut referenced = BTreeSet::new();
+        expression.visit(&mut |expression| {
+            if let Some(path) = crate::constants::path(expression) {
+                if let Some(key) = parser.constant_key(&path).or_else(|| {
+                    path.strip_prefix("self.")
+                        .filter(|name| {
+                            parser.owner.is_none() && aliases.constants.contains_key(*name)
+                        })
+                        .map(str::to_owned)
+                }) {
+                    referenced.insert(key);
+                }
+            }
+        });
+        dependencies.insert(key, referenced);
+    }
+    loop {
+        let count = storage.len();
+        for (key, referenced) in &dependencies {
+            if referenced.iter().any(|name| storage.contains(name)) {
+                storage.insert((*key).clone());
+            }
+        }
+        if storage.len() == count {
+            break;
+        }
+    }
     for (key, declaration) in &aliases.constants {
         let mut parser = Parser::new(declaration.source, aliases.clone());
         parser.owner = declaration.owner.clone();
@@ -1155,6 +1201,8 @@ pub(crate) fn collect_declarations<'a>(
                 declaration.name_at,
                 format!("constant conflicts with value declaration {key:?}"),
             ))
+        } else if storage.contains(key) {
+            Ok(())
         } else {
             parser
                 .constant_value(key.rsplit('.').next().unwrap(), declaration.name_at)
@@ -1171,16 +1219,11 @@ pub(crate) fn collect_declarations<'a>(
                 continue;
             }
         }
-        if result.is_err() && !aliases.owners.contains(key) && !aliases.value_names.contains(key) {
-            let mut expression_parser = Parser::new(declaration.source, aliases.clone());
-            expression_parser.owner = declaration.owner.clone();
-            expression_parser.names = declaration.names.clone();
-            expression_parser.offset = declaration.target;
-            if let Ok(expression) = expression_parser.expression(0) {
-                if crate::constants::storage_expression(&expression) {
-                    continue;
-                }
-            }
+        if storage.contains(key)
+            && !aliases.owners.contains(key)
+            && !aliases.value_names.contains(key)
+        {
+            continue;
         }
         result.map_err(|diagnostic| crate::SourceDiagnostic {
             source: declaration.source_index,

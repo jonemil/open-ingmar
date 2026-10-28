@@ -396,9 +396,15 @@ initializer frame. They reuse existing VM operations and field-symbol aliases.
 Readonly bindings are enforced by unit contracts; no readonly VM flag is assumed.
 
 Owner allocation hooks invoke reserved shared initializer methods with
-`getselfv; invokemz; popv` in declaration order, then return. Each initializer
+`getselfv; invokemz; popv` in the unit's initialization order, then return. Each initializer
 has an ordinary call frame for temporary storage. Shared slots and these method
 records are materialized by application generation, without an SDK template.
+
+The frontend selects literal-default initialization before runtime expressions.
+This uses the same checked writes and ordinary frames as other initialization;
+DATA slot kinds and VM opcodes do not change. Runtime expression order is
+preserved. The backend follows the explicit unit/body order rather than inferring
+or rescheduling constant dependencies.
 
 ### Source allocation and initialization
 
