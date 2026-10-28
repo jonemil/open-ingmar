@@ -755,14 +755,25 @@ widening is introduced. See the
 
 ### Constants
 
-`const NAME = expression;` declares a readonly binding at global, module, or
-class scope. Function-local constants are rejected. Assignments, compound
+`const NAME [as Type] [= expression], ...;` declares readonly bindings at global,
+module, or class scope. An annotation and initializer belong to one binding;
+they do not carry over to the next comma-separated name. Missing initializers
+produce Null, requiring an inferred Null or a compatible nullable annotation.
+Function-local constants are rejected. Assignments, compound
 assignments, and updates cannot rebind a constant; referenced container contents
 remain mutable. Declarations cannot duplicate constants or collide with
 functions, fields, classes/modules, inherited methods, or constructors in their
-value scope.
+value scope. Each name counts toward the unit's constant limit.
 
-Direct global Number, Float, Boolean, Char, Symbol, and Null literals
+Annotations use the ordinary value-type grammar, including typedefs, containers,
+native enums, and source identities. Check the initializer with the annotation's
+construction context and ordinary assignability rules. Later reads retain the
+declared contract rather than narrowing to the initializer's concrete type.
+For example, `const VALUE as Lang.Object = 7;` cannot supply a Number parameter.
+Native enum annotations require matching enum values rather than raw Numbers;
+numeric annotations do not introduce implicit conversions.
+
+Unannotated direct global Number, Float, Boolean, Char, Symbol, and Null literals
 become literal expressions before IR construction; saved IR retains their values
 without declaration records. References and operator expressions instead use
 ordered shared initialization, even when their result could be computed in
@@ -867,7 +878,8 @@ See the [scalar example](../../../examples/compiler-constants/README.md),
 [default eligibility example](../../../examples/compiler-constant-defaults/README.md),
 [scalar initializer example](../../../examples/compiler-scalar-initializers/README.md),
 [module activation example](../../../examples/compiler-module-literals/README.md),
-[branching initializer example](../../../examples/compiler-branch-initializers/README.md), and
+[branching initializer example](../../../examples/compiler-branch-initializers/README.md),
+[typed declaration example](../../../examples/compiler-constant-declarations/README.md), and
 [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
 ### Type aliases

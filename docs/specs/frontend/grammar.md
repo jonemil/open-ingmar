@@ -29,7 +29,8 @@ source-input = source-file
 source-file = native-declaration* declaration*
 declaration = function | module | class | typedef | constant
 typedef = "typedef" identifier "as" value-type ";"
-constant = "const" identifier "=" expression ";"
+constant = "const" constant-binding ("," constant-binding)* ";"
+constant-binding = identifier ("as" value-type)? ("=" expression)?
 module = "module" identifier "{" native-declaration* (function | typedef | constant)+ "}"
 class = "class" identifier ("extends" native-base)?
         "{" native-declaration* (field | function | typedef | constant)* "}"
@@ -48,7 +49,10 @@ inferred-field-default = number-literal | "-" number-literal | symbol-literal
 field-default = "null" | symbol-literal | "(" field-default ")"
 ```
 
-`constant` uses the expression rules below; its initializer must satisfy the
+Each `constant-binding` has its own annotation and initializer. A missing
+initializer produces Null. Nested commas in types, containers, and calls belong
+to those productions, not the declaration list. `constant` uses the expression
+rules below; each binding must satisfy the
 [scope-specific constant profile](README.md#constants). Constants are declarations,
 not function statements. Evaluation restrictions do not create a second
 expression grammar.

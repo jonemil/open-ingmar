@@ -327,6 +327,23 @@ a compiler failure involving the forward nullable Array conditional; it does
 not establish that the expression is forbidden by the language. The retained
 specimen omits it.
 
+The [typed declaration specimen](../../examples/compiler-constant-declarations/README.md)
+uses the same SDK/target/settings. Each name in a comma-separated `const` list
+accepts its own `as` annotation and initializer. Generic containers, nullable
+source identities, native enum types, and typedefs in another file are accepted.
+SDK and generated programs match its 23 expected console lines.
+An Object annotation retains that contract: a focused SDK probe with
+`const A as Lang.Object=7;` rejects passing A to a Number parameter. String to
+Number, Number to Float/Long, and raw Number to NumberFormat annotations also
+fail SDK checking; annotations do not introduce those conversions.
+
+In a separate SDK probe, `const A=1,B,C=3;` leaves B Null. Missing initializers
+for nullable Number/String constants likewise produce Null in global, module,
+and class scopes. Non-nullable Number/String annotations without initializers
+are rejected as potentially uninitialized. The SDK rejects the compact
+`as Lang.Array<Lang.Number>=[3]` spelling in this probe, but accepts it with
+whitespace between `>` and `=`; reproduction commands use the spaced form.
+
 [constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 
 ## Checking off

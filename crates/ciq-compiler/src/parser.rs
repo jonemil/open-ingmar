@@ -679,32 +679,66 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn stored_constant(&mut self) -> Result<Option<ParsedConstant>, Diagnostic> {
-        self.expect(Kind::Word("const"), "const")?;
-        let token = self.identifier()?;
-        let Kind::Word(name) = token.kind else {
-            unreachable!()
+    /// Parse a constant's optional type and initializer, leaving its list
+    /// delimiter untouched. Missing initializers have the ordinary Null default.
+    fn constant_tail(&mut self, name: String, span: Span) -> Result<ParsedConstant, Diagnostic> {
+        let annotation = if self.peek()? == Kind::Word("as") {
+            Some(self.structural_member_type(span.start, false)?)
+        } else {
+            None
         };
-        self.expect(Kind::Punctuation('='), "'=' after constant name")?;
-        let initializer = self.expression(0)?;
-        self.expect(Kind::Punctuation(';'), "';' after constant")?;
-        let key = self
-            .owner
-            .as_ref()
-            .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
-        if self
-            .declarations
-            .constant_values
-            .borrow()
-            .contains_key(&key)
-        {
-            return Ok(None);
-        }
-        Ok(Some(ParsedConstant {
-            name: name.into(),
+        let initializer = if self.peek()? == Kind::Punctuation('=') {
+            self.token()?;
+            self.expression(0)?
+        } else {
+            Expression {
+                kind: ExpressionKind::Null,
+                span,
+            }
+        };
+        Ok(ParsedConstant {
+            name,
+            annotation,
             initializer,
-            span: token.span,
-        }))
+            span,
+        })
+    }
+
+    /// Parse one constant declaration list through the shared value/type grammar.
+    /// Class fields are retained; only cached unannotated global literals vanish.
+    fn constant_declarations(&mut self) -> Result<Vec<ParsedConstant>, Diagnostic> {
+        self.expect(Kind::Word("const"), "const")?;
+        let mut declarations = Vec::new();
+        loop {
+            let token = self.identifier()?;
+            self.reject_binding(&token)?;
+            let Kind::Word(name) = token.kind else {
+                unreachable!()
+            };
+            let declaration = self.constant_tail(name.into(), token.span)?;
+            let key = self
+                .owner
+                .as_ref()
+                .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
+            let class_field = self
+                .owner
+                .as_ref()
+                .is_some_and(|owner| self.declarations.classes.contains(owner));
+            if class_field
+                || !self
+                    .declarations
+                    .constant_values
+                    .borrow()
+                    .contains_key(&key)
+            {
+                declarations.push(declaration);
+            }
+            match self.token()?.kind {
+                Kind::Punctuation(',') => {}
+                Kind::Punctuation(';') => return Ok(declarations),
+                _ => return Err(self.error(self.offset, "expected ',' or ';' after constant")),
+            }
+        }
     }
 
     fn alias_key(&self, path: &str) -> Option<String> {
@@ -874,69 +908,131 @@ pub(crate) fn collect_declarations<'a>(
                 match parser.peek()? {
                     Kind::Word("const") => {
                         parser.token()?;
-                        let name = parser.identifier()?;
-                        parser.reject_binding(&name)?;
-                        let Kind::Word(name_text) = name.kind else {
-                            unreachable!()
-                        };
-                        let key = parser.owner.as_ref().map_or_else(
-                            || name_text.to_owned(),
-                            |owner| format!("{owner}.{name_text}"),
-                        );
-                        parser.expect(Kind::Punctuation('='), "'=' after constant name")?;
-                        let target = parser.offset;
-                        let mut depth = 0usize;
-                        let end = loop {
-                            let token = parser.token()?;
-                            match token.kind {
-                                Kind::Punctuation(';') if depth == 0 => break token.span.start,
-                                Kind::Punctuation('(' | '[' | '{') => {
-                                    depth += 1;
-                                    if depth > 64 {
-                                        return Err(parser.error(
+                        loop {
+                            let name = parser.identifier()?;
+                            parser.reject_binding(&name)?;
+                            let Kind::Word(name_text) = name.kind else {
+                                unreachable!()
+                            };
+                            let key = parser.owner.as_ref().map_or_else(
+                                || name_text.to_owned(),
+                                |owner| format!("{owner}.{name_text}"),
+                            );
+                            // Collection precedes typedef resolution. Balance raw type
+                            // tokens until '=', then balance only expression delimiters.
+                            let target = name.span.end;
+                            let mut depth = 0usize;
+                            let mut angles = 0usize;
+                            let mut initializer = false;
+                            let mut type_context = Some(0usize);
+                            let mut previous_word = None;
+                            let (end, more) = loop {
+                                let token = parser.token()?;
+                                match token.kind {
+                                    Kind::Punctuation(',' | ';') if depth == 0 && angles == 0 => {
+                                        break (
                                             token.span.start,
-                                            "constant initializer exceeds 64 levels",
-                                        ));
+                                            token.kind == Kind::Punctuation(','),
+                                        );
                                     }
+                                    Kind::Punctuation('(' | '[' | '{') => depth += 1,
+                                    Kind::Punctuation(')' | ']' | '}') => {
+                                        depth = depth.checked_sub(1).ok_or_else(|| {
+                                            parser.error(
+                                                token.span.start,
+                                                "unbalanced constant declaration",
+                                            )
+                                        })?;
+                                        if type_context.is_some_and(|start| depth < start) {
+                                            type_context = None;
+                                        }
+                                    }
+                                    Kind::Word("as") => type_context = Some(depth),
+                                    Kind::Punctuation(',') if angles == 0 => type_context = None,
+                                    Kind::Punctuation('<')
+                                        if !initializer
+                                            || angles != 0
+                                            || (type_context.is_some()
+                                                && matches!(
+                                                    previous_word,
+                                                    Some("Array" | "Dictionary")
+                                                )) =>
+                                    {
+                                        angles += 1
+                                    }
+                                    Kind::Punctuation('>') if angles != 0 => angles -= 1,
+                                    Kind::GreaterEqual if angles != 0 => {
+                                        angles -= 1;
+                                        if !initializer && depth == 0 && angles == 0 {
+                                            initializer = true;
+                                            type_context = None;
+                                        }
+                                    }
+                                    Kind::ShiftRight
+                                    | Kind::Compound(crate::BinaryOp::ShiftRight)
+                                        if angles != 0 =>
+                                    {
+                                        angles = angles.saturating_sub(2);
+                                        if !initializer
+                                            && depth == 0
+                                            && angles == 0
+                                            && matches!(token.kind, Kind::Compound(_))
+                                        {
+                                            initializer = true;
+                                            type_context = None;
+                                        }
+                                    }
+                                    Kind::Punctuation('=') if depth == 0 && angles == 0 => {
+                                        initializer = true;
+                                        type_context = None;
+                                    }
+                                    Kind::End => {
+                                        return Err(parser
+                                            .error(target, "unterminated constant declaration"));
+                                    }
+                                    _ => {}
                                 }
-                                Kind::Punctuation(')' | ']' | '}') => {
-                                    depth = depth.checked_sub(1).ok_or_else(|| {
-                                        parser.error(
-                                            token.span.start,
-                                            "unbalanced constant initializer",
-                                        )
-                                    })?;
+                                previous_word = match token.kind {
+                                    Kind::Word(word) => Some(word),
+                                    _ => None,
+                                };
+                                if depth + angles > 64 {
+                                    return Err(parser.error(
+                                        token.span.start,
+                                        "constant declaration exceeds 64 levels",
+                                    ));
                                 }
-                                Kind::End => {
-                                    return Err(
-                                        parser.error(target, "unterminated constant initializer")
-                                    );
-                                }
-                                _ => {}
+                            };
+                            if aliases.constants.len() >= 256 {
+                                return Err(parser.error(
+                                    name.span.start,
+                                    "unit exceeds 256 constant declarations",
+                                ));
                             }
-                        };
-                        if aliases.constants.len() >= 256 {
-                            return Err(parser
-                                .error(name.span.start, "unit exceeds 256 constant declarations"));
-                        }
-                        if aliases
-                            .constants
-                            .insert(
-                                key.clone(),
-                                DeclarationText {
-                                    source,
-                                    source_index,
-                                    name_at: name.span.start,
-                                    target,
-                                    end,
-                                    names: parser.names.clone(),
-                                    owner: parser.owner.clone(),
-                                },
-                            )
-                            .is_some()
-                        {
-                            return Err(parser
-                                .error(name.span.start, format!("duplicate constant {key:?}")));
+                            if aliases
+                                .constants
+                                .insert(
+                                    key.clone(),
+                                    DeclarationText {
+                                        source,
+                                        source_index,
+                                        name_at: name.span.start,
+                                        target,
+                                        end,
+                                        names: parser.names.clone(),
+                                        owner: parser.owner.clone(),
+                                    },
+                                )
+                                .is_some()
+                            {
+                                return Err(parser.error(
+                                    name.span.start,
+                                    format!("duplicate constant {key:?}"),
+                                ));
+                            }
+                            if !more {
+                                break;
+                            }
                         }
                     }
                     Kind::Word("typedef") => {
@@ -1094,21 +1190,26 @@ pub(crate) fn collect_declarations<'a>(
                     format!("constant conflicts with value declaration {key:?}"),
                 ));
             }
-            let expression = parser.expression(0)?;
-            if parser
-                .expect(Kind::Punctuation(';'), "';' after constant")?
-                .span
-                .start
-                != declaration.end
+            let constant = parser.constant_tail(
+                key.rsplit('.').next().unwrap().into(),
+                Span {
+                    start: declaration.name_at,
+                    end: declaration.target,
+                },
+            )?;
+            let delimiter = parser.token()?;
+            if !matches!(delimiter.kind, Kind::Punctuation(',' | ';'))
+                || delimiter.span.start != declaration.end
             {
-                return Err(parser.error(declaration.name_at, "invalid constant initializer"));
+                return Err(parser.error(declaration.name_at, "invalid constant declaration"));
             }
-            if declaration
-                .owner
-                .as_ref()
-                .is_none_or(|owner| aliases.classes.contains(owner))
+            if constant.annotation.is_none()
+                && declaration
+                    .owner
+                    .as_ref()
+                    .is_none_or(|owner| aliases.classes.contains(owner))
             {
-                if let Some(value) = crate::constants::literal(&expression) {
+                if let Some(value) = crate::constants::literal(&constant.initializer) {
                     aliases
                         .constant_values
                         .borrow_mut()
@@ -3560,6 +3661,7 @@ pub(crate) struct ParsedUnit {
 }
 pub(crate) struct ParsedConstant {
     pub name: String,
+    pub annotation: Option<crate::ReturnType>,
     pub initializer: Expression,
     pub span: Span,
 }
@@ -3591,9 +3693,12 @@ pub(crate) fn declarations<'a>(
     parser.imports()?;
     while parser.peek()? != Kind::End {
         if parser.peek()? == Kind::Word("const") {
-            if let Some(value) = parser.stored_constant()? {
-                unit.shared.push((None, value));
-            }
+            unit.shared.extend(
+                parser
+                    .constant_declarations()?
+                    .into_iter()
+                    .map(|value| (None, value)),
+            );
             continue;
         }
         if parser.peek()? == Kind::Word("typedef") {
@@ -3645,30 +3750,15 @@ pub(crate) fn declarations<'a>(
             let mut constants = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
                 if parser.peek()? == Kind::Word("const") {
+                    let declarations = parser.constant_declarations()?;
                     if is_class {
-                        parser.token()?;
-                        let token = parser.identifier()?;
-                        let Kind::Word(name) = token.kind else {
-                            unreachable!()
-                        };
-                        parser.expect(Kind::Punctuation('='), "'=' after constant name")?;
-                        let mut initializer = parser.expression(0)?;
-                        parser.expect(Kind::Punctuation(';'), "';' after constant")?;
-                        if let Some(value) =
-                            parser.declarations.constant_values.borrow().get(&format!(
-                                "{name_owner}.{name}",
-                                name_owner = parser.owner.as_ref().unwrap()
-                            ))
-                        {
-                            initializer = value.expression(initializer.span);
-                        }
-                        constants.push(ParsedConstant {
-                            name: name.into(),
-                            initializer,
-                            span: token.span,
-                        });
-                    } else if let Some(value) = parser.stored_constant()? {
-                        unit.shared.push((Some(name.into()), value));
+                        constants.extend(declarations);
+                    } else {
+                        unit.shared.extend(
+                            declarations
+                                .into_iter()
+                                .map(|value| (Some(name.into()), value)),
+                        );
                     }
                     continue;
                 }

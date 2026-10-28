@@ -3432,6 +3432,21 @@ pub(crate) fn compile_sources_mapped(
                 field.kind = FieldKind::from_result(result).expect("resolved field contract");
             }
         }
+        for constant in parsed
+            .shared
+            .iter_mut()
+            .map(|(_, constant)| constant)
+            .chain(
+                parsed
+                    .classes
+                    .iter_mut()
+                    .flat_map(|class| &mut class.constants),
+            )
+        {
+            if let Some(annotation) = &mut constant.annotation {
+                crate::structural::resolve_result(annotation, &mut resolve)?;
+            }
+        }
     }
     let mut calls = source_ir::CallContext::new();
     calls.constants = aliases.immediate_constants();
@@ -3874,8 +3889,9 @@ fn infer_stored_constants(
     Ok(())
 }
 
-/// Infer the stored value with ordinary expression IR before compiling writes.
-/// Array literals retain mutable element contracts rather than positional slots.
+/// Check an initializer with ordinary expression IR and return its stored contract.
+/// An annotation supplies contextual construction and remains the binding's type;
+/// inferred Array literals use mutable element contracts rather than positional slots.
 fn infer_constant(
     source: &str,
     declaration: &parser::ParsedConstant,
@@ -3887,7 +3903,7 @@ fn infer_constant(
         name: FIELD_INITIALIZER.into(),
         parameters: Vec::new(),
         parameter_types: Vec::new(),
-        result_type: None,
+        result_type: declaration.annotation.clone(),
         statements: vec![parser::Statement::Return {
             value: Some(declaration.initializer.clone()),
             span: declaration.span,
@@ -3895,6 +3911,15 @@ fn infer_constant(
         body_span: declaration.span,
     };
     let probe = source_ir::build_with_calls(source, probe, context, base, calls)?;
+    if let Some(annotation) = &declaration.annotation {
+        return FieldKind::value_contract(annotation.clone()).ok_or_else(|| {
+            Diagnostic::at(
+                source,
+                declaration.span.start,
+                "unsupported constant field contract",
+            )
+        });
+    }
     let value = probe
         .operations()
         .iter()

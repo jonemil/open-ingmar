@@ -36,7 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Support constant declaration annotations and comma-separated declarations.
 - [ ] Parse named/anonymous `enum` declarations, implicit/explicit values, member
   lookup, and enum annotations.
 - [ ] Support global and module `var` fields, typed/untyped defaults, reads, and

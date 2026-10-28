@@ -289,6 +289,10 @@ the unit body limit. Explicit calls or known-selector Method bindings to these
 functions are rejected; source identifiers reserve their prefix.
 
 `SharedRead` / `.read-shared` retains the owner, field, and checked result view.
+An annotated source constant stores its checked declaration type in the existing
+shared/readonly-field contract. Declaration-list boundaries and typedef spellings
+are source syntax; saved IR retains separate bindings and resolved types. An
+omitted initializer becomes an ordinary Null value and write.
 Ordinary reads use the exact declared contract. In a reserved shared initializer,
 a same-owner read before the target's assignment must use `result=null`;
 later reads and reads activating another owner use the declared contract.
