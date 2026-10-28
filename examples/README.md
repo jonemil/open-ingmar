@@ -67,6 +67,8 @@ and future Rust toolchain experiments.
   literal defaults, cross-class contracts, and preserved runtime initializer order.
 - [compiler-null-snapshots](compiler-null-snapshots/README.md): forward runtime
   binding reads, retained Null values, and cross-file lazy module initialization.
+- [compiler-constant-defaults](compiler-constant-defaults/README.md): literal
+  defaults versus runtime aggregate elements, scalar references, and empty slots.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural

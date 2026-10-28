@@ -786,10 +786,15 @@ constructors, and lazy module initialization. Ordinary functions reload their
 lexical owner, so calling a function in the initializing owner is re-entry even
 if it reads no fields. Calls into an independently initialized owner are allowed.
 Forward aliases to later String/Long/Double literal defaults are supported.
-Global/module flat Array and ByteArray literals also provide defaults, including
-supported immediate scalar expressions in their elements. References to stored
-values inside aggregate literals are runtime expressions. Dictionary literals,
-nested Arrays, and calls are not literal defaults. A direct same-owner read
+Global/module nonempty flat Array and ByteArray literals also provide defaults
+when every element is a scalar literal. Numeric signs directly on tokens are
+part of the literal, and unary `+` on a numeric literal element is accepted.
+Grouping a literal does not change eligibility, but `-(1)` is a runtime negation,
+unlike `-1`. Calculated elements and constant references, including immediate
+Number constants, make the aggregate a runtime initializer. Empty Arrays and
+ByteArrays, Dictionary literals, nested Arrays, and calls are not literal
+defaults. Computed Long/Double/String scalar expressions likewise initialize at
+runtime, even when their operands are literals. A direct same-owner read
 before a runtime binding's assignment produces its default Null, with a concrete
 Null contract. Saving or passing that value preserves Null after the later
 binding initializes; it does not create a live alias to the slot. Reads after
@@ -847,7 +852,8 @@ See the [scalar example](../../../examples/compiler-constants/README.md),
 [stored class example](../../../examples/compiler-class-constants/README.md),
 [shared example](../../../examples/compiler-shared-constants/README.md),
 [forward example](../../../examples/compiler-forward-constants/README.md),
-[Null snapshot example](../../../examples/compiler-null-snapshots/README.md), and
+[Null snapshot example](../../../examples/compiler-null-snapshots/README.md),
+[default eligibility example](../../../examples/compiler-constant-defaults/README.md), and
 [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
 ### Type aliases

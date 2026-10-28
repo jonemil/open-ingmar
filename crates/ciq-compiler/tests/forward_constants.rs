@@ -41,10 +41,15 @@ fn runtime_reads_and_cycles_are_not_fixed_by_reordering_effects() {
 }
 
 #[test]
-fn immediate_array_elements_are_literal_defaults_without_crossing_stored_shadows() {
-    common::pipeline(
-        compile_sources(&["const A=B;const B=[-1,1+2];function f(){return A;}"]).unwrap(),
+fn calculated_array_elements_and_stored_shadows_require_runtime_initialization() {
+    let calculated =
+        compile_sources(&["const A=B;const B=[-1,1+2];function f(){return A;}"]).unwrap();
+    assert!(
+        calculated
+            .to_ir_text()
+            .contains(".shared-constant $ A null")
     );
+    common::pipeline(calculated);
     let unit = compile_sources(&[
         "const X=1;module M{const A=B;const B=[X];const X=\"stored\";}function f(){}",
     ])

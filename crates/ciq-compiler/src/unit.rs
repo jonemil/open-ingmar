@@ -3477,7 +3477,7 @@ pub(crate) fn compile_sources_mapped(
     }
     // Literal defaults precede runtime initializers, as DATA defaults do in SDK
     // output. Preserve runtime expression order; do not topologically move calls.
-    let shared_order = shared_initialization_order(&parsed_sources, &calls);
+    let shared_order = shared_initialization_order(&parsed_sources);
     shared.sort_by_key(|constant| {
         shared_order
             .iter()
@@ -3534,8 +3534,7 @@ pub(crate) fn compile_sources_mapped(
                 continue;
             }
             let constants = class.constants.iter().collect::<Vec<_>>();
-            let order =
-                constant_initialization_order(Owner::Class(&class.name), &constants, &calls);
+            let order = constant_initialization_order(Owner::Class(&class.name), &constants);
             let mut assignments = Vec::new();
             for declaration in &class.constants {
                 let result = calls.source_fields[&class.name][&declaration.name].clone();
@@ -3685,10 +3684,7 @@ pub(crate) fn compile_sources_mapped(
 }
 
 /// Return explicit binding order for every shared owner, independent of types.
-fn shared_initialization_order(
-    parsed: &[parser::ParsedUnit],
-    calls: &source_ir::CallContext,
-) -> Vec<(Option<String>, String)> {
+fn shared_initialization_order(parsed: &[parser::ParsedUnit]) -> Vec<(Option<String>, String)> {
     let mut order = Vec::new();
     let owners = parsed
         .iter()
@@ -3702,7 +3698,7 @@ fn shared_initialization_order(
             .map(|(_, value)| value)
             .collect::<Vec<_>>();
         let owner = module.map_or(Owner::Global, Owner::Module);
-        for index in constant_initialization_order(owner, &constants, calls) {
+        for index in constant_initialization_order(owner, &constants) {
             order.push((module.map(str::to_owned), constants[index].name.clone()));
         }
     }
@@ -3730,80 +3726,41 @@ fn uninitialized_shared(
 fn constant_initialization_order(
     owner: Owner<'_>,
     constants: &[&parser::ParsedConstant],
-    calls: &source_ir::CallContext,
 ) -> Vec<usize> {
     use parser::ExpressionKind as E;
-    fn scalar(
-        expression: &parser::Expression,
-        owner: Owner<'_>,
-        calls: &source_ir::CallContext,
-        names: &BTreeSet<&str>,
-    ) -> bool {
-        if local_reference(expression, owner).is_some_and(|name| names.contains(name)) {
-            return false;
-        }
-        match &expression.kind {
+    fn scalar(expression: &parser::Expression) -> bool {
+        matches!(
+            expression.kind,
             E::String(_)
-            | E::Long(_)
-            | E::Double(_)
-            | E::Integer(_)
-            | E::Float(_)
-            | E::Boolean(_)
-            | E::Char(_)
-            | E::Symbol(_)
-            | E::Null
-            | E::NativeConstant { .. } => true,
-            _ => crate::constants::evaluate(expression, &mut |path, _| {
-                let local = path
-                    .strip_prefix("self.")
-                    .or_else(|| path.strip_prefix(&format!("{}.", owner.name())))
-                    .unwrap_or(path);
-                if names.contains(local) {
-                    return Err("stored binding requires an ordered read".into());
-                }
-                let path = path
-                    .strip_prefix("self.")
-                    .map(|field| format!("{}.{field}", owner.name()))
-                    .unwrap_or_else(|| path.to_owned());
-                calls
-                    .constants
-                    .get(&format!("{}.{path}", owner.name()))
-                    .or_else(|| calls.constants.get(&path))
-                    .cloned()
-                    .ok_or_else(|| "not an immediate constant".into())
-            })
-            .is_ok(),
-        }
+                | E::Long(_)
+                | E::Double(_)
+                | E::Integer(_)
+                | E::Float(_)
+                | E::Boolean(_)
+                | E::Char(_)
+                | E::Symbol(_)
+                | E::Null
+        )
     }
-    fn local_reference<'a>(
-        expression: &'a parser::Expression,
-        owner: Owner<'_>,
-    ) -> Option<&'a str> {
-        match &expression.kind {
-            E::Local(name) | E::SelfField(name) => Some(name),
-            E::MemberRead { receiver, member } if matches!((&receiver.kind,owner),(E::Local(module),Owner::Module(current)) if module==current) => {
-                Some(member)
-            }
-            _ => None,
-        }
+    fn element(expression: &parser::Expression) -> bool {
+        scalar(expression)
+            || matches!(&expression.kind, E::Positive(value)
+                if matches!(value.kind, E::Integer(_) | E::Float(_) | E::Long(_) | E::Double(_)))
     }
-    let names = constants
-        .iter()
-        .map(|c| c.name.as_str())
-        .collect::<BTreeSet<_>>();
     let mut ready = BTreeSet::new();
     let mut order = Vec::new();
     for (index, constant) in constants.iter().enumerate() {
         let expression = &constant.initializer;
-        let is_scalar = scalar(expression, owner, calls, &names);
         let aggregate = !matches!(owner, Owner::Class(_))
             && match &expression.kind {
                 E::ArrayLiteral(elements) | E::ByteArrayLiteral(elements) => {
-                    elements.iter().all(|e| scalar(e, owner, calls, &names))
+                    !elements.is_empty() && elements.iter().all(element)
                 }
                 _ => false,
             };
-        if is_scalar || aggregate {
+        // Eligibility follows source form, not constant folding: references,
+        // calculations, and empty containers initialize at runtime in the SDK.
+        if scalar(expression) || aggregate {
             ready.insert(index);
             order.push(index);
         }
@@ -3851,7 +3808,7 @@ fn infer_stored_constants(
             );
         }
     }
-    let shared_order = shared_initialization_order(parsed, calls);
+    let shared_order = shared_initialization_order(parsed);
     while !pending.is_empty() {
         let count = pending.len();
         let mut unresolved = Vec::new();

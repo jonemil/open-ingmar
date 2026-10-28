@@ -36,11 +36,12 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Probe and implement remaining constant-expression defaults and scalar
-  references inside aggregate literals, preserving SDK alias identity and effects.
 - [ ] Extend the global/module immediate expression profile with native API
   constants retaining enum types, Float binary operations, pure scalar
   comparisons, and Boolean logical/conditional expressions; probe accepted forms.
+- [ ] Support conditional and short-circuit stored global/module initializers:
+  stage merged values before shared writes and prove assignment exactly once
+  on every returning path without weakening owner re-entry/shutdown checks.
 - [ ] Support constant declaration annotations and comma-separated declarations.
 - [ ] Parse named/anonymous `enum` declarations, implicit/explicit values, member
   lookup, and enum annotations.

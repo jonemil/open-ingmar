@@ -256,6 +256,30 @@ Its saved Array element, nullable argument, and comparison distinguish captured
 Null from a live alias to the later slot. The module's initializer prints expose
 declaration order at first access. Class readiness restrictions are unchanged.
 
+The [default-eligibility specimen](../../examples/compiler-constant-defaults/README.md)
+uses the same SDK/target/settings. SDK and generated consoles match its 52
+expected lines, including alias mutation and module trace order.
+Nonempty Arrays of scalar literals are
+available to earlier aliases. `[1+2]`, `[N]` with `const N=7`, `[N]b`, `[]`, and
+`[]b` instead initialize at runtime: earlier aliases observe Null in both global
+and module scopes. Stored String/Long references in elements also require
+runtime evaluation. Element eligibility depends on source form, not whether an
+expression could be folded; the frontend preserves that distinction when
+selecting initialization order.
+
+Focused SDK probes distinguish `[+1]`, `[+(1)]`, and `[+(-1)]` (available early)
+from `[-(1)]`, `[-(-1)]`, `[~1]`, and `[!false]` (runtime). Direct negative
+Long/Double tokens are available early; scalar `+(2l)`, `4l+5l`, and
+`"a"+"b"` are runtime initializers. A stored `true ? "yes" : "no"` also compiles
+and observes Null through an earlier alias in the SDK. Our shared-initializer
+straight-line restriction currently rejects this conditional; see the plan.
+
+A separate signed-Long observation needs care: `module P { const NEG=-7l; }`
+prints `4294967289` through `System.println(P.NEG)` in this SDK configuration.
+This differs from the documented signed interpretation of Long. It does not
+establish a general sign-extension rule; generated constants retain their signed
+64-bit source value rather than adopting this isolated SDK result.
+
 [constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 
 ## Checking off
