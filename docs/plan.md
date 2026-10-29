@@ -36,8 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Implement named global/module enums and nominal Number-compatible types
-  across source, saved IR, calls, containers, and enum annotations.
 - [ ] Implement class enums, reproducing allocation-time initializer effects
   and class-qualified reads; probe class-member visibility after allocation.
 - [ ] Resolve enum initializer contracts beyond Number: the SDK accepts a

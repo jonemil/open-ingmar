@@ -283,14 +283,25 @@ class initializer bodies use the same scalar-default phase. The source
 [constant rules](../frontend/README.md#constants) define default eligibility and
 SDK readiness restrictions. Saved IR retains the selected order and contracts,
 not an implicit dependency scheduler.
-Anonymous enum members use these same separate Number bindings and initializer
-bodies. The frontend records implicit values and source-form default eligibility
-before lowering; saved IR retains the selected values, operations, and ordering.
-It has no enum block syntax or implicit numbering state.
 They inherit the hook's receiver instead of looking up the initializing owner.
 Separate functions preserve each source file's diagnostic spans and count toward
 the unit body limit. Explicit calls or known-selector Method bindings to these
 functions are rejected; source identifiers reserve their prefix.
+
+Enum members use these same separate bindings and initializer bodies. Anonymous
+members have Number contracts. Named enums add `.enum OWNER NAME` declarations
+(`$` for global scope) and `enum(QUALIFIED_NAME)` type tags. These identities
+must be unique and declared throughout nested signatures, storage, and value
+contracts, including unused declarations. The unit permits at most 256 enum
+types; standalone functions leave declaration resolution to their enclosing unit.
+
+`EnumValue` / `.enum-value %RESULT QUALIFIED_NAME %OPERAND` gives a
+Number-compatible operand that nominal identity, without runtime conversion.
+Ordinary assignability permits an enum to widen to Number, not the reverse or
+to another enum. The frontend inserts this operation for named member
+initializers after checking their underlying value. Implicit numbering and
+source-form default eligibility are resolved before IR construction; saved IR
+retains values, operations, contracts, and order, not an enum block or counter.
 
 `SharedRead` / `.read-shared` retains the owner, field, and checked result view.
 An annotated source constant stores its checked declaration type in the existing

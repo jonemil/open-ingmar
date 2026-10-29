@@ -2,6 +2,7 @@
 /// Several spellings may share a form, such as `.read` and `.take`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Directive {
+    EnumValue,
     SharedRead,
     SharedAssign,
     MemberRead,
@@ -361,6 +362,7 @@ pub(crate) fn parse_function_ir_context(
             Some(".array-add-all") => (Directive::ArrayAddAll, 4),
             Some(".begin-source") => (Directive::BeginSource, 4),
             Some(".new-source") => (Directive::NewSource, call_width()),
+            Some(".enum-value") => (Directive::EnumValue, 4),
             Some(".constant") => (Directive::Constant, 4),
             Some(".call-native-discard") => (Directive::CallNativeDiscard, call_width()),
             Some(".dictionary-constant") => (Directive::DictionaryConstant, call_width()),
@@ -638,6 +640,11 @@ pub(crate) fn parse_function_ir_context(
                             .collect::<Result<_, _>>()?,
                     }
                 }
+                Directive::EnumValue => Operation::EnumValue {
+                    result: parse_value(&fields[1])?,
+                    name: fields[2].clone(),
+                    operand: parse_value(&fields[3])?,
+                },
                 Directive::Constant => Operation::NativeConstant {
                     result: parse_value(&fields[1])?,
                     module: fields[2].clone(),

@@ -847,6 +847,7 @@ pub struct CompilationUnit {
     declarations: Vec<FunctionDeclaration>,
     classes: Vec<ClassDeclaration>,
     shared: Vec<SharedConstant>,
+    enums: Vec<crate::EnumDeclaration>,
 }
 
 impl CompilationUnit {
@@ -937,8 +938,19 @@ impl CompilationUnit {
     /// dependencies must agree in native construction and saved IR.
     pub fn with_shared(
         declarations: Vec<FunctionDeclaration>,
+        classes: Vec<ClassDeclaration>,
+        shared: Vec<SharedConstant>,
+    ) -> Result<Self, UnitError> {
+        Self::with_enums(declarations, classes, shared, Vec::new())
+    }
+
+    /// Validate nominal source enum declarations together with functions and storage.
+    /// Every enum type used by a body or contract must have exactly one declaration.
+    pub fn with_enums(
+        declarations: Vec<FunctionDeclaration>,
         mut classes: Vec<ClassDeclaration>,
         mut shared: Vec<SharedConstant>,
+        enums: Vec<crate::EnumDeclaration>,
     ) -> Result<Self, UnitError> {
         for constant in &mut shared {
             constant.value_type = FieldKind::value_contract(constant.value_type.clone())
@@ -974,6 +986,7 @@ impl CompilationUnit {
             declarations,
             classes,
             shared,
+            enums,
         };
         unit.validate()?;
         Ok(unit)
@@ -984,6 +997,7 @@ impl CompilationUnit {
     }
 
     fn validate_context(&self, context: Option<crate::api::ApiContext>) -> Result<(), UnitError> {
+        crate::enums::validate_unit(self)?;
         let fail = |declaration, operation, message| UnitError {
             declaration,
             operation,
@@ -3162,12 +3176,24 @@ impl CompilationUnit {
         Program::new(items).expect("unit identities lower to disjoint assembly labels")
     }
 
-    /// Serialize validated function/class ownership and bodies as unit IR text.
+    /// Return nominal source enums in their saved declaration order.
+    pub fn enums(&self) -> &[crate::EnumDeclaration] {
+        &self.enums
+    }
+
+    /// Serialize validated ownership, enum types, storage, and function bodies.
     ///
     /// Inner functions retain optional spans. Classes retain native
     /// base identity without a VM import index. Source filenames are not stored.
     pub fn to_ir_text(&self) -> String {
         let mut text = String::from("ciq-unit\n");
+        for definition in &self.enums {
+            text.push_str(&format!(
+                ".enum {} {}\n",
+                definition.module.as_deref().unwrap_or("$"),
+                definition.name
+            ));
+        }
         for constant in &self.shared {
             text.push_str(&format!(
                 ".shared-constant {} {} {}\n",
@@ -3477,6 +3503,15 @@ pub(crate) fn compile_sources_mapped(
         }
     }
     let mut shared = Vec::new();
+    for parsed in &parsed_sources {
+        for (owner, declaration) in &parsed.shared {
+            if let Some(name) = &declaration.enum_type {
+                calls
+                    .enum_members
+                    .insert((owner.clone(), declaration.name.clone()), name.clone());
+            }
+        }
+    }
     infer_stored_constants(sources, &parsed_sources, context, &mut calls)?;
     for parsed in &parsed_sources {
         for (module, declaration) in &parsed.shared {
@@ -3664,6 +3699,7 @@ pub(crate) fn compile_sources_mapped(
         declarations,
         classes,
         shared,
+        enums: aliases.enum_declarations(),
     };
     unit.validate_context(context)
         .and_then(|()| context.map_or(Ok(()), |context| unit.validate_declaration_api(context)))
@@ -3861,7 +3897,11 @@ fn infer_constant(
         name: FIELD_INITIALIZER.into(),
         parameters: Vec::new(),
         parameter_types: Vec::new(),
-        result_type: declaration.annotation.clone(),
+        result_type: if declaration.enum_type.is_some() {
+            Some(ReturnType::Integer)
+        } else {
+            declaration.annotation.clone()
+        },
         statements: vec![parser::Statement::Return {
             value: Some(declaration.initializer.clone()),
             span: declaration.span,
@@ -3957,6 +3997,7 @@ fn parse_unit_ir_context(
     let mut declarations = Vec::new();
     let mut classes = Vec::new();
     let mut shared = Vec::new();
+    let mut enums = Vec::new();
     let mut locations = Vec::new();
     let mut class_locations = Vec::new();
     fn function(
@@ -3988,6 +4029,10 @@ fn parse_unit_ir_context(
             .collect::<Vec<_>>()
             .as_slice()
         {
+            [".enum", owner, name] => enums.push(crate::EnumDeclaration {
+                module: (*owner != "$").then(|| (*owner).to_owned()),
+                name: (*name).to_owned(),
+            }),
             [".shared-constant", owner, name, tag] => {
                 let value_type = crate::type_text::call_result(tag)
                     .ok()
@@ -4313,7 +4358,7 @@ fn parse_unit_ir_context(
         }
     }
     locations.extend(class_locations);
-    CompilationUnit::with_shared(declarations, classes, shared)
+    CompilationUnit::with_enums(declarations, classes, shared, enums)
         .and_then(|unit| {
             if let Some(context) = context {
                 unit.validate_declaration_api(context)?;

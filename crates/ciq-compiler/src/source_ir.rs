@@ -3352,6 +3352,25 @@ impl Builder<'_> {
                 locals,
                 construction_type(&expected.api_type()),
             )?;
+            let value = if let Some(name) = self
+                .calls
+                .enum_members
+                .get(&(self.calls.current_module.clone(), name.clone()))
+                .cloned()
+            {
+                let result = ValueId(self.operations.len() as u32);
+                self.push(
+                    Operation::EnumValue {
+                        result,
+                        name,
+                        operand: value,
+                    },
+                    Some(span),
+                );
+                result
+            } else {
+                value
+            };
             self.push(
                 Operation::SharedAssign {
                     module: self.calls.current_module.clone(),
@@ -3869,6 +3888,7 @@ pub(crate) struct CallContext {
     pub(crate) shared_snapshots: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) shared_pending: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) shared_initializer: bool,
+    pub(crate) enum_members: BTreeMap<(Option<String>, String), String>,
     pub(crate) shared_fields: BTreeMap<(Option<String>, String), crate::ReturnType>,
     pub(crate) readonly_fields: std::collections::BTreeSet<String>,
     pub(crate) constants: std::rc::Rc<BTreeMap<String, crate::constants::Immediate>>,

@@ -27,14 +27,14 @@ establish availability, assignability, or executable API support.
 ```text
 source-input = source-file
 source-file = native-declaration* declaration*
-declaration = function | module | class | typedef | constant | anonymous-enum
+declaration = function | module | class | typedef | constant | enumeration
 typedef = "typedef" identifier "as" value-type ";"
 constant = "const" constant-binding ("," constant-binding)* ";"
 constant-binding = identifier ("as" value-type)? ("=" expression)?
-anonymous-enum = "enum" "{" enum-member ("," enum-member)* ","? "}"
+enumeration = "enum" identifier? "{" enum-member ("," enum-member)* ","? "}"
 enum-member = identifier ("=" expression)?
 module = "module" identifier "{" native-declaration*
-         (function | typedef | constant | anonymous-enum)+ "}"
+         (function | typedef | constant | enumeration)+ "}"
 class = "class" identifier ("extends" native-base)?
         "{" native-declaration* (field | function | typedef | constant)* "}"
 native-declaration = "using" native-module ("as" identifier)? ";"
@@ -60,10 +60,11 @@ rules below; each binding must satisfy the
 not function statements. Evaluation restrictions do not create a second
 expression grammar.
 
-`anonymous-enum` is accepted at global and module scope. It requires at least
+`enumeration` is accepted at global and module scope. It requires at least
 one member, permits a trailing comma, and has no trailing semicolon. Member
-initializers follow the [enum value and numbering rules](README.md#anonymous-enums).
-Named and class enums remain unsupported.
+initializers follow the [enum value and numbering rules](README.md#enums).
+The optional identifier declares a nominal type; members remain in the enclosing
+value scope. Class enums remain unsupported.
 
 `source-file` consumes the complete input. `function` is shared by global
 functions, module functions, and class methods. Its `block` expands in
@@ -238,7 +239,8 @@ WeakReference, ByteArray), or an exact declared source class. Interface
 names, enum aliases, Null, and dynamic class values are not runtime class tests.
 Cast targets accept Number, Long, Float, Double, Boolean, Char, String, Object,
 Symbol, Method, WeakReference, ByteArray, Numeric, Integer, Decimal,
-NumberFormat, Endian, opaque Dictionary, AppBase/View/BehaviorDelegate references,
+NumberFormat, Endian, declared source enums, opaque Dictionary,
+AppBase/View/BehaviorDelegate references,
 or exact declared source classes.
 Nullable casts accept the scalar/core-reference, native reference, numeric-alias, and exact source
 forms specified by [cast semantics](README.md#lexical-casts). Parameterized
@@ -313,7 +315,7 @@ contracts, proof obligations, and field accesses.
   Numeric alias: Lang.Numeric, Lang.Integer, or Lang.Decimal.
 - Core reference: Lang.Object, Symbol, Method, WeakReference, ByteArray.
 - Interface: Lang.Comparable or Lang.Comparator.
-- Enum: Lang.NumberFormat or Lang.Endian.
+- Enum: Lang.NumberFormat, Lang.Endian, or a declared global/module enum path.
 - Object, View, delegate, and AppBase type leaves resolve to Lang.Object,
   WatchUi.View, WatchUi.BehaviorDelegate, and Application.AppBase respectively.
 - Source class: an exact declared source-class name from this unit. AppBase

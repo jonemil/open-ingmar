@@ -180,6 +180,8 @@ pub(crate) fn constant_record(
 /// Supported non-null scalar, Method, and interface Dictionary keys.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictionaryKey {
+    /// A nominal source enum key with Number runtime equality/hash.
+    Enum(String),
     Callback(Box<crate::StructuralMethod>),
     /// A non-null source interface key; equality/hash dispatch remain runtime operations.
     Structural(Box<crate::StructuralInterface>),
@@ -203,6 +205,7 @@ impl DictionaryKey {
     /// Return the invariant key contract without erasing numeric alternatives.
     pub fn api_type(&self) -> Type {
         let name = match self {
+            Self::Enum(name) => return Type::Enum(name.clone()),
             Self::Callback(signature) => return Type::Callback(signature.clone()),
             Self::Structural(shape) => return Type::Structural(shape.clone()),
             Self::Numeric(alias) => return alias.api_type(false),
@@ -226,6 +229,11 @@ impl DictionaryKey {
 /// Supported bounded Dictionary value contracts, including explicit nullable values.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictionaryValue {
+    /// A nominal enum value, optionally permitting stored Null.
+    Enum {
+        name: String,
+        nullable: bool,
+    },
     /// A retained nested container or recursive reference contract.
     Nested {
         contract: Box<Type>,
@@ -321,6 +329,10 @@ impl DictionaryType {
 
         let key = self.key.api_type();
         let (value, nullable) = match &self.value {
+            DictionaryValue::Enum { name, nullable } => {
+                let ty = Type::Enum(name.clone());
+                return Type::dictionary(key, if *nullable { ty.with_null() } else { ty });
+            }
             DictionaryValue::Nested { .. } => unreachable!(),
             DictionaryValue::Callback {
                 signature,
@@ -385,6 +397,7 @@ impl DictionaryType {
             return None;
         };
         let key = match key.as_ref() {
+            Type::Enum(name) => DictionaryKey::Enum(name.clone()),
             Type::Callback(signature) => {
                 crate::callbacks::validate(signature).ok()?;
                 DictionaryKey::Callback(signature.clone())
@@ -422,6 +435,15 @@ impl DictionaryType {
             [ty] => (ty, false),
             _ => (value.as_ref(), false),
         };
+        if let Type::Enum(name) = nested {
+            return Some(Self {
+                key,
+                value: DictionaryValue::Enum {
+                    name: name.clone(),
+                    nullable,
+                },
+            });
+        }
         if matches!(
             nested,
             Type::Recursive(_)
@@ -517,6 +539,9 @@ impl DictionaryType {
             DictionaryKey::Structural(shape) => {
                 return format!("dictionary({}=>{})", shape.tag(), self.value_text());
             }
+            DictionaryKey::Enum(name) => {
+                return format!("dictionary(enum({name})=>{})", self.value_text());
+            }
             DictionaryKey::Numeric(alias) => alias.value_tag(false),
             DictionaryKey::Interface(crate::InterfaceType::Comparable) => "comparable",
             DictionaryKey::Interface(crate::InterfaceType::Comparator) => "comparator",
@@ -536,6 +561,15 @@ impl DictionaryType {
     }
 
     fn value_text(&self) -> String {
+        if let DictionaryValue::Enum { name, nullable } = &self.value {
+            let ty = Type::Enum(name.clone());
+            return crate::type_text::parameter_tag(
+                &crate::unions::parameter(if *nullable { ty.with_null() } else { ty })
+                    .expect("enum value contract"),
+            )
+            .into_owned();
+        }
+
         if let DictionaryValue::Nested { contract, nullable } = &self.value {
             let ty = if *nullable {
                 (**contract).clone().with_null()
@@ -568,7 +602,8 @@ impl DictionaryType {
             };
         }
         let value = match &self.value {
-            DictionaryValue::Nested { .. }
+            DictionaryValue::Enum { .. }
+            | DictionaryValue::Nested { .. }
             | DictionaryValue::Structural { .. }
             | DictionaryValue::Callback { .. } => unreachable!(),
             DictionaryValue::LangObject => "object",
@@ -656,7 +691,7 @@ pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> 
             return Some(alias.api_type(false));
         }
         match ty {
-            Type::Named(_) => Some(ty.clone()),
+            Type::Enum(_) | Type::Named(_) => Some(ty.clone()),
             Type::Union(types) => {
                 let mut non_null = types.iter().filter(|ty| **ty != Type::Null);
                 let first = non_null.next()?;
@@ -680,6 +715,12 @@ pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> 
             return Some(());
         }
         match ty {
+            Type::Enum(_) => {
+                if scalar.as_ref().is_some_and(|previous| previous != ty) {
+                    return None;
+                }
+                *scalar = Some(ty.clone());
+            }
             Type::Named(name)
                 if matches!(
                     name.as_str(),

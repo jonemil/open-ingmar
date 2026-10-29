@@ -79,6 +79,7 @@ pub(crate) fn parameter(ty: Type) -> Option<ParameterType> {
         return Some(p);
     }
     match ty {
+        Type::Enum(name) => Some(ParameterType::Enum(name)),
         Type::Options(fields) => crate::records::validate(&fields)
             .ok()
             .map(|_| ParameterType::Options(fields)),
@@ -110,6 +111,7 @@ pub(crate) fn result(ty: Type) -> Option<ReturnType> {
         return Some(r);
     }
     match ty {
+        Type::Enum(name) => Some(ReturnType::Enum(name)),
         Type::Options(fields) => crate::records::validate(&fields)
             .ok()
             .map(|_| ReturnType::Options(fields)),
@@ -165,7 +167,8 @@ pub(crate) fn printable(ty: &Type) -> bool {
         matches!(
             ValueType::from_api_type(part),
             Some(
-                ValueType::Any
+                ValueType::Enum(_)
+                    | ValueType::Any
                     | ValueType::Integer
                     | ValueType::Long
                     | ValueType::Float

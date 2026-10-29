@@ -375,6 +375,7 @@ pub(crate) fn value_call(
         }
     }
     let class = match receiver {
+        api::Type::Enum(_) => "Toybox.Lang.Number",
         api::Type::Options(fields) => {
             crate::records::validate(fields)?;
             "Toybox.Lang.Dictionary"
@@ -663,6 +664,7 @@ fn sort_element_supported(element: &api::Type, arguments: &[api::Type]) -> bool 
             crate::ArrayElement::Numeric {
                 nullable: false, ..
             }
+            | crate::ArrayElement::Enum(_)
             | crate::ArrayElement::Number
             | crate::ArrayElement::Long
             | crate::ArrayElement::Float
@@ -689,6 +691,7 @@ fn sort_element_supported(element: &api::Type, arguments: &[api::Type]) -> bool 
 /// The caller separately excludes Null and union receivers.
 fn method_receiver_profile(ty: &api::Type) -> bool {
     match ty {
+        api::Type::Enum(_) => true,
         api::Type::TupleValue(tuple) => tuple.validate().is_ok(),
         api::Type::Null => true,
         api::Type::Named(name) => matches!(
@@ -718,6 +721,9 @@ fn method_receiver_profile(ty: &api::Type) -> bool {
 /// Their required members must be available by the interface introduction level,
 /// so checking the receiving interface's API level also covers this witness.
 fn scalar_comparable(actual: &api::Type) -> bool {
+    if matches!(actual, api::Type::Enum(_)) {
+        return scalar_comparable(&api::Type::named("Toybox.Lang.Number"));
+    }
     let api::Type::Named(class) = actual else {
         return false;
     };
@@ -763,7 +769,7 @@ pub(crate) fn accepts_boundary(expected: &api::Type, actual: &api::Type) -> bool
     }
     fn native_contract(ty: &api::Type) -> bool {
         match ty {
-            api::Type::Named(_) | api::Type::Null | api::Type::Any => true,
+            api::Type::Enum(_) | api::Type::Named(_) | api::Type::Null | api::Type::Any => true,
             api::Type::Union(parts) => parts.iter().all(native_contract),
             api::Type::Array(element) => native_contract(element),
             api::Type::Dictionary { key, value } => native_contract(key) && native_contract(value),
@@ -866,6 +872,10 @@ fn accepts_step(
     }
     if let api::Type::Union(types) = expected {
         return types.iter().any(|ty| accepts(ty, actual));
+    }
+    if matches!(actual, api::Type::Enum(_)) {
+        return !matches!(expected, api::Type::Enum(_))
+            && accepts(expected, &api::Type::named("Toybox.Lang.Number"));
     }
     if let (api::Type::Array(expected), api::Type::Array(actual)) = (expected, actual) {
         return crate::tuples::array_elements_match_with(expected, actual, &accepts);

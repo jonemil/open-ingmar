@@ -33,7 +33,9 @@ document = function-document | unit-document
 function-document = "ciq-ir" newline function-header newline
                     operation+ ".end" newline
 unit-document = "ciq-unit" newline unit-record+
-unit-record = shared-constant-record | owner newline function-document | class-record
+unit-record = enum-record | shared-constant-record
+            | owner newline function-document | class-record
+enum-record = ".enum" shared-owner identifier newline
 shared-constant-record = ".shared-constant" shared-owner identifier
                          call-result-tag newline
 shared-owner = "$" | identifier
@@ -50,7 +52,8 @@ next sections. Class records use `field-record` below before their methods.
 
 An owner applies to exactly one following function document. There is no unit
 end directive. Class field records precede all methods; class methods require
-`receiver=instance`. Canonical output places shared declarations first, global/module functions next,
+`receiver=instance`. Canonical output places enum types first, shared declarations
+next, then global/module functions,
 then classes, retaining declaration order inside each group. `$` selects global
 shared storage; an identifier selects a source module. Shared records carry no
 spans, and their contracts exclude Void and Graphics.Dc. Each nested function is
@@ -167,6 +170,7 @@ value-operation = ".integer" value-id signed-decimal-i32
                 | ".string" value-id quoted-string
                 | ".symbol" value-id identifier
                 | ".constant" value-id module-name identifier
+                | ".enum-value" value-id qualified-name value-id
 storage-operation = ".read-shared" value-id shared-owner identifier
                     "result=" call-result-tag
                   | ".assign-shared" shared-owner identifier value-id
@@ -359,7 +363,9 @@ alias-tag = "integer-union" | "decimal" | "numeric"
 numeric-alias-tag = alias-tag | "nullable-" alias-tag
 interface-name-tag = "comparable" | "comparator"
 interface-tag = interface-name-tag | "nullable-" interface-name-tag
-enum-tag = "number-format" | "endian"
+enum-tag = "number-format" | "endian" | source-enum-tag
+source-enum-tag = "enum(" qualified-name ")"
+qualified-name = identifier
 source-union-tag = "source-union(" source-union-atom ("|" source-union-atom)+ ")"
 source-union-atom = source-tag | native-parameter-tag
 source-tag = "source(" source-identity ")"
@@ -369,7 +375,7 @@ source-base = "Lang.Object" | "Application.AppBase" | "WatchUi.View"
             | "WatchUi.BehaviorDelegate"
 element-tag = "any" | "null" | "number" | "nullable-number" | other-scalar-tag
             | "nullable-" other-scalar-tag | core-tag | nullable-core-tag
-            | numeric-alias-tag | interface-tag | "view"
+            | numeric-alias-tag | interface-tag | source-enum-tag | "view"
             | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag
             | union-tag | nested-element-tag | exact-element-tag
             | recursive-tag | recursive-reference-tag
@@ -380,11 +386,12 @@ nullable-structural-tag = "union(" structural-tag "|null)"
 nullable-callback-tag = "union(" callback-tag "|null)"
 array-tag = element-tag "-array"
 dictionary-tag = "dictionary(" dictionary-key-tag "=>" dictionary-value-tag ")"
-dictionary-key-tag = scalar-tag | alias-tag | interface-name-tag
+dictionary-key-tag = scalar-tag | alias-tag | interface-name-tag | source-enum-tag
                    | "symbol" | "method" | "byte-array" | structural-tag | callback-tag
 dictionary-value-tag = scalar-tag | nullable-scalar-tag | core-tag
                      | nullable-core-tag | numeric-alias-tag | interface-tag
                      | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag
+                     | source-enum-tag | "union(" source-enum-tag "|null)"
                      | nested-dictionary-value-tag
 nested-dictionary-value-tag = nested-dictionary-value
                             | "union(" nested-dictionary-value "|null)"

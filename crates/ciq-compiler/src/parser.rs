@@ -585,6 +585,8 @@ struct DeclarationText<'a> {
 pub(crate) struct Declarations<'a> {
     constants: BTreeMap<String, DeclarationText<'a>>,
     enum_groups: BTreeMap<String, usize>,
+    enum_types: BTreeMap<String, (usize, usize)>,
+    enum_members: BTreeMap<String, String>,
     value_names: BTreeSet<String>,
     constant_values: RefCell<BTreeMap<String, crate::constants::Immediate>>,
 
@@ -595,6 +597,22 @@ pub(crate) struct Declarations<'a> {
 }
 
 impl Declarations<'_> {
+    pub(crate) fn enum_declarations(&self) -> Vec<crate::EnumDeclaration> {
+        self.enum_types
+            .keys()
+            .map(|path| {
+                let (module, name) = path
+                    .rsplit_once('.')
+                    .map_or((None, path.as_str()), |(owner, name)| {
+                        (Some(owner.to_owned()), name)
+                    });
+                crate::EnumDeclaration {
+                    module,
+                    name: name.into(),
+                }
+            })
+            .collect()
+    }
     pub(crate) fn immediate_constants(&self) -> Rc<BTreeMap<String, crate::constants::Immediate>> {
         Rc::new(
             self.constant_values
@@ -706,6 +724,7 @@ impl<'a> Parser<'a> {
         Ok(ParsedConstant {
             name,
             annotation,
+            enum_type: None,
             initializer,
             literal_default,
             span,
@@ -720,6 +739,7 @@ impl<'a> Parser<'a> {
         name: String,
         span: Span,
         next: &mut i32,
+        enum_type: Option<String>,
     ) -> Result<ParsedConstant, Diagnostic> {
         let (initializer, literal_default) = if self.peek()? == Kind::Punctuation('=') {
             self.token()?;
@@ -762,7 +782,14 @@ impl<'a> Parser<'a> {
         };
         Ok(ParsedConstant {
             name,
-            annotation: Some(crate::ReturnType::Integer),
+            annotation: Some(
+                enum_type
+                    .as_ref()
+                    .map_or(crate::ReturnType::Integer, |name| {
+                        crate::ReturnType::Enum(name.clone())
+                    }),
+            ),
+            enum_type,
             initializer,
             literal_default,
             span,
@@ -786,9 +813,9 @@ impl<'a> Parser<'a> {
                 ));
             }
             if self.peek()? != Kind::Punctuation('{') {
-                return Err(self.error(self.offset, "named enum types are not yet supported"));
+                self.identifier()?;
             }
-            self.token()?;
+            self.expect(Kind::Punctuation('{'), "'{' after enum name")?;
         }
         let mut next = 0i32;
         let mut declarations = Vec::new();
@@ -798,8 +825,17 @@ impl<'a> Parser<'a> {
             let Kind::Word(name) = token.kind else {
                 unreachable!()
             };
+            let key = self
+                .owner
+                .as_ref()
+                .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
             let declaration = if enumeration {
-                self.enum_tail(name.into(), token.span, &mut next)?
+                self.enum_tail(
+                    name.into(),
+                    token.span,
+                    &mut next,
+                    self.declarations.enum_members.get(&key).cloned(),
+                )?
             } else {
                 self.constant_tail(name.into(), token.span)?
             };
@@ -1007,6 +1043,7 @@ pub(crate) fn collect_declarations<'a>(
                 match parser.peek()? {
                     Kind::Word("const" | "enum") => {
                         let enumeration = parser.token()?.kind == Kind::Word("enum");
+                        let mut enum_type = None;
                         let enum_group = if enumeration {
                             if parser
                                 .owner
@@ -1019,12 +1056,27 @@ pub(crate) fn collect_declarations<'a>(
                                 ));
                             }
                             if parser.peek()? != Kind::Punctuation('{') {
-                                return Err(parser.error(
-                                    parser.offset,
-                                    "named enum types are not yet supported",
-                                ));
+                                let token = parser.identifier()?;
+                                parser.reject_binding(&token)?;
+                                let Kind::Word(name) = token.kind else {
+                                    unreachable!()
+                                };
+                                let path = parser.owner.as_ref().map_or_else(
+                                    || name.to_owned(),
+                                    |owner| format!("{owner}.{name}"),
+                                );
+                                enum_type = Some(path.clone());
+                                if aliases
+                                    .enum_types
+                                    .insert(path, (source_index, token.span.start))
+                                    .is_some()
+                                {
+                                    return Err(
+                                        parser.error(token.span.start, "duplicate enum type")
+                                    );
+                                }
                             }
-                            parser.token()?;
+                            parser.expect(Kind::Punctuation('{'), "'{' after enum name")?;
                             enum_group_count += 1;
                             Some(enum_group_count)
                         } else {
@@ -1163,6 +1215,9 @@ pub(crate) fn collect_declarations<'a>(
                                 ));
                             }
                             if let Some(group) = enum_group {
+                                if let Some(name) = &enum_type {
+                                    aliases.enum_members.insert(key.clone(), name.clone());
+                                }
                                 aliases.enum_groups.insert(key, group);
                             }
                             if !more {
@@ -1299,6 +1354,22 @@ pub(crate) fn collect_declarations<'a>(
             diagnostic,
         })?;
     }
+    for (name, (source_index, at)) in &aliases.enum_types {
+        if aliases.owners.contains(name)
+            || aliases.aliases.contains_key(name)
+            || aliases.constants.contains_key(name)
+            || aliases.value_names.contains(name)
+        {
+            return Err(crate::SourceDiagnostic {
+                source: *source_index,
+                diagnostic: Diagnostic::at(
+                    sources[*source_index],
+                    *at,
+                    "enum type conflicts with another declaration",
+                ),
+            });
+        }
+    }
     let aliases = Rc::new(aliases);
     for (key, alias) in &aliases.aliases {
         let mut parser = Parser::new(alias.source, aliases.clone());
@@ -1339,7 +1410,12 @@ pub(crate) fn collect_declarations<'a>(
             let name = key.rsplit('.').next().unwrap().into();
             let enum_group = aliases.enum_groups.get(key);
             let constant = if let Some(group) = enum_group {
-                parser.enum_tail(name, span, enum_next.entry(*group).or_insert(0))?
+                parser.enum_tail(
+                    name,
+                    span,
+                    enum_next.entry(*group).or_insert(0),
+                    aliases.enum_members.get(key).cloned(),
+                )?
             } else {
                 parser.constant_tail(name, span)?
             };
@@ -3582,6 +3658,19 @@ impl Parser<'_> {
             return Ok(crate::ParameterType::Callback(Box::new(signature)));
         }
         let path = self.path()?;
+        let qualified = self.owner.as_ref().map(|owner| format!("{owner}.{path}"));
+        if let Some(name) = qualified
+            .as_ref()
+            .filter(|name| self.declarations.enum_types.contains_key(*name))
+            .or_else(|| {
+                self.declarations
+                    .enum_types
+                    .contains_key(&path)
+                    .then_some(&path)
+            })
+        {
+            return Ok(crate::ParameterType::Enum(name.clone()));
+        }
         if let Some(ty) = self.alias_parameter(&path, at)? {
             return Ok(ty);
         }
@@ -3810,6 +3899,7 @@ pub(crate) struct ParsedUnit {
 pub(crate) struct ParsedConstant {
     pub name: String,
     pub annotation: Option<crate::ReturnType>,
+    pub enum_type: Option<String>,
     pub initializer: Expression,
     /// Preserve source-dependent default eligibility before enum grouping is lost.
     pub literal_default: bool,

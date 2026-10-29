@@ -886,14 +886,32 @@ See the [scalar example](../../../examples/compiler-constants/README.md),
 [anonymous enum example](../../../examples/compiler-anonymous-enums/README.md), and
 [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
-### Anonymous enums
+### Enums
 
 Global and module `enum { ... }` declarations introduce readonly Number-valued
 members in their enclosing value scope. Bare, module-qualified, and owner-relative
 member lookup reuse constant lookup. Members cannot collide with constants or
 other value declarations, cannot be rebound, and count toward the 256-constant
-limit. Named enum types, class enums, and non-Number member contracts remain
-outside this profile.
+limit. Class enums and non-Number member contracts remain outside this profile.
+
+`enum Color { RED, GREEN=5, BLUE }` also declares a nominal type, with at most
+256 enum types per unit. Its members have type Color; `Color.RED` is not a value
+path. A module enum `M.Kind` is available as `Kind` within M and as `M.Kind`
+elsewhere. Collection across files permits forward type references and typedefs;
+enum names cannot collide with other declarations in that scope.
+
+Enum annotations retain identity in parameters, results, locals, class fields,
+nullable unions, and generic containers. A Color value satisfies Number or
+Object, but a raw Number or another enum does not satisfy Color. An explicit
+`as Color` assertion changes the lexical view without a runtime check. Mutable
+typed Arrays and Dictionaries retain their existing invariant contracts;
+inferred tuple literals retain their existing tuple-to-Array adaptation rules.
+
+Number methods and numeric operators accept enum values. Arithmetic, negation,
+bitwise operations, and updates produce ordinary Number results; comparisons
+also permit different enums. Unary `+` preserves the original identity. A named
+member initializer is checked as Number and then given the declared enum type;
+this differs from an ordinary `const X as Color=4`, which fails assignability.
 
 Each block starts an implicit counter at zero. An omitted initializer receives
 the counter and advances it with 32-bit wrapping. A direct integer token,
@@ -908,7 +926,8 @@ once in its owner's initialization sequence; an implicit successor does not
 read or repeat a runtime initializer. Direct integer and implicit values provide
 literal defaults. Parenthesized values initialize at runtime, so earlier aliases
 can retain Null. Existing owner re-entry, shutdown, and API checks still apply.
-See the [specimen](../../../examples/compiler-anonymous-enums/README.md) and
+See the [anonymous](../../../examples/compiler-anonymous-enums/README.md) and
+[named](../../../examples/compiler-named-enums/README.md) specimens and
 [SDK evidence](../../investigations/core-lang-completion.md#enumerations).
 
 ### Type aliases

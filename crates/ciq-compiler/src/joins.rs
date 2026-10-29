@@ -304,7 +304,8 @@ pub(crate) fn validate_stack_uses(
                 | Operation::Compare { result, left, .. } if left == value => {
                     value = result;
                 }
-                Operation::SourceCast { result, .. }
+                Operation::EnumValue { result, .. }
+                | Operation::SourceCast { result, .. }
                 | Operation::ArrayAllocate { result, .. }
                 | Operation::ByteArrayAllocate { result, .. }
                 | Operation::Cast { result, .. }

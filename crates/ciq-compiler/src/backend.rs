@@ -156,6 +156,7 @@ pub(crate) fn lower_owned<'a>(
             | Operation::SharedRead { result, .. }
             | Operation::Binary { result, .. }
             | Operation::Step { result, .. }
+            | Operation::EnumValue { result, .. }
             | Operation::Positive { result, .. }
             | Operation::Complement { result, .. }
             | Operation::Negate { result, .. }
@@ -972,6 +973,10 @@ fn expression(
                     receiver, member, ..
                 } => {
                     tasks.extend([Task::SourceMember(member.clone()), Task::Value(*receiver)]);
+                    continue;
+                }
+                Operation::EnumValue { operand, .. } => {
+                    tasks.push(Task::Value(*operand));
                     continue;
                 }
                 Operation::SharedRead { module, field, .. } => {

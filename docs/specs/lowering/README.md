@@ -48,6 +48,10 @@ Structural option records use the Dictionary allocation/fill/finish path:
 `RecordBegin` selects `newd`, and reads/writes use ordinary Dictionary calls.
 Per-key contracts and nullable read types are erased without runtime guards.
 
+Source enum identities erase to their underlying Number values. `EnumValue`
+emits only its operand; enum declarations add no VM class, wrapper, instruction,
+or PRG section. Number operators and method calls use their ordinary lowering.
+
 
 ### Parameters and positional arguments
 

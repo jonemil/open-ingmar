@@ -8,6 +8,9 @@ use crate::{BinaryOp, ComparisonOp, api::Type};
 
 /// Resolve Boolean inversion or integer complement without changing its type.
 fn not_proven_result(operand: &Type) -> Option<Type> {
+    if matches!(operand, Type::Enum(_)) {
+        return not_proven_result(&Type::named("Toybox.Lang.Number"));
+    }
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
             parts
@@ -30,6 +33,9 @@ fn not_proven_result(operand: &Type) -> Option<Type> {
 
 /// Resolve Number/Long complement without widening its width or admitting Null.
 fn complement_proven_result(operand: &Type) -> Option<Type> {
+    if matches!(operand, Type::Enum(_)) {
+        return complement_proven_result(&Type::named("Toybox.Lang.Number"));
+    }
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
             parts
@@ -52,6 +58,9 @@ fn complement_proven_result(operand: &Type) -> Option<Type> {
 
 /// Resolve unary signs without changing numeric width or admitting Null.
 fn sign_proven_result(operand: &Type) -> Option<Type> {
+    if matches!(operand, Type::Enum(_)) {
+        return sign_proven_result(&Type::named("Toybox.Lang.Number"));
+    }
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
             parts
@@ -80,6 +89,9 @@ fn numeric(ty: &Type) -> bool {
 
 /// Resolve a numeric step or Char increment, preserving the operand type.
 fn step_proven_result(operand: &Type, increment: bool) -> Option<Type> {
+    if matches!(operand, Type::Enum(_)) {
+        return step_proven_result(&Type::named("Toybox.Lang.Number"), increment);
+    }
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
             parts
@@ -108,6 +120,22 @@ fn step_proven_result(operand: &Type, increment: bool) -> Option<Type> {
 /// Numeric aliases require every concrete pair to be valid; results use an
 /// exact scalar or the narrowest supported numeric alias containing them.
 fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
+    let number = Type::named("Toybox.Lang.Number");
+    if matches!(left, Type::Enum(_)) || matches!(right, Type::Enum(_)) {
+        return binary_proven_result(
+            kind,
+            if matches!(left, Type::Enum(_)) {
+                &number
+            } else {
+                left
+            },
+            if matches!(right, Type::Enum(_)) {
+                &number
+            } else {
+                right
+            },
+        );
+    }
     if *left == Type::Any || *right == Type::Any {
         return Some(Type::Any);
     }
@@ -197,6 +225,22 @@ fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Typ
 /// String equality uses object identity with supported String/numeric/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 fn comparison_proven_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
+    let number = Type::named("Toybox.Lang.Number");
+    if matches!(left, Type::Enum(_)) || matches!(right, Type::Enum(_)) {
+        return comparison_proven_result(
+            kind,
+            if matches!(left, Type::Enum(_)) {
+                &number
+            } else {
+                left
+            },
+            if matches!(right, Type::Enum(_)) {
+                &number
+            } else {
+                right
+            },
+        );
+    }
     if let Some(body) = crate::recursive::unfold(left) {
         return comparison_proven_result(kind, &body, right);
     }
@@ -240,7 +284,7 @@ fn comparison_proven_result(kind: ComparisonOp, left: &Type, right: &Type) -> Op
 
 fn string_operand(ty: &Type, boolean: bool) -> bool {
     match ty {
-        Type::Any | Type::Null => true,
+        Type::Enum(_) | Type::Any | Type::Null => true,
         Type::Named(name) => {
             matches!(
                 name.as_str(),

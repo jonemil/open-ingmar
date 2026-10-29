@@ -368,7 +368,22 @@ A Color parameter accepts BLUE, rejects raw Number 4 and members of a different
 named enum. Returning that parameter from a Number-returning function, `BLUE+1`,
 and `BLUE.toString()` compile. `const X as Color=4` is rejected. The SDK also
 accepts a Float initializer in a named enum; its static/runtime contract remains
-unresolved. Our current anonymous profile requires Number-valued expressions.
+unresolved. Our current source enum profile requires Number-valued expressions.
+
+Additional SDK probes accept `take(+RED)` for a Color parameter, but reject
+`take(-RED)`, `take(RED+0)`, and an inferred enum local after `++`. Equality
+between members of different enums compiles. These distinguish unary plus's
+identity preservation from operations producing Number.
+
+The [named enum specimen](../../examples/compiler-named-enums/README.md), using
+SDK 9.2.0, `fr265`, API 5.2.0/minimum 5.0.0, `-O 0`, produces the same 18 expected
+lines with SDK and generated programs. It covers cross-file types, module enums,
+typed calls, Number methods/operators, mutable containers, nullable contracts,
+class fields, and assertions. The SDK loses enum-key information when inferring
+the return of `{RED => GREEN}` as `Dictionary<Color, Color>`; explicitly asserting
+that Dictionary type makes the specimen compile. Our inference retains both
+enum contracts without the assertion. Both PRGs pass structured CODE/DATA export
+and reconstruction; generated saved IR/assembly paths agree.
 
 **Simulator probe:** for `class EnumBox { enum { A=Trace.number(88), B } }`,
 where the helper prints 88 and returns 4, `EnumBox.A` before allocation is Null.

@@ -249,7 +249,11 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
         let element = ArrayElement::from_api_type(&if nullable { ty.with_null() } else { ty })?;
         return matches!(element, ArrayElement::Nested { .. }).then_some(element);
     }
-    if tag.starts_with("interface(") || tag.starts_with("union(") || tag.starts_with("callback(") {
+    if tag.starts_with("enum(")
+        || tag.starts_with("interface(")
+        || tag.starts_with("union(")
+        || tag.starts_with("callback(")
+    {
         return ArrayElement::from_api_type(&call_result(tag).ok()?.api_type());
     }
     ARRAY_ELEMENTS.iter().find(|e| e.text() == tag).cloned()
@@ -258,6 +262,10 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
 /// Parse the ordinary call-result domain, retaining exact source identities.
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
+    if let Some(name) = tag.strip_prefix("enum(").and_then(|s| s.strip_suffix(')')) {
+        crate::enums::validate_name(name)?;
+        return Ok(ReturnType::Enum(name.to_owned()));
+    }
     if tag.starts_with("rec(") || tag.starts_with("ref(") {
         crate::structural::split(tag, '\0')?;
     }
@@ -394,6 +402,7 @@ pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
         return Ok(parameter.clone());
     }
     match call_result(tag) {
+        Ok(ReturnType::Enum(name)) => Ok(ParameterType::Enum(name)),
         Ok(ReturnType::Options(fields)) => Ok(ParameterType::Options(fields)),
         Ok(ReturnType::Tuple(tuple)) => Ok(ParameterType::Tuple(tuple)),
         Ok(ReturnType::Structural(shape)) => Ok(ParameterType::Structural(shape)),
@@ -460,6 +469,7 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
         ReturnType::SourceUnion(contract) => Cow::Owned(contract.text()),
         ReturnType::SourceObject(class) => Cow::Owned(format!("source({class})")),
         ReturnType::NullableSourceObject(class) => Cow::Owned(format!("nullable-source({class})")),
+        ReturnType::Enum(name) => Cow::Owned(format!("enum({name})")),
         ReturnType::Tuple(tuple) => Cow::Owned(tuple.tag()),
         ReturnType::Void => unreachable!("Void has no value-result tag"),
         _ => Cow::Borrowed(
@@ -482,6 +492,7 @@ pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
         return Cow::Owned(crate::records::tag(fields));
     }
     match ty {
+        ParameterType::Enum(name) => Cow::Owned(format!("enum({name})")),
         ParameterType::Tuple(tuple) => Cow::Owned(tuple.tag()),
         ParameterType::Structural(shape) => Cow::Owned(shape.tag()),
         ParameterType::Callback(signature) => Cow::Owned(crate::callbacks::tag(signature)),
