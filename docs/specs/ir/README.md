@@ -283,6 +283,10 @@ class initializer bodies use the same scalar-default phase. The source
 [constant rules](../frontend/README.md#constants) define default eligibility and
 SDK readiness restrictions. Saved IR retains the selected order and contracts,
 not an implicit dependency scheduler.
+Anonymous enum members use these same separate Number bindings and initializer
+bodies. The frontend records implicit values and source-form default eligibility
+before lowering; saved IR retains the selected values, operations, and ordering.
+It has no enum block syntax or implicit numbering state.
 They inherit the hook's receiver instead of looking up the initializing owner.
 Separate functions preserve each source file's diagnostic spans and count toward
 the unit body limit. Explicit calls or known-selector Method bindings to these

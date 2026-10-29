@@ -809,8 +809,11 @@ Forward aliases to later String/Long/Double literal defaults are supported.
 Global/module nonempty flat Array and ByteArray literals also provide defaults
 when every element is a scalar literal. Numeric signs directly on tokens are
 part of the literal, and unary `+` on a numeric literal element is accepted.
-Grouping a literal does not change eligibility, but `-(1)` is a runtime negation,
-unlike `-1`. Calculated elements and constant references, including immediate
+Grouping an element literal does not change element eligibility, but `-(1)` is
+a runtime negation, unlike `-1`. Grouping the whole initializer, such as `(30)`,
+makes it a runtime initializer. Direct unary `+` on an integer token is a Number
+default; it does not require runtime evaluation. Calculated elements and constant
+references, including immediate
 Number constants, make the aggregate a runtime initializer. Empty Arrays and
 ByteArrays, Dictionary literals, nested Arrays, and calls are not literal
 defaults. Computed Long/Double/String scalar expressions likewise initialize at
@@ -880,7 +883,33 @@ See the [scalar example](../../../examples/compiler-constants/README.md),
 [module activation example](../../../examples/compiler-module-literals/README.md),
 [branching initializer example](../../../examples/compiler-branch-initializers/README.md),
 [typed declaration example](../../../examples/compiler-constant-declarations/README.md), and
+[anonymous enum example](../../../examples/compiler-anonymous-enums/README.md), and
 [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
+
+### Anonymous enums
+
+Global and module `enum { ... }` declarations introduce readonly Number-valued
+members in their enclosing value scope. Bare, module-qualified, and owner-relative
+member lookup reuse constant lookup. Members cannot collide with constants or
+other value declarations, cannot be rebound, and count toward the 256-constant
+limit. Named enum types, class enums, and non-Number member contracts remain
+outside this profile.
+
+Each block starts an implicit counter at zero. An omitted initializer receives
+the counter and advances it with 32-bit wrapping. A direct integer token,
+including a direct signed `+`/`-` token, sets the counter to that value plus one.
+Other expressions retain their runtime value and effects without updating the
+counter: `enum { A=10, B=1+2, C }` gives B=3 and C=11. A parenthesized integer
+likewise does not update it. Counters reset for each block, including blocks in
+reopened modules or different files.
+
+Explicit initializers use ordinary checked Number expressions. Each executes
+once in its owner's initialization sequence; an implicit successor does not
+read or repeat a runtime initializer. Direct integer and implicit values provide
+literal defaults. Parenthesized values initialize at runtime, so earlier aliases
+can retain Null. Existing owner re-entry, shutdown, and API checks still apply.
+See the [specimen](../../../examples/compiler-anonymous-enums/README.md) and
+[SDK evidence](../../investigations/core-lang-completion.md#enumerations).
 
 ### Type aliases
 

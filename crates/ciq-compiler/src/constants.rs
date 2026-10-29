@@ -72,3 +72,37 @@ pub(crate) fn literal(expression: &Expression) -> Option<Immediate> {
         _ => return None,
     })
 }
+
+/// Classify ordinary constant defaults before source forms lose grouping.
+/// Class aggregate defaults remain runtime initializers under the SDK profile.
+pub(crate) fn literal_default(expression: &Expression, class_field: bool, source: &str) -> bool {
+    if source.as_bytes().get(expression.span.start) == Some(&b'(') {
+        return false;
+    }
+    fn scalar(expression: &Expression) -> bool {
+        matches!(
+            expression.kind,
+            E::String(_)
+                | E::Long(_)
+                | E::Double(_)
+                | E::Integer(_)
+                | E::Float(_)
+                | E::Boolean(_)
+                | E::Char(_)
+                | E::Symbol(_)
+                | E::Null
+        )
+    }
+    scalar(expression) || matches!(&expression.kind, E::Positive(inner)
+        if matches!(inner.kind, E::Integer(_))
+            && source.as_bytes().get(inner.span.start).is_some_and(u8::is_ascii_digit))
+    || (!class_field && match &expression.kind {
+        E::ArrayLiteral(elements) | E::ByteArrayLiteral(elements) => {
+            !elements.is_empty() && elements.iter().all(|element| {
+                scalar(element) || matches!(&element.kind, E::Positive(value)
+                    if matches!(value.kind, E::Integer(_) | E::Float(_) | E::Long(_) | E::Double(_)))
+            })
+        }
+        _ => false,
+    })
+}

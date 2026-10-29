@@ -116,6 +116,9 @@ before bodies, retrying unresolved dependencies without placeholder types.
 Constant lists share one binding parser across global, module, and class scopes.
 Annotations reuse value-type parsing, source-class resolution, and checked return
 construction to validate an initializer while retaining its declared contract.
+Anonymous enum blocks collect their members into that constant environment.
+The parser numbers them in source order and records default eligibility before
+grouping is erased; inference and initializer scheduling reuse that decision.
 Source initialization separates literal defaults from runtime expression order.
 The same order determines pre-assignment Null views during type inference and
 body construction; unit validation rechecks those views and summarizes reads

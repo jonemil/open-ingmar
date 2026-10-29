@@ -3547,7 +3547,7 @@ pub(crate) fn compile_sources_mapped(
                 continue;
             }
             let constants = class.constants.iter().collect::<Vec<_>>();
-            let order = constant_initialization_order(Owner::Class(&class.name), &constants);
+            let order = constant_initialization_order(&constants);
             let mut assignments = Vec::new();
             for declaration in &class.constants {
                 let result = calls.source_fields[&class.name][&declaration.name].clone();
@@ -3710,8 +3710,7 @@ fn shared_initialization_order(parsed: &[parser::ParsedUnit]) -> Vec<(Option<Str
             .filter(|(owner, _)| owner.as_deref() == module)
             .map(|(_, value)| value)
             .collect::<Vec<_>>();
-        let owner = module.map_or(Owner::Global, Owner::Module);
-        for index in constant_initialization_order(owner, &constants) {
+        for index in constant_initialization_order(&constants) {
             order.push((module.map(str::to_owned), constants[index].name.clone()));
         }
     }
@@ -3733,53 +3732,12 @@ fn uninitialized_shared(
         .collect()
 }
 
-/// Place literal defaults before runtime expressions. Alias assignments, calls,
-/// and other runtime initializers retain declaration order.
-/// Class aggregate forward reads remain subject to the SDK's readiness rule.
-fn constant_initialization_order(
-    owner: Owner<'_>,
-    constants: &[&parser::ParsedConstant],
-) -> Vec<usize> {
-    use parser::ExpressionKind as E;
-    fn scalar(expression: &parser::Expression) -> bool {
-        matches!(
-            expression.kind,
-            E::String(_)
-                | E::Long(_)
-                | E::Double(_)
-                | E::Integer(_)
-                | E::Float(_)
-                | E::Boolean(_)
-                | E::Char(_)
-                | E::Symbol(_)
-                | E::Null
-        )
-    }
-    fn element(expression: &parser::Expression) -> bool {
-        scalar(expression)
-            || matches!(&expression.kind, E::Positive(value)
-                if matches!(value.kind, E::Integer(_) | E::Float(_) | E::Long(_) | E::Double(_)))
-    }
-    let mut ready = BTreeSet::new();
-    let mut order = Vec::new();
-    for (index, constant) in constants.iter().enumerate() {
-        let expression = &constant.initializer;
-        let aggregate = !matches!(owner, Owner::Class(_))
-            && match &expression.kind {
-                E::ArrayLiteral(elements) | E::ByteArrayLiteral(elements) => {
-                    !elements.is_empty() && elements.iter().all(element)
-                }
-                _ => false,
-            };
-        // Eligibility follows source form, not constant folding: references,
-        // calculations, and empty containers initialize at runtime in the SDK.
-        if scalar(expression) || aggregate {
-            ready.insert(index);
-            order.push(index);
-        }
-    }
-    order.extend((0..constants.len()).filter(|index| !ready.contains(index)));
-    order
+/// Preserve each phase's declaration order using default eligibility recorded
+/// by the parser. Enum syntax can distinguish grouped and ungrouped literals.
+fn constant_initialization_order(constants: &[&parser::ParsedConstant]) -> Vec<usize> {
+    let (defaults, runtime): (Vec<_>, Vec<_>) =
+        (0..constants.len()).partition(|index| constants[*index].literal_default);
+    defaults.into_iter().chain(runtime).collect()
 }
 
 /// Resolve stored declaration contracts independently of evaluation order.

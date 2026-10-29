@@ -584,6 +584,7 @@ struct DeclarationText<'a> {
 #[derive(Default)]
 pub(crate) struct Declarations<'a> {
     constants: BTreeMap<String, DeclarationText<'a>>,
+    enum_groups: BTreeMap<String, usize>,
     value_names: BTreeSet<String>,
     constant_values: RefCell<BTreeMap<String, crate::constants::Immediate>>,
 
@@ -696,18 +697,100 @@ impl<'a> Parser<'a> {
                 span,
             }
         };
+        let class_field = self
+            .owner
+            .as_ref()
+            .is_some_and(|owner| self.declarations.classes.contains(owner));
+        let literal_default =
+            crate::constants::literal_default(&initializer, class_field, self.source);
         Ok(ParsedConstant {
             name,
             annotation,
             initializer,
+            literal_default,
             span,
         })
     }
 
-    /// Parse one constant declaration list through the shared value/type grammar.
-    /// Class fields are retained; only cached unannotated global literals vanish.
+    /// Parse one anonymous enum member. Only a direct signed integer token
+    /// (including unary '+') advances the numbering base. Other expressions
+    /// retain their runtime effects without changing that compile-time counter.
+    fn enum_tail(
+        &mut self,
+        name: String,
+        span: Span,
+        next: &mut i32,
+    ) -> Result<ParsedConstant, Diagnostic> {
+        let (initializer, literal_default) = if self.peek()? == Kind::Punctuation('=') {
+            self.token()?;
+            let value = self.expression(0)?;
+            let direct = |value: &Expression| {
+                self.source
+                    .as_bytes()
+                    .get(value.span.start)
+                    .is_some_and(|c| c.is_ascii_digit() || *c == b'-')
+            };
+            let literal = match &value.kind {
+                ExpressionKind::Integer(n) if direct(&value) => Some(*n),
+                ExpressionKind::Positive(inner)
+                    if self.source.as_bytes().get(value.span.start) == Some(&b'+') =>
+                {
+                    match inner.kind {
+                        ExpressionKind::Integer(n) if direct(inner) => Some(n),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            };
+            if let Some(n) = literal {
+                *next = n.wrapping_add(1);
+            }
+            let default = literal.is_some()
+                || (self.source.as_bytes().get(value.span.start) != Some(&b'(')
+                    && crate::constants::literal_default(&value, false, self.source));
+            (value, default)
+        } else {
+            let n = *next;
+            *next = n.wrapping_add(1);
+            (
+                Expression {
+                    kind: ExpressionKind::Integer(n),
+                    span,
+                },
+                true,
+            )
+        };
+        Ok(ParsedConstant {
+            name,
+            annotation: Some(crate::ReturnType::Integer),
+            initializer,
+            literal_default,
+            span,
+        })
+    }
+
+    /// Parse a constant list or anonymous enum through the shared expression
+    /// grammar. Enums supply numbered defaults; constants supply Null defaults.
     fn constant_declarations(&mut self) -> Result<Vec<ParsedConstant>, Diagnostic> {
-        self.expect(Kind::Word("const"), "const")?;
+        let enumeration = self.peek()? == Kind::Word("enum");
+        self.token()?;
+        if enumeration {
+            if self
+                .owner
+                .as_ref()
+                .is_some_and(|owner| self.declarations.classes.contains(owner))
+            {
+                return Err(self.error(
+                    self.offset,
+                    "class enums require class-qualified default lookup support",
+                ));
+            }
+            if self.peek()? != Kind::Punctuation('{') {
+                return Err(self.error(self.offset, "named enum types are not yet supported"));
+            }
+            self.token()?;
+        }
+        let mut next = 0i32;
         let mut declarations = Vec::new();
         loop {
             let token = self.identifier()?;
@@ -715,7 +798,11 @@ impl<'a> Parser<'a> {
             let Kind::Word(name) = token.kind else {
                 unreachable!()
             };
-            let declaration = self.constant_tail(name.into(), token.span)?;
+            let declaration = if enumeration {
+                self.enum_tail(name.into(), token.span, &mut next)?
+            } else {
+                self.constant_tail(name.into(), token.span)?
+            };
             let key = self
                 .owner
                 .as_ref()
@@ -734,9 +821,20 @@ impl<'a> Parser<'a> {
                 declarations.push(declaration);
             }
             match self.token()?.kind {
-                Kind::Punctuation(',') => {}
-                Kind::Punctuation(';') => return Ok(declarations),
-                _ => return Err(self.error(self.offset, "expected ',' or ';' after constant")),
+                Kind::Punctuation(',') => {
+                    if enumeration && self.peek()? == Kind::Punctuation('}') {
+                        self.token()?;
+                        return Ok(declarations);
+                    }
+                }
+                Kind::Punctuation('}') if enumeration => return Ok(declarations),
+                Kind::Punctuation(';') if !enumeration => return Ok(declarations),
+                _ => {
+                    return Err(self.error(
+                        self.offset,
+                        "invalid constant or enum declaration delimiter",
+                    ));
+                }
             }
         }
     }
@@ -898,6 +996,7 @@ pub(crate) fn collect_declarations<'a>(
     sources: &[&'a str],
 ) -> Result<Rc<Declarations<'a>>, crate::SourceDiagnostic> {
     let mut aliases = Declarations::default();
+    let mut enum_group_count = 0usize;
     for (source_index, source) in sources.iter().enumerate() {
         let mut parser = Parser::new(source, Rc::default());
         parser.source_index = source_index;
@@ -906,8 +1005,31 @@ pub(crate) fn collect_declarations<'a>(
             let mut outer_names = None;
             while parser.peek()? != Kind::End {
                 match parser.peek()? {
-                    Kind::Word("const") => {
-                        parser.token()?;
+                    Kind::Word("const" | "enum") => {
+                        let enumeration = parser.token()?.kind == Kind::Word("enum");
+                        let enum_group = if enumeration {
+                            if parser
+                                .owner
+                                .as_ref()
+                                .is_some_and(|owner| aliases.classes.contains(owner))
+                            {
+                                return Err(parser.error(
+                                    parser.offset,
+                                    "class enums require class-qualified default lookup support",
+                                ));
+                            }
+                            if parser.peek()? != Kind::Punctuation('{') {
+                                return Err(parser.error(
+                                    parser.offset,
+                                    "named enum types are not yet supported",
+                                ));
+                            }
+                            parser.token()?;
+                            enum_group_count += 1;
+                            Some(enum_group_count)
+                        } else {
+                            None
+                        };
                         loop {
                             let name = parser.identifier()?;
                             parser.reject_binding(&name)?;
@@ -929,11 +1051,21 @@ pub(crate) fn collect_declarations<'a>(
                             let (end, more) = loop {
                                 let token = parser.token()?;
                                 match token.kind {
-                                    Kind::Punctuation(',' | ';') if depth == 0 && angles == 0 => {
+                                    Kind::Punctuation(',') if depth == 0 && angles == 0 => {
                                         break (
                                             token.span.start,
                                             token.kind == Kind::Punctuation(','),
                                         );
+                                    }
+                                    Kind::Punctuation('}')
+                                        if enumeration && depth == 0 && angles == 0 =>
+                                    {
+                                        break (token.span.start, false);
+                                    }
+                                    Kind::Punctuation(';')
+                                        if !enumeration && depth == 0 && angles == 0 =>
+                                    {
+                                        break (token.span.start, false);
                                     }
                                     Kind::Punctuation('(' | '[' | '{') => depth += 1,
                                     Kind::Punctuation(')' | ']' | '}') => {
@@ -1030,7 +1162,14 @@ pub(crate) fn collect_declarations<'a>(
                                     format!("duplicate constant {key:?}"),
                                 ));
                             }
+                            if let Some(group) = enum_group {
+                                aliases.enum_groups.insert(key, group);
+                            }
                             if !more {
+                                break;
+                            }
+                            if enumeration && parser.peek()? == Kind::Punctuation('}') {
+                                parser.token()?;
                                 break;
                             }
                         }
@@ -1178,7 +1317,10 @@ pub(crate) fn collect_declarations<'a>(
     // Cache direct non-heap global/class literals. Module members always need
     // shared storage: even a scalar literal read must activate its owner and
     // run other initializers. References/operators likewise retain real slots.
-    for (key, declaration) in &aliases.constants {
+    let mut constants = aliases.constants.iter().collect::<Vec<_>>();
+    constants.sort_by_key(|(_, declaration)| (declaration.source_index, declaration.name_at));
+    let mut enum_next = BTreeMap::new();
+    for (key, declaration) in constants {
         let mut parser = Parser::new(declaration.source, aliases.clone());
         parser.owner = declaration.owner.clone();
         parser.names = declaration.names.clone();
@@ -1190,20 +1332,26 @@ pub(crate) fn collect_declarations<'a>(
                     format!("constant conflicts with value declaration {key:?}"),
                 ));
             }
-            let constant = parser.constant_tail(
-                key.rsplit('.').next().unwrap().into(),
-                Span {
-                    start: declaration.name_at,
-                    end: declaration.target,
-                },
-            )?;
+            let span = Span {
+                start: declaration.name_at,
+                end: declaration.target,
+            };
+            let name = key.rsplit('.').next().unwrap().into();
+            let enum_group = aliases.enum_groups.get(key);
+            let constant = if let Some(group) = enum_group {
+                parser.enum_tail(name, span, enum_next.entry(*group).or_insert(0))?
+            } else {
+                parser.constant_tail(name, span)?
+            };
             let delimiter = parser.token()?;
-            if !matches!(delimiter.kind, Kind::Punctuation(',' | ';'))
+            if !(matches!(delimiter.kind, Kind::Punctuation(',' | ';'))
+                || (enum_group.is_some() && delimiter.kind == Kind::Punctuation('}')))
                 || delimiter.span.start != declaration.end
             {
                 return Err(parser.error(declaration.name_at, "invalid constant declaration"));
             }
             if constant.annotation.is_none()
+                && constant.literal_default
                 && declaration
                     .owner
                     .as_ref()
@@ -3663,6 +3811,8 @@ pub(crate) struct ParsedConstant {
     pub name: String,
     pub annotation: Option<crate::ReturnType>,
     pub initializer: Expression,
+    /// Preserve source-dependent default eligibility before enum grouping is lost.
+    pub literal_default: bool,
     pub span: Span,
 }
 pub(crate) struct ParsedClass {
@@ -3692,7 +3842,7 @@ pub(crate) fn declarations<'a>(
     let mut count = 0;
     parser.imports()?;
     while parser.peek()? != Kind::End {
-        if parser.peek()? == Kind::Word("const") {
+        if matches!(parser.peek()?, Kind::Word("const" | "enum")) {
             unit.shared.extend(
                 parser
                     .constant_declarations()?
@@ -3749,7 +3899,7 @@ pub(crate) fn declarations<'a>(
             let mut fields = Vec::new();
             let mut constants = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
-                if parser.peek()? == Kind::Word("const") {
+                if matches!(parser.peek()?, Kind::Word("const" | "enum")) {
                     let declarations = parser.constant_declarations()?;
                     if is_class {
                         constants.extend(declarations);

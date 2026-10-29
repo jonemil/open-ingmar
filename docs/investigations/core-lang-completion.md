@@ -346,6 +346,38 @@ whitespace between `>` and `=`; reproduction commands use the spaced form.
 
 [constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 
+## Enumerations
+
+**Experimentally observed**, 2026-10-29, SDK 9.2.0, `fr265`, minimum API 5.0.0,
+`-O 0`, default checking: the
+[anonymous enum specimen](../../examples/compiler-anonymous-enums/README.md)
+produces the same 47 expected lines with SDK and generated programs. Explicit
+runtime calls execute once, while implicit members are literal counter values.
+`enum { A=10, B=1+2, C }` gives B=3, C=11. Grouped `(30)` does not update the
+counter; direct `+40` does. Incrementing 2147483647 wraps to -2147483648.
+Trailing commas are accepted; empty blocks and a semicolon after `}` are rejected.
+
+A focused SDK probe confirms forward default behavior in both constants and
+enums: an alias before a grouped `(30)` captures Null, while one before direct
+`+40` sees 40. Literal grouping within a nonempty Array remains eligible for its
+array default; grouping the whole initializer is a different source form.
+
+**Build probes:** named `enum Color { RED, GREEN=5, BLUE }` introduces the type
+Color and enclosing-scope members, not a value namespace: `Color.RED` is rejected.
+A Color parameter accepts BLUE, rejects raw Number 4 and members of a different
+named enum. Returning that parameter from a Number-returning function, `BLUE+1`,
+and `BLUE.toString()` compile. `const X as Color=4` is rejected. The SDK also
+accepts a Float initializer in a named enum; its static/runtime contract remains
+unresolved. Our current anonymous profile requires Number-valued expressions.
+
+**Simulator probe:** for `class EnumBox { enum { A=Trace.number(88), B } }`,
+where the helper prints 88 and returns 4, `EnumBox.A` before allocation is Null.
+Each of two subsequent allocations prints 88; the first instance's A is 4 and
+the second's B is 0. A separate literal class enum permits `C.ON` at build time.
+These observations establish allocation-time effects and class-qualified access,
+not persistent shared static initialization. Class-qualified reads after
+allocation were not checked; the plan retains that question with class enum work.
+
 ## Checking off
 
 **Experimentally observed:** SDK 9.2.0, fr265, minimum API 5.0.0, `-O 0`,

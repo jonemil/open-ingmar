@@ -77,6 +77,8 @@ and future Rust toolchain experiments.
   conditional/short-circuit initialization, skipped effects, and shared aliases.
 - [compiler-constant-declarations](compiler-constant-declarations/README.md): typed
   declaration lists, Null defaults, cross-file aliases, and retained contracts.
+- [compiler-anonymous-enums](compiler-anonymous-enums/README.md): Number members,
+  syntax-dependent numbering, runtime explicit values, and declaration defaults.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural
