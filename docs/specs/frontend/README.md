@@ -888,11 +888,13 @@ See the [scalar example](../../../examples/compiler-constants/README.md),
 
 ### Enums
 
-Global and module `enum { ... }` declarations introduce readonly Number-valued
+Global and module `enum { ... }` declarations introduce readonly
 members in their enclosing value scope. Bare, module-qualified, and owner-relative
 member lookup reuse constant lookup. Members cannot collide with constants or
 other value declarations, cannot be rebound, and count toward the 256-constant
-limit. Non-Number member contracts remain outside this profile.
+limit. Each anonymous member retains its initializer's inferred type, including
+supported scalars, Null, containers, and source objects. Implicit members are
+Numbers; a non-Number initializer does not change the numbering counter.
 
 `enum Color { RED, GREEN=5, BLUE }` also declares a nominal type, with at most
 256 enum types per unit. Its members have type Color; `Color.RED` is not a value
@@ -912,6 +914,10 @@ bitwise operations, and updates produce ordinary Number results; comparisons
 also permit different enums. Unary `+` preserves the original identity. A named
 member initializer is checked as Number and then given the declared enum type;
 this differs from an ordinary `const X as Color=4`, which fails assignability.
+Named enum support currently requires Number-valued initializers. The SDK also
+accepts named enums with other backing types; those contracts are outside this
+profile until their nominal identity and backing-type sets are represented
+together. Anonymous member inference does not erase values to Number.
 
 Each block starts an implicit counter at zero. An omitted initializer receives
 the counter and advances it with 32-bit wrapping. A direct integer token,
@@ -921,7 +927,7 @@ counter: `enum { A=10, B=1+2, C }` gives B=3 and C=11. A parenthesized integer
 likewise does not update it. Counters reset for each block, including blocks in
 reopened modules or different files.
 
-Explicit initializers use ordinary checked Number expressions. At global/module
+Explicit initializers use ordinary checked expressions. At global/module
 scope each executes once in its owner's initialization sequence; an implicit
 successor does not read or repeat a runtime initializer. Direct integer and implicit values provide
 literal defaults. Parenthesized values initialize at runtime, so earlier aliases
@@ -932,25 +938,33 @@ constant fields. `Class.MEMBER`, `instance.MEMBER`, `self.MEMBER`, and a bare
 member within the class read the same slot. A named class enum declares the type
 `Class.Kind`; its type name does not create another value namespace.
 
-Direct integer and implicit members have metadata defaults available before any
-allocation. Runtime expressions, including grouped integers, start as Null and
+Direct integer and implicit members have Number metadata defaults. Other scalar
+literals and nonempty flat scalar Arrays/ByteArrays initialize once through the
+class statics hook, making them available before allocation. Their stored
+references and mutations survive subsequent allocations. Null literals are
+defaults too, with a concrete Null contract for anonymous members.
+
+Runtime expressions, including grouped scalars, empty containers, Dictionary
+literals, calls, and object construction, start as Null and
 execute on every allocation, before user constructor arguments and `initialize()`.
 A later allocation updates the values observed through existing instances and
 class-qualified reads. Calling user `initialize()` directly does not repeat
 these expressions. Ordinary class `const` bindings remain per-instance and reject
 class-qualified reads.
 
-Class enum read contracts retain their declared Number or nominal type, including
-before allocation when the runtime default may be Null. No implicit allocation or
+Class enum reads retain their inferred anonymous or declared nominal contract,
+including before allocation when the runtime default may be Null. No implicit allocation or
 readiness guard accompanies a class read. Runtime writes use the same restricted
 [allocation initializer](#constants) as class constants: required writes must
 form a straight-line prefix, and incomplete receiver exposure/read rules still
-apply. Literal enum slots require no allocation write. Ordinary methods and
-instance/class-qualified writes cannot rebind enum members.
+apply. Class defaults have their own checked statics initializer and require no
+allocation write. Ordinary methods and instance/class-qualified writes cannot
+rebind enum members.
 
 See the [anonymous](../../../examples/compiler-anonymous-enums/README.md) and
 [named](../../../examples/compiler-named-enums/README.md) global/module specimens,
-the [class specimen](../../../examples/compiler-class-enums/README.md), and
+the [class specimen](../../../examples/compiler-class-enums/README.md),
+[non-Number anonymous values](../../../examples/compiler-enum-values/README.md), and
 [SDK evidence](../../investigations/core-lang-completion.md#enumerations).
 
 ### Type aliases

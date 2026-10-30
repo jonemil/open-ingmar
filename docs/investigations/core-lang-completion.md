@@ -367,8 +367,8 @@ Color and enclosing-scope members, not a value namespace: `Color.RED` is rejecte
 A Color parameter accepts BLUE, rejects raw Number 4 and members of a different
 named enum. Returning that parameter from a Number-returning function, `BLUE+1`,
 and `BLUE.toString()` compile. `const X as Color=4` is rejected. The SDK also
-accepts a Float initializer in a named enum; its static/runtime contract remains
-unresolved. Our current source enum profile requires Number-valued expressions.
+accepts non-Number initializers in anonymous and named enums; their contracts
+are distinguished in the following probes.
 
 Additional SDK probes accept `take(+RED)` for a Color parameter, but reject
 `take(-RED)`, `take(RED+0)`, and an inferred enum local after `++`. Equality
@@ -404,6 +404,38 @@ are `0x50`, with type `0x01` Number defaults or type `0x00` Null. CODE uses
 `getsv` for class-qualified reads and ordinary receiver field operations for
 allocation writes/instance reads. Generated statics records reproduce the
 observed behavior; SDK/generated CODE and DATA exports reconstruct completely.
+
+**Non-Number values, experimentally observed (2026-10-30):** SDK 9.2.0, `fr265`,
+minimum API 5.0.0, `-O 0`, default checking. An anonymous Float member satisfies
+a Float result and rejects a Number result. Named enums retain nominal identity
+but derive native behavior from their members: a Float-only enum parameter can
+return Float, and a String-only enum parameter can call `length()` but cannot
+return Number. A raw String still cannot satisfy the enum parameter. A
+Number-only enum member cannot satisfy Float.
+
+For `enum Kind { S="text", F=1.5f }`, a Kind parameter can both call `length()`
+and satisfy a Float return under the SDK's default checking policy. This is
+evidence of a partial match against backing types, not proof that every member
+supports those uses. Direct Float/String member reads and an ordinary alias
+retain those native capabilities. The compiler's Number-only named enum model
+does not yet represent this behavior; the plan names the backing-type work.
+
+The [anonymous value specimen](../../examples/compiler-enum-values/README.md)
+covers scalar, container, Null, and source-object members. Non-Number explicit
+values leave implicit numbering unchanged. SDK and generated programs produce
+the same 32 expected lines, and their CODE/DATA exports reconstruct completely.
+Class literal defaults are available
+before allocation; a mutated Array default survives two allocations, while a
+computed source-object member is initialized on allocation. Full-width Long and
+Double defaults must retain their values, not just their runtime type tags.
+
+An authored SDK class-enum probe places direct Float, Boolean, Char, Symbol,
+String, and nonempty flat Array defaults in metadata, while its class statics
+hook fills a Double default with `dpush`/`putv`. Empty Array and Dictionary
+members remain allocation-time expressions. A `0x0f` metadata slot whose value
+word is zero is therefore not evidence that the initializer lost its Double
+bits: the statics hook runs before the class read. Our generated statics hook
+uses ordinary value construction for non-Number defaults.
 
 ## Checking off
 

@@ -121,8 +121,14 @@ fn tuple_callback_elements(tuple: &crate::TupleType) -> bool {
 
 fn effect_callees<'a>(owner: Owner<'a>, operation: &'a Operation) -> Vec<(Owner<'a>, &'a str)> {
     let mut calls = source_callees(owner, operation);
-    if let Operation::SourceBegin { class, .. } = operation {
+    if let Operation::SourceBegin { class, .. } | Operation::SourceNew { class, .. } = operation {
         calls.push((Owner::Class(class), FIELD_INITIALIZER));
+        calls.push((Owner::Class(class), ENUM_DEFAULT_INITIALIZER));
+    }
+    if let Operation::ClassFieldRead { class, .. } = operation {
+        if owner != Owner::Class(class) {
+            calls.push((Owner::Class(class), ENUM_DEFAULT_INITIALIZER));
+        }
     }
     calls
 }
@@ -343,6 +349,10 @@ impl FunctionDeclaration {
 
 /// Allocation-only field initialization body, excluded from callable members.
 pub(crate) const FIELD_INITIALIZER: &str = "__ciq_initialize_fields";
+pub(crate) const ENUM_DEFAULT_INITIALIZER: &str = "__ciq_initialize_enum_defaults";
+pub(crate) fn field_initializer(name: &str) -> bool {
+    matches!(name, FIELD_INITIALIZER | ENUM_DEFAULT_INITIALIZER)
+}
 
 /// Supported native superclass identity, independent of an import-table index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -504,11 +514,11 @@ impl ScalarFieldType {
 /// A supported field's default and initialization requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldKind {
-    /// A readonly class enum slot shared by all instances. A literal default is
-    /// available before allocation; a Null default requires an allocation write.
+    /// A readonly class enum slot shared by all instances. Initialization selects
+    /// a metadata Number, a statics default, or a write on every allocation.
     Enum {
         value_type: ReturnType,
-        initial: Option<i32>,
+        initial: crate::EnumInitialization,
     },
     /// A readonly binding populated once by the allocation initializer.
     /// Its referenced contents may remain mutable; metadata starts as Null.
@@ -571,7 +581,11 @@ impl FieldKind {
     fn allocation_write(&self) -> bool {
         matches!(
             self,
-            Self::Constant { .. } | Self::Enum { initial: None, .. }
+            Self::Constant { .. }
+                | Self::Enum {
+                    initial: crate::EnumInitialization::Allocation,
+                    ..
+                }
         )
     }
     /// Normalize a field value contract, excluding Void and graphics contexts.
@@ -977,12 +991,30 @@ impl CompilationUnit {
         }
         for class in &mut classes {
             for field in &mut class.fields {
-                if let FieldKind::Enum { value_type, .. } = &field.kind {
-                    if !matches!(value_type, ReturnType::Integer | ReturnType::Enum(_)) {
+                if let FieldKind::Enum {
+                    value_type,
+                    initial,
+                } = &field.kind
+                {
+                    if matches!(initial, crate::EnumInitialization::Number(_))
+                        && !matches!(value_type, ReturnType::Enum(_))
+                        && !crate::native::accepts(
+                            &value_type.api_type(),
+                            &crate::api::Type::named("Toybox.Lang.Number"),
+                        )
+                    {
                         return Err(UnitError {
                             declaration: None,
                             operation: None,
-                            message: "class enum fields require a Number or enum contract".into(),
+                            message: "enum Number default does not satisfy its field contract"
+                                .into(),
+                        });
+                    }
+                    if FieldKind::value_contract(value_type.clone()).is_none() {
+                        return Err(UnitError {
+                            declaration: None,
+                            operation: None,
+                            message: "unsupported class enum field contract".into(),
                         });
                     }
                 }
@@ -1244,6 +1276,25 @@ impl CompilationUnit {
                     "constant fields require an allocation initializer".into(),
                 ));
             }
+            if class.fields.iter().any(|field| {
+                matches!(
+                    field.kind,
+                    FieldKind::Enum {
+                        initial: crate::EnumInitialization::Static,
+                        ..
+                    }
+                )
+            }) != class
+                .methods
+                .iter()
+                .any(|f| f.name() == ENUM_DEFAULT_INITIALIZER)
+            {
+                return Err(fail(
+                    Some(at),
+                    None,
+                    "enum static defaults require their initializer".into(),
+                ));
+            }
             if class.methods.is_empty() {
                 return Err(fail(
                     None,
@@ -1346,7 +1397,7 @@ impl CompilationUnit {
                 .iter()
                 .filter(|op| matches!(op.operation, Operation::NativeBaseInitialize { .. }))
                 .count();
-            if function.name() == FIELD_INITIALIZER {
+            if field_initializer(function.name()) {
                 if !matches!(owner, Owner::Class(_))
                     || function.parameter_count() != 0
                     || function.return_type() != ReturnType::Void
@@ -1354,7 +1405,7 @@ impl CompilationUnit {
                 {
                     return Err(fail(
                         Some(index), None,
-                        "allocation initializer requires an instance, no parameters, Void, and no native base initialization".into(),
+                        "field initializer requires an instance, no parameters, Void, and no native base initialization".into(),
                     ));
                 }
                 let declaration = self
@@ -1365,7 +1416,19 @@ impl CompilationUnit {
                 let mut pending = declaration
                     .fields
                     .iter()
-                    .filter(|field| field.kind.allocation_write())
+                    .filter(|field| {
+                        if function.name() == ENUM_DEFAULT_INITIALIZER {
+                            matches!(
+                                field.kind,
+                                FieldKind::Enum {
+                                    initial: crate::EnumInitialization::Static,
+                                    ..
+                                }
+                            )
+                        } else {
+                            field.kind.allocation_write()
+                        }
+                    })
                     .map(|field| field.name.as_str())
                     .collect::<BTreeSet<_>>();
                 let unreadable = declaration
@@ -1395,13 +1458,15 @@ impl CompilationUnit {
                         Operation::SelfFieldAssign { field, .. }
                             if !pending.remove(field.as_str()) =>
                         {
-                            Some("allocation initializer must assign each constant exactly once")
+                            Some(
+                                "field initializer must assign each designated binding exactly once",
+                            )
                         }
                         Operation::SelfFieldRead { field, .. }
                             if pending.contains(field.as_str())
                                 || unreadable.contains(field.as_str()) =>
                         {
-                            Some("field read before allocation initialization")
+                            Some("field read before required initialization")
                         }
                         Operation::SelfValue { .. }
                         | Operation::SelfCall { .. }
@@ -1409,18 +1474,16 @@ impl CompilationUnit {
                             if !pending.is_empty() || !unreadable.is_empty() =>
                         {
                             Some(
-                                "initialize required fields before exposing the allocation receiver",
+                                "initialize required fields before exposing the initializer receiver",
                             )
                         }
                         Operation::Branch { .. } | Operation::Jump { .. }
                             if !pending.is_empty() =>
                         {
-                            Some(
-                                "constant allocation initialization requires a straight-line prefix",
-                            )
+                            Some("constant field initialization requires a straight-line prefix")
                         }
                         Operation::ReturnVoid if !pending.is_empty() => {
-                            Some("constant is not initialized on allocation")
+                            Some("required field initializer write is missing")
                         }
                         _ => None,
                     };
@@ -1664,7 +1727,7 @@ impl CompilationUnit {
                     }
                 }
                 if let Operation::SelfFieldAssign { field, .. } = &located.operation {
-                    if function.name() != FIELD_INITIALIZER
+                    if !field_initializer(function.name())
                         && self
                             .classes
                             .iter()
@@ -1701,7 +1764,7 @@ impl CompilationUnit {
                 }
                 if let Operation::BindMethod { selector, .. } = &located.operation {
                     if origins.symbol(*selector).is_some_and(|name| {
-                        name == FIELD_INITIALIZER || name.starts_with("__ciq_initialize_shared_")
+                        field_initializer(name) || name.starts_with("__ciq_initialize_shared_")
                     }) {
                         return Err(fail(
                             Some(index),
@@ -2324,7 +2387,7 @@ impl CompilationUnit {
                 };
                 let mut joined_result = None;
                 for key in source_callees(owner, &located.operation) {
-                    if key.1 == FIELD_INITIALIZER || key.1.starts_with("__ciq_initialize_shared_") {
+                    if field_initializer(key.1) || key.1.starts_with("__ciq_initialize_shared_") {
                         return Err(fail(
                             Some(index),
                             Some(operation),
@@ -3259,7 +3322,7 @@ impl CompilationUnit {
                         ".field-enum {} {} {}\n",
                         field.name,
                         crate::type_text::result_tag(value_type),
-                        initial.map_or_else(|| "null".into(), |n| n.to_string())
+                        initial.text()
                     ),
                     FieldKind::Constant { value_type } => format!(
                         ".field-constant {} {}\n",
@@ -3649,18 +3712,20 @@ pub(crate) fn compile_sources_mapped(
             let constants = class.constants.iter().collect::<Vec<_>>();
             let order = constant_initialization_order(&constants);
             let mut assignments = Vec::new();
+            let mut defaults = Vec::new();
             for declaration in &class.constants {
                 let result = calls.source_fields[&class.name][&declaration.name].clone();
                 class.fields.push(InstanceField {
                     name: declaration.name.clone(),
                     kind: if declaration.enumeration {
-                        let initial = if declaration.literal_default {
-                            match crate::constants::literal(&declaration.initializer) {
-                                Some(crate::constants::Immediate::Number(n)) => Some(n),
-                                _ => None,
-                            }
+                        let initial = if !declaration.literal_default {
+                            crate::EnumInitialization::Allocation
+                        } else if let Some(crate::constants::Immediate::Number(n)) =
+                            crate::constants::literal(&declaration.initializer)
+                        {
+                            crate::EnumInitialization::Number(n)
                         } else {
-                            None
+                            crate::EnumInitialization::Static
                         };
                         FieldKind::Enum {
                             value_type: result,
@@ -3673,30 +3738,43 @@ pub(crate) fn compile_sources_mapped(
             }
             for index in order {
                 let declaration = &class.constants[index];
-                if declaration.enumeration && declaration.literal_default {
-                    continue;
-                }
-                assignments.push(parser::Statement::FieldAssign {
+                let target = if declaration.enumeration && declaration.literal_default {
+                    if matches!(
+                        crate::constants::literal(&declaration.initializer),
+                        Some(crate::constants::Immediate::Number(_))
+                    ) {
+                        continue;
+                    }
+                    &mut defaults
+                } else {
+                    &mut assignments
+                };
+                target.push(parser::Statement::FieldAssign {
                     name: declaration.name.clone(),
                     value: declaration.initializer.clone(),
                     span: declaration.span,
                 });
             }
-            if assignments.is_empty() {
-                continue;
+            for (name, mut statements) in [
+                (ENUM_DEFAULT_INITIALIZER, defaults),
+                (FIELD_INITIALIZER, assignments),
+            ] {
+                if statements.is_empty() {
+                    continue;
+                }
+                statements.push(parser::Statement::Return {
+                    value: None,
+                    span: class.name_span,
+                });
+                class.methods.push(parser::ParsedFunction {
+                    name: name.into(),
+                    parameters: Vec::new(),
+                    parameter_types: Vec::new(),
+                    result_type: Some(ReturnType::Void),
+                    statements,
+                    body_span: class.name_span,
+                });
             }
-            assignments.push(parser::Statement::Return {
-                value: None,
-                span: class.name_span,
-            });
-            class.methods.push(parser::ParsedFunction {
-                name: FIELD_INITIALIZER.into(),
-                parameters: Vec::new(),
-                parameter_types: Vec::new(),
-                result_type: Some(ReturnType::Void),
-                statements: assignments,
-                body_span: class.name_span,
-            });
         }
     }
     for (source_index, parsed) in parsed_sources.into_iter().enumerate() {
@@ -4215,13 +4293,14 @@ fn parse_unit_ir_context(
                             }
                             let value_type = crate::type_text::call_result(&parts[2])
                                 .map_err(|e| Diagnostic::at(text, method_at, e))?;
-                            let initial = if parts[3] == "null" {
-                                None
-                            } else {
-                                Some(parts[3].parse().map_err(|_| {
-                                    Diagnostic::at(text, method_at, "invalid enum default")
-                                })?)
-                            };
+                            let initial =
+                                crate::EnumInitialization::parse(&parts[3]).ok_or_else(|| {
+                                    Diagnostic::at(
+                                        text,
+                                        method_at,
+                                        "invalid enum initialization mode",
+                                    )
+                                })?;
                             FieldKind::Enum {
                                 value_type,
                                 initial,

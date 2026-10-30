@@ -1,5 +1,32 @@
 //! Source enum identities and their unit declarations.
 
+/// Select when a shared class enum slot receives its initial value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EnumInitialization {
+    /// A Number embedded directly in class metadata.
+    Number(i32),
+    /// A literal/default expression evaluated once by the statics initializer.
+    Static,
+    /// A computed expression evaluated by each allocation initializer.
+    Allocation,
+}
+impl EnumInitialization {
+    pub(crate) fn text(&self) -> String {
+        match self {
+            Self::Number(n) => n.to_string(),
+            Self::Static => "static".into(),
+            Self::Allocation => "null".into(),
+        }
+    }
+    pub(crate) fn parse(text: &str) -> Option<Self> {
+        Some(match text {
+            "static" => Self::Static,
+            "null" => Self::Allocation,
+            _ => Self::Number(text.parse().ok()?),
+        })
+    }
+}
+
 /// A nominal Number-compatible enum in global, module, or class type scope.
 /// Members are separate readonly bindings; this declaration has no VM class.
 #[derive(Clone, Debug, PartialEq, Eq)]

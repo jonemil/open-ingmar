@@ -1,7 +1,7 @@
 /// Classify source keywords independently of the implemented grammar subset.
 /// IR/assembly identifiers have their own rules and do not use this restriction.
 fn reserved_word(name: &str) -> bool {
-    (name == crate::unit::FIELD_INITIALIZER || name.starts_with("__ciq_initialize_shared_"))
+    (crate::unit::field_initializer(name) || name.starts_with("__ciq_initialize_shared_"))
         || matches!(
             name,
             "alias"
@@ -788,13 +788,9 @@ impl<'a> Parser<'a> {
         };
         Ok(ParsedConstant {
             name,
-            annotation: Some(
-                enum_type
-                    .as_ref()
-                    .map_or(crate::ReturnType::Integer, |name| {
-                        crate::ReturnType::Enum(name.clone())
-                    }),
-            ),
+            annotation: enum_type
+                .as_ref()
+                .map(|name| crate::ReturnType::Enum(name.clone())),
             enum_type,
             enumeration: true,
             initializer,
@@ -1413,7 +1409,8 @@ pub(crate) fn collect_declarations<'a>(
             {
                 return Err(parser.error(declaration.name_at, "invalid constant declaration"));
             }
-            if constant.annotation.is_none()
+            if !constant.enumeration
+                && constant.annotation.is_none()
                 && constant.literal_default
                 && declaration
                     .owner

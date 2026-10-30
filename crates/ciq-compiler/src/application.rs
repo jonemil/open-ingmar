@@ -72,7 +72,11 @@ fn storage_field(
     ids: &BTreeMap<String, u32>,
 ) -> FieldDeclaration {
     let (kind, value) = match &declaration.kind {
-        crate::FieldKind::Enum { initial, .. } => initial.map_or((0, 0), |n| (1, n as u32)),
+        crate::FieldKind::Enum {
+            initial: crate::EnumInitialization::Number(n),
+            ..
+        } => (1, *n as u32),
+        crate::FieldKind::Enum { .. } => (0, 0),
         crate::FieldKind::Number(initial) => (1, *initial as u32),
         crate::FieldKind::Symbol {
             initial: Some(name),
@@ -759,7 +763,19 @@ pub fn build_console_application(
                 .iter()
                 .filter(|f| matches!(f.kind, crate::FieldKind::Enum { .. }))
                 .map(|f| storage_field(f, &ids))
-                .chain(std::iter::once(method(INIT, 0x30, "__ciq_noop")))
+                .chain(std::iter::once(method(
+                    INIT,
+                    0x30,
+                    &if source_class
+                        .methods
+                        .iter()
+                        .any(|f| f.name() == crate::unit::ENUM_DEFAULT_INITIALIZER)
+                    {
+                        source_class.code_label(crate::unit::ENUM_DEFAULT_INITIALIZER)
+                    } else {
+                        "__ciq_noop".into()
+                    },
+                )))
                 .collect(),
         ));
     }

@@ -119,7 +119,8 @@ Annotations reuse value-type parsing, source-class resolution, and checked retur
 construction to validate an initializer while retaining its declared contract.
 Enum blocks collect their members into that constant environment. Named enums
 also declare unit-scoped nominal identities; `enums.rs` validates their definitions
-and nested type uses. They use Number storage without native catalogue entries.
+and nested type uses. Supported named enums use Number storage without native
+catalogue entries; anonymous members retain inferred initializer types.
 The parser numbers them in source order and records default eligibility before
 grouping is erased; inference and initializer scheduling reuse that decision.
 Source initialization separates literal defaults from runtime expression order.
@@ -130,7 +131,9 @@ dataflow, tracking unwritten/written paths independently of physical block order
 Class constants retain readonly field
 contracts and a checked allocation initializer. Class enums reuse that runtime
 initializer but retain shared slots, literal metadata defaults, and class-qualified
-read operations. Application generation places them in separate statics records,
+read operations. A separate reserved statics body initializes other class enum
+defaults once, independently of allocation. Application generation places enum
+slots in separate statics records,
 leaving ordinary fields in instance metadata. Source construction uses private allocation/completion
 builders to preserve allocation before user argument effects.
 Typedef targets reuse annotation parsing with cached closed terms and guarded

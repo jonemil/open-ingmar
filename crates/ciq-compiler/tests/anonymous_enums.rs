@@ -39,7 +39,6 @@ fn enum_scope_duplicates_readonly_writes_and_bounds_are_checked() {
         "enum{A};function f(){}",
         "enum{A}function f(){A=1;}",
         "module M{enum{A}}function f(){M.A++;}",
-        "enum{A=1.5f,B}function f(){}",
         "enum{A=missing}function f(){}",
         "function f(){enum{A}}",
     ] {

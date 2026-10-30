@@ -289,7 +289,7 @@ the unit body limit. Explicit calls or known-selector Method bindings to these
 functions are rejected; source identifiers reserve their prefix.
 
 Global/module enum members use these same separate bindings and initializer bodies. Anonymous
-members have Number contracts. Named enums add `.enum OWNER NAME` declarations
+members retain their inferred value contracts. Named enums add `.enum OWNER NAME` declarations
 (`$` for global scope) and `enum(QUALIFIED_NAME)` type tags. These identities
 must be unique and declared throughout nested signatures, storage, and value
 contracts, including unused declarations. The unit permits at most 256 enum
@@ -2206,11 +2206,18 @@ it. Source identifiers cannot use its reserved name. Application generation
 provides an internal DATA method slot for the allocation hook's ordinary call;
 its locals require a separate call frame. It is not user `initialize()`.
 
-`FieldKind::Enum { value_type, initial }` / `.field-enum name tag default`
-declares a readonly shared class enum slot. Its contract is `integer` or
-`enum(Owner.Name)`; its metadata default is an i32 or `null`. A Null default
-requires exactly one write in each allocation initializer invocation. A literal
-default has no allocation write. Self/instance reads retain the field contract,
+`FieldKind::Enum { value_type, initial }` / `.field-enum name tag mode`
+declares a readonly shared class enum slot under an ordinary stored value
+contract, excluding Void and Graphics.Dc. `EnumInitialization` selects an i32
+metadata default, `static`, or `null`. A Number default must satisfy the
+anonymous field contract, or belong to a nominal enum. `null` requires exactly
+one write in each allocation initializer invocation. `static` requires exactly
+one write in `__ciq_initialize_enum_defaults`, invoked once as the class statics
+initialization hook; it has an instance-shaped receiver, no parameters, and a
+Void result. Static defaults have no allocation write. Each hook must exist
+exactly when its fields require it. They cannot write each other's bindings,
+be explicitly called/bound, expose an incomplete receiver, or skip required
+writes. Self/instance reads retain the field contract,
 but all instances see the same class storage. Readonly/interface checks apply
 to enum slots as well as per-instance constants.
 
@@ -2220,6 +2227,7 @@ enum field, and exact contract to match their declaration; an ordinary instance
 field is not a class read target. Reads remain ordered relative to allocations
 and their effects. The declared contract does not prove that a runtime enum
 initializer has executed: a pre-allocation read can still return Null.
+Class reads and construction include statics-default bodies in effect analysis.
 
 `FieldKind::Value { value_type: ReturnType }` carries field contracts without an
 existing specialized storage form, including general unions and nullable

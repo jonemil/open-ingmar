@@ -83,6 +83,8 @@ and future Rust toolchain experiments.
   enums through calls, containers, fields, nullable contracts, and Number operations.
 - [compiler-class-enums](compiler-class-enums/README.md): shared class enum slots,
   literal defaults, allocation effects, class/instance reads, and nominal types.
+- [compiler-enum-values](compiler-enum-values/README.md): anonymous scalar,
+  container, Null, and source-object members, including shared class defaults.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural

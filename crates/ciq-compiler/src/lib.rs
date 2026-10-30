@@ -21,7 +21,7 @@ mod callbacks;
 mod casts;
 mod constants;
 mod enums;
-pub use enums::EnumDeclaration;
+pub use enums::{EnumDeclaration, EnumInitialization};
 mod control_flow;
 mod dictionary;
 mod record_flow;
@@ -3230,8 +3230,8 @@ impl Function {
                     ref result_type,
                 } => {
                     validate_call_names(Some(class), field).map_err(fail)?;
-                    if !matches!(result_type, ReturnType::Integer | ReturnType::Enum(_)) {
-                        return Err(fail("class enum reads require a Number or enum contract"));
+                    if FieldKind::value_contract(result_type.clone()).is_none() {
+                        return Err(fail("unsupported class enum read contract"));
                     }
                     types.insert(result, call_result_type(result_type.clone()).map_err(fail)?);
                     (Some(result), vec![])

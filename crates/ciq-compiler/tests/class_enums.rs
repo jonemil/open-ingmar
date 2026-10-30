@@ -45,7 +45,6 @@ fn class_enum_writes_and_namespaces_are_checked() {
         "class C{enum{A}const A=1;function initialize(){}}",
         "class C{enum Kind{A}function initialize(){}}function f(){return C.Kind.A;}",
         "class C{enum Kind{A}function initialize(){}}function f(){return new C.Kind();}",
-        "class C{enum{A=1.5f}function initialize(){}}",
         "class C{const A=1;function initialize(){}}function f(){return C.A;}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");

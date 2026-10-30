@@ -270,6 +270,11 @@ impl Origins {
                 result_type,
                 ..
             }
+            | Operation::ClassFieldRead {
+                result,
+                result_type,
+                ..
+            }
             | Operation::SelfFieldRead {
                 result,
                 result_type,
