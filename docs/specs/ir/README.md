@@ -2215,18 +2215,30 @@ readonly field binding under an ordinary value contract. DATA starts as Null;
 the reserved instance method `__ciq_initialize_fields` assigns every constant
 exactly once during allocation. It takes no parameters, returns Void, and has no
 native-base initialization. It may read earlier initialized fields, but cannot
-read incomplete fields, expose an incomplete receiver, branch before completing
-the assignment prefix, or call potentially shutting-down bodies while required
-fields remain incomplete. Ordinary methods, including user `initialize()`,
+read incomplete fields, expose an incomplete receiver, or call potentially
+shutting-down bodies while required fields remain incomplete. Ordinary methods, including user `initialize()`,
 cannot rebind constants. Container contents remain mutable. Mutable structural
 interface fields require mutable implementation bindings.
 
 The reserved allocation method must exist exactly when allocation writes are
-required by constants or runtime class enum members. Unit
-validation rejects explicit source/IR calls and known-selector Method binding to
+required by constants, initialized mutable fields, or runtime class enum members.
+Unit validation rejects explicit source/IR calls and known-selector Method binding to
 it. Source identifiers cannot use its reserved name. Application generation
 provides an internal DATA method slot for the allocation hook's ordinary call;
 its locals require a separate call frame. It is not user `initialize()`.
+
+`FieldKind::Initialized { value_type }` / `.field-initialized name tag` uses the
+same allocation-only initialization contract and Null metadata slot while
+permitting later ordinary field stores. Declaration expressions live in the
+reserved method, not the field record. Supported contracts include scalars,
+containers, source identities, enums, and structural values, excluding Void and
+Graphics.Dc. Each designated allocation or statics field must receive exactly
+one write on every returning CFG path, with an entry-reachable assignment.
+Readiness is computed before each operation, independently of block text order;
+disconnected components cannot inherit a completed initialization proof.
+Conditional RHS expressions may branch before the write. Joins/loops that can
+repeat a designated write, skipped writes, and writes to undesignated fields
+are rejected. This proof is shared with global/module binding initialization.
 
 `FieldKind::Enum { value_type, initial }` / `.field-enum name tag mode`
 declares a readonly shared class enum slot under an ordinary stored value

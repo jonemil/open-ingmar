@@ -91,8 +91,6 @@ fn field_domains_defaults_and_api_limits_are_rechecked_even_without_reads() {
     for body in [
         "class Box{var value as A or Toybox.Graphics.Dc or Null;function initialize(){}}",
         "class Box{var value as Toybox.Lang.String or Toybox.Graphics.Dc or Null;function initialize(){}}",
-        "class Box{var value as Toybox.Lang.Number or Toybox.Lang.String = 1;function initialize(){}}",
-        "class Box{var value as Toybox.Lang.Number or Toybox.Lang.String or Null = 1;function initialize(){}}",
     ] {
         assert!(compile_sources(&[CLASSES, body]).is_err(), "{body}");
     }

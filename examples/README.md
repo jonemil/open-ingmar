@@ -65,6 +65,8 @@ and future Rust toolchain experiments.
   shared storage, alias identity, mutable contents, and lazy module startup.
 - [compiler-shared-variables](compiler-shared-variables/README.md): typed/dynamic
   mutable slots, Null defaults, shadowing, and activation before RHS evaluation.
+- [compiler-field-initializers](compiler-field-initializers/README.md): typed and
+  inferred declaration expressions, per-instance containers, and allocation order.
 - [compiler-forward-constants](compiler-forward-constants/README.md): later
   literal defaults, cross-class contracts, and preserved runtime initializer order.
 - [compiler-null-snapshots](compiler-null-snapshots/README.md): forward runtime

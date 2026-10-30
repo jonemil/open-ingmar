@@ -78,8 +78,6 @@ fn byte_array_fields_require_initialization_and_snapshot_null_proofs() {
         "class C {var b as Toybox.Lang.ByteArray;}",
         "class C {var b as Toybox.Lang.ByteArray;function initialize(){}}",
         "class C {var b as Toybox.Lang.ByteArray=null;}",
-        "class C {var b as Toybox.Lang.ByteArray=[1]b;}",
-        "class C {var b as Toybox.Lang.ByteArray or Null=[1]b;}",
         "class C {var b as Toybox.Lang.ByteArray;function initialize(b as Toybox.Lang.ByteArray or Null){self.b=b;}}",
         "class C {var b as Toybox.Lang.ByteArray;function initialize(){self.b=[1];}}",
         "class C {var b as Toybox.Lang.ByteArray;function initialize(){self.b=self.b;}}",

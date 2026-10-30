@@ -177,7 +177,7 @@ fn field_initialization_and_saved_edits_are_rechecked() {
             assert!(checking::compile_sources(&[&invalid]).is_err(), "{invalid}");
         }
         for suffix in ["=null", "or Null", "=1"] {
-            if ty == "Lang.Object" && suffix == "or Null" {
+            if ty == "Lang.Object" && matches!(suffix, "or Null" | "=1") {
                 continue;
             }
             let invalid = source.replace(

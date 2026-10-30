@@ -102,8 +102,6 @@ fn numeric_alias_fields_require_complete_initialization_and_snapshot_guards() {
             "var n as Lang.TYPE; function f() as Void {}",
             "var n as Lang.TYPE; function initialize() {}",
             "var n as Lang.TYPE=null; function initialize() {}",
-            "var n as Lang.TYPE=1; function f() as Void {}",
-            "var n as Lang.TYPE or Null=1; function f() as Void {}",
             "var n as Lang.TYPE; function initialize(n as Lang.TYPE or Null) {self.n=n;}",
             "var n as Lang.TYPE; function initialize(n as Lang.TYPE) {self.n=self.n;}",
             "var n as Lang.TYPE; function initialize(n as Lang.TYPE) {if(true){self.n=n;}}",

@@ -399,6 +399,13 @@ respectively; the class alias is `__ciq_native_BehaviorDelegate` for delegate
 construction. See [constructor
 evidence](../../investigations/compiler-native-views.md).
 
+Declaration-initialized mutable fields use the same allocation hook and ordinary
+`putv` writes as class constants. Their contracts affect validation, not DATA
+field flags. Conditional/short-circuit RHS values are staged before receiver
+setup; CFG paths retain one designated initialization write. Literal-default
+and runtime phases follow the explicit unit/body order. Reinvoking user
+`initialize()` does not rerun the allocation hook.
+
 ### Shared storage
 
 A shared read uses `getselfv` in its declared owner and `getmv` from another

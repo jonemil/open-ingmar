@@ -47,11 +47,8 @@ function = "function" identifier "(" parameter-list? ")"
            ("as" result-type)? block
 parameter-list = parameter ("," parameter)*
 parameter = identifier ("as" value-type)?
-field = "var" identifier "=" inferred-field-default ";"
-      | "var" identifier "as" field-type ("=" field-default)? ";"
-inferred-field-default = number-literal | "-" number-literal | symbol-literal
-                       | "(" inferred-field-default ")"
-field-default = "null" | symbol-literal | "(" field-default ")"
+field = "var" field-binding ("," field-binding)* ";"
+field-binding = identifier ("as" field-type)? ("=" expression)?
 ```
 
 Each `constant-binding` has its own annotation and initializer. A missing
@@ -65,8 +62,8 @@ expression grammar.
 `shared-variable` reuses the binding-list syntax at global/module scope.
 An omitted initializer produces Null; an omitted annotation gives the mutable
 slot the dynamic Any contract, independently of its initializer. See
-[shared variables](README.md#shared-variables). Class `field` declarations retain
-their separate default and type restrictions.
+[shared variables](README.md#shared-variables). Class `field` declarations follow the
+[instance initialization rules](README.md#field-declaration-initializers).
 
 `enumeration` is accepted at global, module, and class scope. It requires at least
 one member, permits a trailing comma, and has no trailing semicolon. Member

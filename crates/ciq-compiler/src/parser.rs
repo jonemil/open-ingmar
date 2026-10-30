@@ -750,7 +750,8 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let initializer = if self.peek()? == Kind::Punctuation('=') {
+        let has_initializer = self.peek()? == Kind::Punctuation('=');
+        let initializer = if has_initializer {
             self.token()?;
             self.expression(0)?
         } else {
@@ -771,6 +772,7 @@ impl<'a> Parser<'a> {
             enum_type: None,
             enumeration: false,
             mutable: false,
+            has_initializer,
             initializer,
             literal_default,
             span,
@@ -834,6 +836,7 @@ impl<'a> Parser<'a> {
             enum_type,
             enumeration: true,
             mutable: false,
+            has_initializer: true,
             initializer,
             literal_default,
             span,
@@ -877,7 +880,13 @@ impl<'a> Parser<'a> {
                 self.constant_tail(name.into(), token.span)?
             };
             declaration.mutable = mutable;
-            if mutable && declaration.annotation.is_none() {
+            if mutable
+                && declaration.annotation.is_none()
+                && !self
+                    .owner
+                    .as_ref()
+                    .is_some_and(|owner| self.declarations.classes.contains(owner))
+            {
                 declaration.annotation = Some(crate::ReturnType::Any);
             }
             let key = self
@@ -3953,13 +3962,14 @@ pub(crate) struct ParsedBinding {
     pub enum_type: Option<Box<crate::EnumType>>,
     pub enumeration: bool,
     pub mutable: bool,
+    pub has_initializer: bool,
     pub initializer: Expression,
     /// Preserve source-dependent default eligibility before enum grouping is lost.
     pub literal_default: bool,
     pub span: Span,
 }
 pub(crate) struct ParsedClass {
-    pub constants: Vec<ParsedBinding>,
+    pub bindings: Vec<ParsedBinding>,
     pub name: String,
     pub name_span: Span,
     pub base: crate::ClassBase,
@@ -4040,14 +4050,14 @@ pub(crate) fn declarations<'a>(
             parser.imports()?;
             let mut methods = Vec::new();
             let mut fields = Vec::new();
-            let mut constants = Vec::new();
+            let mut bindings = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
                 if matches!(parser.peek()?, Kind::Word("const" | "enum"))
                     || (!is_class && parser.peek()? == Kind::Word("var"))
                 {
                     let declarations = parser.constant_declarations()?;
                     if is_class {
-                        constants.extend(declarations);
+                        bindings.extend(declarations);
                     } else {
                         unit.shared.extend(
                             declarations
@@ -4062,75 +4072,69 @@ pub(crate) fn declarations<'a>(
                     continue;
                 }
                 if is_class && parser.peek()? == Kind::Word("var") {
-                    parser.token()?;
-                    let token = parser.identifier()?;
-                    parser.reject_binding(&token)?;
-                    let Kind::Word(name) = token.kind else {
-                        unreachable!()
-                    };
-                    let kind = if parser.peek()? == Kind::Word("as") {
-                        parser.token()?;
-                        let parameter = parser.parameter_annotation(token.span.start)?;
-                        let result = parameter
-                            .source_contract()
-                            .map(crate::SourceUnion::result)
-                            .or_else(|| crate::unions::result(parameter.api_type()))
-                            .ok_or_else(|| {
-                                parser.error(token.span.start, "unsupported field type")
-                            })?;
-                        let mut kind = crate::FieldKind::from_result(result).ok_or_else(|| {
-                            parser.error(token.span.start, "unsupported field type")
-                        })?;
-                        if parser.peek()? == Kind::Punctuation('=') {
-                            parser.token()?;
-                            if let crate::FieldKind::Symbol { initial, nullable } = &mut kind {
-                                let value = parser.expression(0)?;
-                                match value.kind {
-                                    ExpressionKind::Symbol(name) => *initial=Some(name),
-                                    ExpressionKind::Null if *nullable => {},
-                                    _ => return Err(parser.error(value.span.start,"Symbol fields require a literal Symbol or permitted null default")),
+                    for mut binding in parser.constant_declarations()? {
+                        let kind = if !binding.has_initializer {
+                            Some(
+                                crate::FieldKind::from_result(
+                                    binding.annotation.clone().unwrap_or(crate::ReturnType::Any),
+                                )
+                                .ok_or_else(|| {
+                                    parser.error(binding.span.start, "unsupported field type")
+                                })?,
+                            )
+                        } else if binding.annotation.is_none() {
+                            match &binding.initializer.kind {
+                                ExpressionKind::Integer(n) => Some(crate::FieldKind::Number(*n)),
+                                ExpressionKind::Symbol(name) => Some(crate::FieldKind::Symbol {
+                                    initial: Some(name.clone()),
+                                    nullable: false,
+                                }),
+                                ExpressionKind::Null => {
+                                    binding.annotation = Some(crate::ReturnType::Any);
+                                    Some(crate::FieldKind::Value {
+                                        value_type: crate::ReturnType::Any,
+                                    })
                                 }
-                            } else {
-                                if !crate::native::accepts(
-                                    &parameter.api_type(),
-                                    &crate::api::Type::Null,
-                                ) {
-                                    return Err(parser.error(
-                                        token.span.start,
-                                        "non-null fields must be assigned in initialize",
-                                    ));
-                                }
-                                parser
-                                    .expect(Kind::Word("null"), "literal null field initializer")?;
+                                _ => None,
                             }
-                        }
-                        parser.expect(Kind::Punctuation(';'), "';' after field declaration")?;
-                        kind
-                    } else {
-                        parser.expect(Kind::Punctuation('='), "'=' and a Number literal")?;
-                        let value = parser.expression(0)?;
-                        let kind = match value.kind {
-                            ExpressionKind::Integer(initial) => crate::FieldKind::Number(initial),
-                            ExpressionKind::Symbol(name) => crate::FieldKind::Symbol {
-                                initial: Some(name),
-                                nullable: false,
-                            },
-                            _ => return Err(parser.error(
-                                value.span.start,
-                                "instance fields require a Number or Symbol literal initializer",
-                            )),
+                        } else {
+                            let mut kind =
+                                crate::FieldKind::from_result(binding.annotation.clone().unwrap())
+                                    .ok_or_else(|| {
+                                        parser.error(binding.span.start, "unsupported field type")
+                                    })?;
+                            match (&mut kind, &binding.initializer.kind) {
+                                (
+                                    crate::FieldKind::Symbol { initial, .. },
+                                    ExpressionKind::Symbol(name),
+                                ) => {
+                                    *initial = Some(name.clone());
+                                    Some(kind)
+                                }
+                                (_, ExpressionKind::Null)
+                                    if crate::native::accepts(
+                                        &binding.annotation.as_ref().unwrap().api_type(),
+                                        &crate::api::Type::Null,
+                                    ) =>
+                                {
+                                    Some(kind)
+                                }
+                                _ => None,
+                            }
                         };
-                        parser.expect(Kind::Punctuation(';'), "';'")?;
-                        kind
-                    };
-                    fields.push(crate::InstanceField {
-                        name: name.into(),
-                        kind,
-                    });
-                    if fields.len() > 256 {
-                        return Err(
-                            parser.error(token.span.start, "class exceeds 256 instance fields")
-                        );
+                        if let Some(kind) = kind {
+                            fields.push(crate::InstanceField {
+                                name: binding.name,
+                                kind,
+                            });
+                        } else {
+                            bindings.push(binding);
+                        }
+                        if fields.len() + bindings.len() > 256 {
+                            return Err(
+                                parser.error(token.span.start, "class exceeds 256 instance fields")
+                            );
+                        }
                     }
                     continue;
                 }
@@ -4166,7 +4170,7 @@ pub(crate) fn declarations<'a>(
             }
             if is_class {
                 unit.classes.push(ParsedClass {
-                    constants,
+                    bindings,
                     name: name.into(),
                     name_span: token.span,
                     base: class_base.unwrap(),

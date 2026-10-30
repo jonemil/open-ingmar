@@ -67,6 +67,7 @@ module or a class: `.enum C Kind integer` declares `C.Kind` backed by Number.
 ```text
 field-record = field-body newline
 field-body = ".field-constant" identifier call-result-tag
+           | ".field-initialized" identifier call-result-tag
            | ".field-enum" identifier call-result-tag
              (signed-decimal-i32 | "static" | "null")
            | ".field-value" identifier call-result-tag
@@ -92,7 +93,9 @@ Scalar field tags are `integer`, `long`, `float`, `double`, `boolean`, `char`,
 and nullable forms. Field records do not carry spans or arbitrary default
 expressions. `.field-constant` retains a readonly binding and requires a checked
 allocation initializer; its value contract uses the same restrictions as
-`.field-value`. `.field-value` carries the full ordinary value contract, including
+`.field-value`. `.field-initialized` retains a mutable binding with the same
+allocation-write requirement and value contracts. `.field-value` carries the full
+ordinary value contract, including
 native/source/mixed unions, tuples, and nullable container references. Void and
 Graphics.Dc are excluded, including as union alternatives. Parsing and typed
 construction canonicalize contracts with an existing specialized field form to

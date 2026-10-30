@@ -858,7 +858,7 @@ its actual field. Source-class union alternatives may contain differing values
 under compatible field contracts. Readonly fields cannot satisfy mutable
 structural-interface field requirements.
 
-Allocation initializes scalar literal defaults first, then other constant
+Allocation initializes scalar literal defaults first, then other declaration
 expressions in declaration order, before evaluating user constructor arguments
 and calling `initialize()`. Application-owned constants
 also initialize during allocation. Calling user `initialize()` again leaves
@@ -868,10 +868,11 @@ another runtime alias is not a literal
 default. Class Array/ByteArray forward reads remain rejected, matching the SDK's
 class readiness check; literal storage availability alone does not relax it.
 Uninitialized reads and constant dependency cycles fail.
-The current allocation initializer requires a straight-line assignment prefix:
-branches, incomplete-field reads, receiver exposure, and calls that may request
-shutdown are rejected until required fields are initialized. Non-null mutable
-fields are still initialized separately by user `initialize()`.
+The allocation initializer proves one write on every returning path. Branching
+expressions are allowed; incomplete-field reads, receiver exposure, and calls
+that may request shutdown are rejected until required fields are initialized.
+Mutable fields without declaration initializers retain their separate user
+`initialize()` requirements. See [field declaration initializers](#field-declaration-initializers).
 
 See the [scalar example](../../../examples/compiler-constants/README.md),
 [stored class example](../../../examples/compiler-class-constants/README.md),
@@ -1000,9 +1001,9 @@ class-qualified reads.
 Class enum reads retain their inferred anonymous or declared nominal contract,
 including before allocation when the runtime default may be Null. No implicit allocation or
 readiness guard accompanies a class read. Runtime writes use the same restricted
-[allocation initializer](#constants) as class constants: required writes must
-form a straight-line prefix, and incomplete receiver exposure/read rules still
-apply. Class defaults have their own checked statics initializer and require no
+[allocation initializer](#constants) as class constants: each designated field
+requires one write on every returning CFG path, and incomplete receiver
+exposure/read rules still apply. Class defaults have their own checked statics initializer and require no
 allocation write. Ordinary methods and instance/class-qualified writes cannot
 rebind enum members.
 
@@ -1655,12 +1656,11 @@ class. These tags do not authorize a cast or an undeclared property.
 
 ### Number instance fields
 
-Source classes may declare up to 256 fields with Number
-literal initializers. These inferred fields have a fixed Number contract; typed
-declarations follow the [scalar-field contract](#typed-scalar-fields). Other
-inferred numeric literals and computed declaration initializers are unsupported.
-Parentheses around a literal are accepted. These restrictions and the
-field-count limit define our subset, not a device memory limit.
+Source classes may declare up to 256 fields. An unannotated Number literal
+provides a metadata default and a fixed Number contract; parentheses around the
+literal are accepted. Other declaration forms follow the
+[initializer rules](#field-declaration-initializers) below. The field-count limit
+defines our subset, not a device memory limit.
 
 Each field name must be a valid, non-reserved identifier, unique within its
 class. Reject names shared with source methods or catalogue-known inherited
@@ -1701,6 +1701,44 @@ constant initialization precedes its source initialize method. The shared
 [counter example](../../../examples/compiler-fields/README.md) and
 [instance isolation evidence](../../investigations/compiler-fields.md).
 
+### Field declaration initializers
+
+Class `var` lists give each name its own optional annotation and expression.
+Expressions use ordinary typing, API checks, and contextual container
+construction; an annotation remains the field's contract. Without an annotation,
+supported non-Null initializers infer a fixed scalar, container, source-object,
+or other ordinary field contract. Inferred Arrays use mutable element contracts
+rather than positional tuple inference. Rebinding must satisfy that contract.
+This fixed inferred-field profile is narrower than the SDK's dynamic untyped
+fields. An unannotated field with no initializer or literal Null uses Any and
+defaults to Null.
+
+Inferred Number and Symbol literals retain metadata defaults. Typed Symbol
+literals and permitted Null defaults also use metadata. Other expressions run
+through the reserved allocation initializer for every instance, before user
+`initialize()` and before constructor argument effects. Application instances
+use the same hook. Containers and source objects are constructed afresh for
+each allocation; subsequent aliases retain ordinary reference identity.
+
+Literal defaults precede runtime expressions; each phase retains declaration
+order across mutable fields, constants, and enum members. The
+[constant default classification](#constants) also applies here: class aggregate
+literals are runtime expressions, and grouping can change default eligibility.
+Reads of completed fields and metadata defaults are allowed. Reads of pending
+allocation fields or fields awaiting user-constructor assignment are rejected;
+the compiler does not reorder runtime expressions to satisfy dependencies.
+
+Every designated field must receive exactly one allocation write on each
+returning path. Conditional and short-circuit expressions retain their ordinary
+control flow, including staged container construction. Missing, repeated, or
+repeatable writes fail saved-IR validation. An incomplete receiver cannot escape
+or make self calls, and shutdown-capable calls cannot bypass required writes.
+These checks apply to mutable and readonly declaration initializers; ordinary
+methods may subsequently rebind only mutable fields.
+
+See the [two-file example](../../../examples/compiler-field-initializers/README.md)
+and [SDK evidence](../../investigations/core-lang-completion.md#instance-field-declaration-initializers).
+
 ### Union fields
 
 Typed instance fields use the shared signature value grammar and normalization,
@@ -1714,9 +1752,9 @@ Generic value fields have ordinary Null metadata slots. If the contract admits
 Null, omission of an initializer supplies that default; literal `= null` is also
 accepted. Otherwise `initialize` must assign a valid value before reads, self
 exposure/calls, control flow, shutdown-capable calls, or return, under the shared
-required-field rules. Declaration initializers remain restricted to existing
-Number/Symbol metadata forms and nullable Null defaults; a general union has no
-scalar, container, or computed declaration initializer.
+required-field rules when no declaration expression supplies the value.
+[Declaration initializers](#field-declaration-initializers) use the same contract
+and construction context as subsequent writes.
 
 Writes check every actual alternative against the field contract. Exact classes
 can satisfy their declared identity, an assignable native arm, or a verified
@@ -1749,11 +1787,12 @@ still produce a type assignable to the field. Operators and native methods
 follow the ordinary scalar rules. Char declarations require API 1.3.0; the other
 scalar classes require 1.0.0. Base classes retain their own availability.
 
-Typed fields start as Null metadata slots. A non-null declaration requires
-assignment in `initialize` under the
+Typed fields start as Null metadata slots. A non-null declaration without an
+initializer requires assignment in `initialize` under the
 [required-field prefix rules](#source-reference-fields). Nullable fields may
-omit a default or use literal `null`. Other declaration initializers remain
-outside this profile. Shared member-name and 256-field limits apply.
+omit a default or use literal `null`. Other expressions follow the
+[declaration initializer rules](#field-declaration-initializers).
+Shared member-name and 256-field limits apply.
 
 Nullable reads need a guarded local snapshot before non-null use; testing one
 mutable field read does not refine a later read. Clearing the field leaves
@@ -1803,9 +1842,10 @@ literals receive field construction context, including empty literals and
 conditional arms; this does not broaden unrelated literal inference.
 
 Initialization and field limits follow the [typed-field
-rules](#typed-scalar-fields). Object fields may have literal Null defaults only
-when nullable. Non-null containers require assignment in `initialize`;
-nullable references default to Null and also permit literal `= null`.
+rules](#typed-scalar-fields). Without a declaration expression, non-null
+containers require assignment in `initialize`; nullable references default to
+Null and also permit literal `= null`. Other expressions follow the
+[declaration initializer rules](#field-declaration-initializers).
 Opaque unparameterized Dictionary fields use their ordinary opaque contract;
 that erasure cannot recover key/value types. Payload types retain their API requirements even for
 unused fields.
@@ -1825,13 +1865,15 @@ See the
 Object-, View-, or BehaviorDelegate-derived class. The class must resolve across
 the unit, including forward declarations. The 256-field limit and name/conflict
 rules cover all supported fields together. `var target as HelloView or Null;`
-declares a nullable slot; it may also use a literal `= null` default. Non-null
-source fields reject declaration initializers. Comparison interfaces follow their
+declares a nullable slot; it may also use a literal `= null` default.
+[Declaration initializers](#field-declaration-initializers) can establish either
+contract before user `initialize()`. Comparison interfaces follow their
 [own field rules](#comparison-interface-fields).
 
 Metadata creates a null slot (key bits zero, type `0x00`, value zero). Nullable
-source fields need no source assignment before use. A source initialize method
-is required to establish a non-null field contract. It must
+source fields need no source assignment before use. Without a declaration
+initializer, a source initialize method is required to establish a non-null field
+contract. It must
 assign every required non-null reference field before exposing `self` as an
 Object, binding a self callback, making a self call, branching, jumping, or
 returning. A reference read before that field's assignment is rejected.
@@ -1884,7 +1926,8 @@ requires a source initializer and follows the straight-line
 be read until assigned, and must be filled before self exposure, self calls,
 control flow, return, or calls that may request shutdown. Nullable fields start
 as Null and do not require assignment; an explicit literal `= null` is
-equivalent. Other declaration initializers remain unsupported.
+equivalent. A compatible [declaration initializer](#field-declaration-initializers)
+can instead establish the contract before `initialize()`.
 
 Writes accept the corresponding interface, a verified native witness, or an
 exact source implementation under the
@@ -1921,11 +1964,13 @@ function initialize(callback as Toybox.Lang.Method) {
 ```
 
 Both slots start as Null in metadata (type `0x00`, value zero). A non-null field
-requires assignment in source `initialize`, following the required-field prefix
+without a declaration initializer requires assignment in source `initialize`,
+following the required-field prefix
 and self-exposure restrictions of [reference fields](#source-reference-fields).
 Binding `self.method(...)` exposes self and cannot fill the first required slot.
-Nullable fields may omit their initializer or use literal `null`; computed
-defaults remain unsupported. Writes must preserve the declared
+Nullable fields may omit their initializer or use literal `null`. Other
+[declaration expressions](#field-declaration-initializers) use the ordinary
+Method construction rules. Writes must preserve the declared
 Method/nullability contract. Methods retain their erased invocation contracts.
 
 Reads retain the declaration's type. Nullable invocation/member access requires
@@ -1944,10 +1989,12 @@ See the
 All supported source class bases accept annotated `Toybox.Lang.WeakReference`
 and `WeakReference or Null` fields from API 1.2.0, including unused
 declarations. Canonical, imported, and aliased type names are accepted. Both
-slots start as Null metadata (type `0x00`, value zero). Non-null fields require
-assignment in source `initialize`, with the existing required-field prefix and
-self-exposure rules. Nullable fields may omit initialization or use literal
-`null`; computed defaults are unsupported.
+slots start as Null metadata (type `0x00`, value zero). Non-null fields without
+a declaration initializer require assignment in source `initialize`, with the
+existing required-field prefix and self-exposure rules. Nullable fields may omit
+initialization or use literal `null`. Other
+[declaration expressions](#field-declaration-initializers) use ordinary
+WeakReference construction rules.
 
 Reads and writes preserve declared nullability. Nullable field members need a
 guarded local snapshot; a test of one mutable field read cannot refine another.
@@ -1965,9 +2012,11 @@ See the
 All supported source class bases accept `Toybox.Lang.ByteArray` and `ByteArray
 or Null` fields from API 3.0.0, including unused declarations. Canonical names,
 imports, and aliases work. Both slots start as Null metadata (type `0x00`, value
-zero). Non-null fields require assignment in source `initialize` under the
-required-field prefix and self-exposure rules. Nullable fields may omit a
-default or use literal `null`; computed defaults are rejected.
+zero). Non-null fields without a declaration initializer require assignment in
+source `initialize` under the required-field prefix and self-exposure rules.
+Nullable fields may omit a default or use literal `null`. Other
+[declaration expressions](#field-declaration-initializers) use ordinary ByteArray
+construction rules.
 
 Reads/writes preserve the declared reference and nullability. Ordinary Arrays
 cannot satisfy ByteArray fields. Methods and indexed updates accept non-null
@@ -1999,7 +2048,9 @@ Symbol. Nullable fields default to Null when no Symbol is supplied. Non-null
 fields without defaults must be assigned in source `initialize`, using the same
 straight-line prefix and exposure/callback restrictions as required reference
 fields. A literal default already satisfies initialization. Null requires an
-explicit nullable declaration; other/computed defaults remain unsupported.
+explicit nullable declaration. Other
+[declaration expressions](#field-declaration-initializers) must produce the
+Symbol contract without conversion.
 
 Reads retain the declared Symbol/nullability type, including when a nullable
 field has a Symbol default. Writes must satisfy that contract. Nullable reads

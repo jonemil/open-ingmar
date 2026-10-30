@@ -74,8 +74,8 @@ fn source_fields_require_snapshot_proofs_and_exact_assignment_classes() {
         );
     }
     for field in [
-        "var target as Token or Null = new Token();",
-        "var target as Token or Null = (null);",
+        "var target as Token or Null = new Other();",
+        "var target as Token = (null);",
         "var target as Missing or Null;",
     ] {
         let source = format!(

@@ -99,7 +99,6 @@ fn branches_keep_owner_reentry_shutdown_and_type_checks() {
         "module T{function stop() as Toybox.Lang.Number{Toybox.System.exit();return 1;}}const X=true?T.stop():1;function f(){}",
         "const X=1 ? 2:3;function f(){}",
         "const X=true && 1;function f(){}",
-        "class C{const X=true ? [1]:[2];}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }

@@ -108,15 +108,16 @@ remain deferred in [the plan](plan.md).
 The declaration parser returns one `ParsedUnit` per source file. Shared
 `Declarations` collect typedef and binding environments across files. Direct
 non-heap global/class constants are cached before IR construction. Mutable
-variables always use shared slots; module members also retain shared storage
+global/module variables always use shared slots; module members also retain
+shared storage
 so lookup preserves initialization effects.
 References and operators use ordinary typed initialization rather than a
 separate constant evaluator. Stored global/module bindings retain shared
 declaration types and reserved initializer bodies. Stored contracts are inferred
 across all scopes
 before bodies, retrying unresolved dependencies without placeholder types.
-Const/var lists share a binding parser; class variable fields retain their
-separate declaration/default parser.
+Const/var lists share a binding parser. Class field collection separates
+metadata defaults and constructor-required contracts from declaration expressions.
 Annotations reuse value-type parsing, source-class resolution, and checked return
 construction to validate an initializer while retaining its declared contract.
 Enum blocks collect their members into that constant environment. Named enums
@@ -136,8 +137,10 @@ The same order determines pre-assignment Null views during type inference and
 body construction; unit validation rechecks those views and summarizes reads
 and owner activation across calls. Shared initializer assignment proofs use CFG
 dataflow, tracking unwritten/written paths independently of physical block order.
-Class constants retain readonly field
-contracts and a checked allocation initializer. Class enums reuse that runtime
+Class declaration expressions retain checked field contracts and an allocation
+initializer; constants are readonly and initialized variables permit later stores.
+Their per-field CFG assignment/readiness proofs reuse the global/module
+initialization checker. Class enums reuse that runtime
 initializer but retain shared slots, literal metadata defaults, and class-qualified
 read operations. A separate reserved statics body initializes other class enum
 defaults once, independently of allocation. Application generation places enum

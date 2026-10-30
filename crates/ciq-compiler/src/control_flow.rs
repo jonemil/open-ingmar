@@ -174,7 +174,7 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
 /// Possible assignment states immediately before an initializer operation.
 /// Both flags hold when incoming paths disagree about whether a write occurred.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct SharedWriteState {
+pub(crate) struct BindingWriteState {
     pub unwritten: bool,
     pub written: bool,
 }
@@ -185,25 +185,34 @@ pub(crate) struct SharedWriteState {
 /// Target ownership and read contracts remain compilation-unit obligations.
 pub(crate) fn shared_write_states(
     operations: &[LocatedOperation],
-) -> Result<Vec<SharedWriteState>, IrError> {
+) -> Result<Vec<BindingWriteState>, IrError> {
+    binding_write_states(operations, |operation| {
+        matches!(operation, Operation::SharedAssign { .. })
+    })
+}
+
+/// Prove one write per returning path for a selected initialization binding.
+/// Returns the pre-operation state for readiness and receiver-exposure checks.
+pub(crate) fn binding_write_states(
+    operations: &[LocatedOperation],
+    is_write: impl Fn(&Operation) -> bool,
+) -> Result<Vec<BindingWriteState>, IrError> {
     let structure = validate(operations)?;
     let writes = operations
         .iter()
         .enumerate()
-        .filter_map(|(at, op)| {
-            matches!(op.operation, Operation::SharedAssign { .. }).then_some(structure.blocks[at])
-        })
+        .filter_map(|(at, op)| is_write(&op.operation).then_some(structure.blocks[at]))
         .collect::<BTreeSet<_>>();
     let mut inputs = structure
         .blocks
         .iter()
-        .map(|block| (*block, SharedWriteState::default()))
+        .map(|block| (*block, BindingWriteState::default()))
         .collect::<BTreeMap<_, _>>();
     let mut outputs = inputs.clone();
     loop {
         let mut changed = false;
         for (block, input) in &mut inputs {
-            let mut incoming = SharedWriteState {
+            let mut incoming = BindingWriteState {
                 unwritten: structure.roots.contains(block),
                 written: false,
             };
@@ -213,7 +222,7 @@ pub(crate) fn shared_write_states(
                 incoming.written |= previous.written;
             }
             let outgoing = if writes.contains(block) && (incoming.unwritten || incoming.written) {
-                SharedWriteState {
+                BindingWriteState {
                     unwritten: false,
                     written: true,
                 }
@@ -235,19 +244,19 @@ pub(crate) fn shared_write_states(
         let state = inputs.get_mut(&block).unwrap();
         states.push(*state);
         let message = match located.operation {
-            Operation::SharedAssign { .. } if state.written => {
-                Some("shared initializer may assign its binding more than once")
+            _ if is_write(&located.operation) && state.written => {
+                Some("initializer may assign its binding more than once")
             }
-            Operation::SharedAssign { .. } => {
+            _ if is_write(&located.operation) => {
                 reachable_write |= structure.reachable(block);
-                *state = SharedWriteState {
+                *state = BindingWriteState {
                     unwritten: false,
                     written: true,
                 };
                 None
             }
             Operation::ReturnVoid | Operation::Return { .. } if state.unwritten => {
-                Some("shared binding is not initialized on every returning path")
+                Some("binding is not initialized on every returning path")
             }
             _ => None,
         };
@@ -261,7 +270,7 @@ pub(crate) fn shared_write_states(
     if !reachable_write {
         return Err(IrError {
             operation: None,
-            message: "shared initializer requires an entry-reachable assignment".into(),
+            message: "initializer requires an entry-reachable assignment".into(),
         });
     }
     Ok(states)

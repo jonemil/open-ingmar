@@ -6,6 +6,27 @@ is the runtime reference environment; individual probes below distinguish
 compiler acceptance from simulator observations.
 The [prioritized checklist][inventory] owns remaining work.
 
+## Instance-field declaration initializers
+
+Experimentally observed, 2026-10-30: SDK 9.2.0, `fr265`, `-O 0`, default
+checking, minimum API 5.0.0. The
+[two-file specimen](../../examples/compiler-field-initializers/README.md) produces
+the same [output](../../examples/compiler-field-initializers/expected.txt) from
+SDK and generated PRGs. Each `Box` allocation prints `10`, `30`, then the user
+initializer marker `40`; the second allocation repeats the effects. Its snapshot
+reads the Number metadata default, 7. Mutating one instance's Array, Dictionary,
+and ByteArray leaves the other instance unchanged. Scalar/String and source-object
+declaration values remain available to ordinary reads and later field writes.
+The conditional String initializer executes successfully in both programs.
+
+A separate SDK probe with minimum API 3.0.0 accepts
+`var first=Trace.number(10);` followed by
+`self.first="new";` and a String method call in an instance method. Our fixed
+inferred-field contracts do not yet accept that rebinding. Reproduce it in the
+specimen's `Box` using the existing `Trace.number` function. This distinguishes
+SDK untyped-field semantics from the implemented inference profile; the
+[core checklist][inventory] retains the remaining dynamic-field work.
+
 ## Shared variables
 
 Experimentally observed, 2026-10-30: SDK 9.2.0, `fr265`, `-O 0`, default

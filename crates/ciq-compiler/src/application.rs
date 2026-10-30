@@ -83,6 +83,7 @@ fn storage_field(
             ..
         } => (8, ids[name]),
         crate::FieldKind::Constant { .. }
+        | crate::FieldKind::Initialized { .. }
         | crate::FieldKind::Value { .. }
         | crate::FieldKind::Symbol { initial: None, .. }
         | crate::FieldKind::Numeric { .. }

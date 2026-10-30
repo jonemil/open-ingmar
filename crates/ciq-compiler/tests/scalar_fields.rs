@@ -121,7 +121,6 @@ fn scalar_fields_require_initialization_and_fresh_snapshot_proofs() {
             "var value as Lang.TYPE;",
             "var value as Lang.TYPE;function initialize(){}",
             "var value as Lang.TYPE=null;",
-            "var value as Lang.TYPE or Null=1;",
             "var value as Lang.TYPE;function initialize(v as Lang.TYPE or Null){self.value=v;}",
             "var value as Lang.TYPE;function initialize(v as Lang.TYPE){self.value=self.value;}",
             "var value as Lang.TYPE;function initialize(v as Lang.TYPE){if(true){self.value=v;}}",

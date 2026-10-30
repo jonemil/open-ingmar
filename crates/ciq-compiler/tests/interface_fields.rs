@@ -107,7 +107,6 @@ fn non_null_field_initialization_and_signature_proofs_are_required() {
     for source in [
         "class C { var value as Toybox.Lang.Comparable; function other() {} }",
         "class C { var value as Toybox.Lang.Comparable = null; function initialize() {} }",
-        "class C { var value as Toybox.Lang.Comparable or Null = 1; function initialize() {} }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }

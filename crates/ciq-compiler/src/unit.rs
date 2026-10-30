@@ -529,6 +529,9 @@ pub enum FieldKind {
     /// Requires an instance method named `__ciq_initialize_fields` with no
     /// parameters and a Void result; unit checks require exactly one assignment.
     Constant { value_type: ReturnType },
+    /// A mutable binding populated by the allocation initializer before initialize.
+    /// Metadata starts as Null; the reserved body must assign it exactly once.
+    Initialized { value_type: ReturnType },
     /// A supported value contract with a Null metadata slot. Contracts admitting
     /// Null have that default; others require constructor initialization.
     Value { value_type: ReturnType },
@@ -586,6 +589,7 @@ impl FieldKind {
         matches!(
             self,
             Self::Constant { .. }
+                | Self::Initialized { .. }
                 | Self::Enum {
                     initial: crate::EnumInitialization::Allocation,
                     ..
@@ -731,6 +735,7 @@ impl InstanceField {
         match &self.kind {
             FieldKind::Enum { value_type, .. }
             | FieldKind::Constant { value_type }
+            | FieldKind::Initialized { value_type }
             | FieldKind::Value { value_type } => value_type.clone(),
             FieldKind::Number(_) => ReturnType::Integer,
             FieldKind::LangObject { nullable } => {
@@ -1030,15 +1035,19 @@ impl CompilationUnit {
                             operation: None,
                             message: "unsupported field value contract".into(),
                         })?;
-                } else if let FieldKind::Constant { value_type } = &field.kind {
-                    field.kind = FieldKind::Constant {
-                        value_type: FieldKind::value_contract(value_type.clone()).ok_or_else(
-                            || UnitError {
-                                declaration: None,
-                                operation: None,
-                                message: "unsupported constant field contract".into(),
-                            },
-                        )?,
+                } else if let FieldKind::Constant { value_type }
+                | FieldKind::Initialized { value_type } = &field.kind
+                {
+                    let value_type =
+                        FieldKind::value_contract(value_type.clone()).ok_or_else(|| UnitError {
+                            declaration: None,
+                            operation: None,
+                            message: "unsupported allocation field contract".into(),
+                        })?;
+                    field.kind = if field.kind.readonly() {
+                        FieldKind::Constant { value_type }
+                    } else {
+                        FieldKind::Initialized { value_type }
                     };
                 }
             }
@@ -1278,7 +1287,7 @@ impl CompilationUnit {
                 return Err(fail(
                     Some(at),
                     None,
-                    "constant fields require an allocation initializer".into(),
+                    "allocation fields require their reserved initializer".into(),
                 ));
             }
             if class.fields.iter().any(|field| {
@@ -1418,7 +1427,7 @@ impl CompilationUnit {
                     .iter()
                     .find(|class| owner == Owner::Class(class.name.as_str()))
                     .unwrap();
-                let mut pending = declaration
+                let pending = declaration
                     .fields
                     .iter()
                     .filter(|field| {
@@ -1439,11 +1448,29 @@ impl CompilationUnit {
                 let unreadable = declaration
                     .fields
                     .iter()
-                    .filter(|field| field.kind.requires_initialization())
+                    .filter(|field| {
+                        field.kind.requires_initialization()
+                            || (function.name() == ENUM_DEFAULT_INITIALIZER
+                                && field.kind.allocation_write())
+                    })
                     .map(|field| field.name.as_str())
                     .collect::<BTreeSet<_>>();
+                let states = pending
+                    .iter()
+                    .map(|field| {
+                        crate::control_flow::binding_write_states(
+                            function.operations(),
+                            |operation| {
+                                matches!(operation, Operation::SelfFieldAssign { field: target, .. } if target == field)
+                            },
+                        )
+                        .map(|states| (*field, states))
+                        .map_err(|error| fail(Some(index), error.operation, error.message))
+                    })
+                    .collect::<Result<BTreeMap<_, _>, _>>()?;
                 for (operation, located) in function.operations().iter().enumerate() {
-                    if (!pending.is_empty() || !unreadable.is_empty())
+                    let incomplete = states.values().any(|states| states[operation].unwritten);
+                    if (incomplete || !unreadable.is_empty())
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
                             || activation_callees(owner, &located.operation, &bodies)
@@ -1455,20 +1482,22 @@ impl CompilationUnit {
                         return Err(fail(
                             Some(index),
                             Some(operation),
-                            "initialize constant fields before calls that may request shutdown"
+                            "initialize allocation fields before calls that may request shutdown"
                                 .into(),
                         ));
                     }
                     let message = match &located.operation {
                         Operation::SelfFieldAssign { field, .. }
-                            if !pending.remove(field.as_str()) =>
+                            if !pending.contains(field.as_str()) =>
                         {
                             Some(
                                 "field initializer must assign each designated binding exactly once",
                             )
                         }
                         Operation::SelfFieldRead { field, .. }
-                            if pending.contains(field.as_str())
+                            if states
+                                .get(field.as_str())
+                                .is_some_and(|states| states[operation].unwritten)
                                 || unreadable.contains(field.as_str()) =>
                         {
                             Some("field read before required initialization")
@@ -1476,19 +1505,11 @@ impl CompilationUnit {
                         Operation::SelfValue { .. }
                         | Operation::SelfCall { .. }
                         | Operation::SelfCallStatement { .. }
-                            if !pending.is_empty() || !unreadable.is_empty() =>
+                            if incomplete || !unreadable.is_empty() =>
                         {
                             Some(
                                 "initialize required fields before exposing the initializer receiver",
                             )
-                        }
-                        Operation::Branch { .. } | Operation::Jump { .. }
-                            if !pending.is_empty() =>
-                        {
-                            Some("constant field initialization requires a straight-line prefix")
-                        }
-                        Operation::ReturnVoid if !pending.is_empty() => {
-                            Some("required field initializer write is missing")
                         }
                         _ => None,
                     };
@@ -3411,6 +3432,11 @@ impl CompilationUnit {
                         crate::type_text::result_tag(value_type),
                         initial.text()
                     ),
+                    FieldKind::Initialized { value_type } => format!(
+                        ".field-initialized {} {}\n",
+                        field.name,
+                        crate::type_text::result_tag(value_type)
+                    ),
                     FieldKind::Constant { value_type } => format!(
                         ".field-constant {} {}\n",
                         field.name,
@@ -3670,14 +3696,14 @@ pub(crate) fn compile_sources_mapped(
     // Runtime writes retain declaration order and ordinary readiness checks.
     for parsed in &mut parsed_sources {
         for class in &mut parsed.classes {
-            if class.constants.is_empty() {
+            if class.bindings.is_empty() {
                 continue;
             }
-            let constants = class.constants.iter().collect::<Vec<_>>();
+            let constants = class.bindings.iter().collect::<Vec<_>>();
             let order = constant_initialization_order(&constants);
             let mut assignments = Vec::new();
             let mut defaults = Vec::new();
-            for declaration in &class.constants {
+            for declaration in &class.bindings {
                 let result = calls.source_fields[&class.name][&declaration.name].clone();
                 class.fields.push(InstanceField {
                     name: declaration.name.clone(),
@@ -3695,13 +3721,15 @@ pub(crate) fn compile_sources_mapped(
                             value_type: result,
                             initial,
                         }
+                    } else if declaration.mutable {
+                        FieldKind::Initialized { value_type: result }
                     } else {
                         FieldKind::Constant { value_type: result }
                     },
                 });
             }
             for index in order {
-                let declaration = &class.constants[index];
+                let declaration = &class.bindings[index];
                 let target = if declaration.enumeration && declaration.literal_default {
                     if matches!(
                         crate::constants::literal(&declaration.initializer),
@@ -3773,8 +3801,9 @@ pub(crate) fn compile_sources_mapped(
             let mut methods = Vec::new();
             let mut method_calls = calls.clone();
             method_calls.readonly_fields = class
-                .constants
+                .bindings
                 .iter()
+                .filter(|binding| !binding.mutable)
                 .map(|value| value.name.clone())
                 .collect();
             method_calls.current_class = Some(crate::SourceClass {
@@ -3974,7 +4003,7 @@ fn prepare_sources<'a>(
                 parsed
                     .classes
                     .iter_mut()
-                    .flat_map(|class| &mut class.constants),
+                    .flat_map(|class| &mut class.bindings),
             )
         {
             if let Some(annotation) = &mut constant.annotation {
@@ -4026,7 +4055,7 @@ fn prepare_sources<'a>(
     }
     for parsed in &parsed_sources {
         for class in &parsed.classes {
-            for declaration in &class.constants {
+            for declaration in &class.bindings {
                 if declaration.enumeration {
                     calls
                         .class_enums
@@ -4104,14 +4133,15 @@ fn infer_stored_constants(
             class_names.insert(
                 class.name.as_str(),
                 class
-                    .constants
+                    .bindings
                     .iter()
+                    .filter(|binding| !binding.mutable)
                     .map(|c| c.name.clone())
                     .collect::<BTreeSet<_>>(),
             );
             pending.extend(
                 class
-                    .constants
+                    .bindings
                     .iter()
                     .map(|declaration| (source, Owner::Class(class.name.as_str()), declaration)),
             );
@@ -4445,6 +4475,7 @@ fn parse_unit_ir_context(
                             part.as_str(),
                             ".field-enum"
                                 | ".field-constant"
+                                | ".field-initialized"
                                 | ".field-value"
                                 | ".field-number"
                                 | ".field-object"
@@ -4494,7 +4525,10 @@ fn parse_unit_ir_context(
                                 value_type,
                                 initial,
                             }
-                        } else if parts[0] == ".field-constant" {
+                        } else if matches!(
+                            parts[0].as_str(),
+                            ".field-constant" | ".field-initialized"
+                        ) {
                             let value_type = crate::type_text::call_result(&parts[2])
                                 .ok()
                                 .and_then(FieldKind::value_contract)
@@ -4505,7 +4539,11 @@ fn parse_unit_ir_context(
                                         "unsupported constant field contract",
                                     )
                                 })?;
-                            FieldKind::Constant { value_type }
+                            if parts[0] == ".field-constant" {
+                                FieldKind::Constant { value_type }
+                            } else {
+                                FieldKind::Initialized { value_type }
+                            }
                         } else if parts[0] == ".field-value" {
                             crate::type_text::call_result(&parts[2])
                                 .ok()

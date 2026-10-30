@@ -79,7 +79,6 @@ fn method_fields_check_initialization_and_assignment_contracts() {
         "class C {var callback as Toybox.Lang.Method; function initialize(){}}",
         "class C {var callback as Toybox.Lang.Method=null; function initialize(){}}",
         "class C {var callback as Toybox.Lang.Method or Null=1;}",
-        "class C {var callback as Toybox.Lang.Method or Null=1.method(:abs);}",
         "class C {var callback as Toybox.Lang.Method; function initialize(){self.callback=self.method(:initialize);}}",
         "class C {var callback as Toybox.Lang.Method; function initialize(m as Toybox.Lang.Method){var old=self.callback;self.callback=m;}}",
         "class C {var callback as Toybox.Lang.Method; function initialize(m as Toybox.Lang.Method){self.callback=m;} function clear() as Void {self.callback=null;}}",

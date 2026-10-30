@@ -36,9 +36,9 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Support scalar/String/container and computed instance-field declaration
-  initializers for typed and inferred fields; infer declaration types beyond
-  Number/Symbol defaults and preserve per-instance evaluation order.
+- [ ] Retain dynamic contracts for unannotated instance fields with non-Null
+  initializers, while preserving literal metadata defaults and checked member
+  access; allow later writes of different value types as the SDK does.
 - [ ] Resolve bare field names in instance methods with the SDK's local,
   parameter, field, and outer-owner shadowing rules.
 - [ ] Support nested module declarations and qualified names through multiple
