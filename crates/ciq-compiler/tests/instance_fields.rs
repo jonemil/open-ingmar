@@ -12,7 +12,7 @@ fn field_state_preserves_complete_pipelines_and_instance_metadata() {
     assert_eq!(unit.classes()[0].fields[0].name, "count");
     assert_eq!(
         unit.classes()[0].fields[0].kind,
-        ciq_compiler::FieldKind::Number(7)
+        ciq_compiler::FieldKind::DynamicNumber(7)
     );
     let text = unit.to_ir_text();
     let resumed = parse_unit_ir(&text).unwrap();
@@ -68,7 +68,7 @@ fn declarations_and_saved_ir_resolve_fields_against_their_owner() {
         "var AppBase = 1; function start() {}",
         "var n = 1; function start() { self.missing = 2; }",
         "var n = 1; function start() { System.println(self.missing); }",
-        "var n = 1; function start() { self.n = \"wrong\"; }",
+        "var n as Toybox.Lang.Number = 1; function start() { self.n = \"wrong\"; }",
     ] {
         let source = format!("class C extends Application.AppBase {{ {body} }}");
         assert!(compile_sources(&[&source]).is_err(), "{source}");
@@ -76,12 +76,15 @@ fn declarations_and_saved_ir_resolve_fields_against_their_owner() {
     let unit = compile_sources(&[APP, VIEW]).unwrap();
     let text = unit.to_ir_text();
     for changed in [
-        text.replace(".field-number count 7\n", ""),
+        text.replace(".field-dynamic-number count 7\n", ""),
         text.replace(
-            ".field-number count 7",
-            ".field-number count 7\n.field-number count 8",
+            ".field-dynamic-number count 7",
+            ".field-dynamic-number count 7\n.field-dynamic-number count 8",
         ),
-        text.replace(".field-number count 7", ".field-number other 7"),
+        text.replace(
+            ".field-dynamic-number count 7",
+            ".field-dynamic-number other 7",
+        ),
         text.replace(".assign-self count", ".assign-self missing"),
     ] {
         assert_ne!(text, changed);
@@ -96,7 +99,7 @@ fn field_reads_cannot_move_across_writes_and_locals_remain_distinct() {
     let unit = compile_sources(&[source]).unwrap();
     assert_eq!(
         unit.classes()[0].fields[0].kind,
-        ciq_compiler::FieldKind::Number(i32::MIN)
+        ciq_compiler::FieldKind::DynamicNumber(i32::MIN)
     );
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     let bad = "ciq-ir\n.function f receiver=instance\n.read-self %0 n\n.integer %1 2\n.assign-self n %1\n.println %0\n.return-void\n.end\n";

@@ -62,13 +62,13 @@ fn structural_assignments_require_actual_members_and_signatures() {
 
 #[test]
 fn interface_fields_are_invariant_witness_requirements() {
-    let source = "typedef T as interface {var value as Toybox.Lang.Number; function answer() as Toybox.Lang.Number;}; class C {var value=1;function answer() as Toybox.Lang.Number {return 2;}} function pass(x as T) as T {return x;} function start() {return pass(new C());}";
+    let source = "typedef T as interface {var value as Toybox.Lang.Number; function answer() as Toybox.Lang.Number;}; class C {var value as Toybox.Lang.Number=1;function answer() as Toybox.Lang.Number {return 2;}} function pass(x as T) as T {return x;} function start() {return pass(new C());}";
     let unit = compile_sources(&[source]).unwrap();
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     for wrong in [
-        source.replace("var value=1;", "var other=1;"),
+        source.replace("var value as Toybox.Lang.Number=1;", "var other=1;"),
         source.replace(
-            "var value=1;",
+            "var value as Toybox.Lang.Number=1;",
             "var value as Toybox.Lang.Object;function initialize(){self.value=1;}",
         ),
     ] {
@@ -78,7 +78,7 @@ fn interface_fields_are_invariant_witness_requirements() {
 
 #[test]
 fn structural_fields_read_write_and_recheck_saved_operands() {
-    let source = "typedef T as interface {var value as Toybox.Lang.Number;}; class C {var value=1;} function set(x as T, n as Toybox.Lang.Number) as Toybox.Lang.Number {x.value=n;return x.value;} function start(){return set(new C(),41);}";
+    let source = "typedef T as interface {var value as Toybox.Lang.Number;}; class C {var value as Toybox.Lang.Number=1;} function set(x as T, n as Toybox.Lang.Number) as Toybox.Lang.Number {x.value=n;return x.value;} function start(){return set(new C(),41);}";
     let unit = compile_sources(&[source]).unwrap();
     let text = unit.to_ir_text();
     assert!(text.contains(".member-write"));

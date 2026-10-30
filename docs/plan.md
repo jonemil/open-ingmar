@@ -36,9 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Retain dynamic contracts for unannotated instance fields with non-Null
-  initializers, while preserving literal metadata defaults and checked member
-  access; allow later writes of different value types as the SDK does.
 - [ ] Resolve bare field names in instance methods with the SDK's local,
   parameter, field, and outer-owner shadowing rules.
 - [ ] Support nested module declarations and qualified names through multiple
@@ -92,7 +89,8 @@ implemented contracts; investigations retain evidence, not another backlog.
 - [ ] Support runtime source-subclass targets and union refinement for
   `instanceof`; verify which interface/parameterized targets the SDK accepts.
 - [ ] Make `has` refine guarded member/API availability while keeping member
-  existence separate from callable signature proof.
+  existence separate from callable signature proof; accept Any selectors under
+  gradual checking with policy diagnostics and the runtime Symbol requirement.
 - [ ] Preserve enclosing lexical refinements while checking unreachable loop
   updates and post-tests; accept unassigned operands in provably unexecuted
   headers where the SDK does, without inventing a runtime value. Keep those

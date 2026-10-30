@@ -19,13 +19,20 @@ and ByteArray leaves the other instance unchanged. Scalar/String and source-obje
 declaration values remain available to ordinary reads and later field writes.
 The conditional String initializer executes successfully in both programs.
 
+The [dynamic-field specimen](../../examples/compiler-dynamic-fields/README.md),
+with the same SDK/target/options and minimum API 5.0.0, also matches
+[console output](../../examples/compiler-dynamic-fields/expected.txt) across
+SDK and generated PRGs. Fields initialized from Number, Symbol, String, Array,
+source objects, and a computed Number accept later writes of different types.
+Number and Symbol literal defaults remain available before user methods run.
+A local guarded by `instanceof Token` calls the source method; an Array-guarded
+local supports indexing after the field changes from Number to Array.
+
 A separate SDK probe with minimum API 3.0.0 accepts
-`var first=Trace.number(10);` followed by
-`self.first="new";` and a String method call in an instance method. Our fixed
-inferred-field contracts do not yet accept that rebinding. Reproduce it in the
-specimen's `Box` using the existing `Trace.number` function. This distinguishes
-SDK untyped-field semantics from the implemented inference profile; the
-[core checklist][inventory] retains the remaining dynamic-field work.
+`var first=Trace.number(10);` followed by `self.first="new";` and a String method
+call in an instance method. Reproduce it in `Box` using the specimen's existing
+`Trace.number` function. These observations support dynamic untyped storage;
+they do not make an initializer's type a permanent member contract.
 
 ## Shared variables
 

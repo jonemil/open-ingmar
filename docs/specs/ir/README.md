@@ -2240,6 +2240,18 @@ Conditional RHS expressions may branch before the write. Joins/loops that can
 repeat a designated write, skipped writes, and writes to undesignated fields
 are rejected. This proof is shared with global/module binding initialization.
 
+Unannotated mutable source fields retain Any independently of initializer
+values. Runtime initializers use `.field-initialized name any`; Null defaults use
+the ordinary Any value slot. `FieldKind::DynamicNumber` /
+`.field-dynamic-number name value` and `FieldKind::DynamicSymbol` /
+`.field-dynamic-symbol name :symbol` retain Number/Symbol metadata defaults with
+the same Any read/write contract. They need no allocation write. The typed
+`.field-number` and `.field-symbol` forms retain fixed contracts. Metadata values
+do not prove a narrower field read or a typed mutable structural witness.
+Ordinary read-view, API, and policy checks apply after saved-text resumption.
+PRG metadata records only the default value; these semantic contracts introduce
+no VM field flag or new DATA kind.
+
 `FieldKind::Enum { value_type, initial }` / `.field-enum name tag mode`
 declares a readonly shared class enum slot under an ordinary stored value
 contract, excluding Void and Graphics.Dc. `EnumInitialization` selects an i32

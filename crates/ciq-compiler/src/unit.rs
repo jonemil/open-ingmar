@@ -537,6 +537,10 @@ pub enum FieldKind {
     Value { value_type: ReturnType },
     /// A Number copied from class metadata into each new instance.
     Number(i32),
+    /// A Number metadata default for a mutable Any slot; later writes may change type.
+    DynamicNumber(i32),
+    /// A Symbol metadata default for a mutable Any slot; the name must be an identifier.
+    DynamicSymbol(String),
     /// A Null-initialized concrete scalar slot. Non-null fields require source
     /// initialization before reads, self exposure, control flow, or return.
     Scalar { ty: ScalarFieldType, nullable: bool },
@@ -714,10 +718,10 @@ impl FieldKind {
 
     /// Return the literal Symbol name that application binding must resolve.
     pub(crate) fn symbol_default(&self) -> Option<&str> {
-        if let Self::Symbol { initial, .. } = self {
-            initial.as_deref()
-        } else {
-            None
+        match self {
+            Self::Symbol { initial, .. } => initial.as_deref(),
+            Self::DynamicSymbol(name) => Some(name),
+            _ => None,
         }
     }
 }
@@ -738,6 +742,7 @@ impl InstanceField {
             | FieldKind::Initialized { value_type }
             | FieldKind::Value { value_type } => value_type.clone(),
             FieldKind::Number(_) => ReturnType::Integer,
+            FieldKind::DynamicNumber(_) | FieldKind::DynamicSymbol(_) => ReturnType::Any,
             FieldKind::LangObject { nullable } => {
                 if *nullable {
                     ReturnType::NullableObject
@@ -3450,6 +3455,12 @@ impl CompilationUnit {
                     FieldKind::Number(initial) => {
                         format!(".field-number {} {initial}\n", field.name)
                     }
+                    FieldKind::DynamicNumber(initial) => {
+                        format!(".field-dynamic-number {} {initial}\n", field.name)
+                    }
+                    FieldKind::DynamicSymbol(initial) => {
+                        format!(".field-dynamic-symbol {} :{initial}\n", field.name)
+                    }
                     FieldKind::LangObject { nullable } => format!(
                         ".field-object {} {}object\n",
                         field.name,
@@ -4478,6 +4489,8 @@ fn parse_unit_ir_context(
                                 | ".field-initialized"
                                 | ".field-value"
                                 | ".field-number"
+                                | ".field-dynamic-number"
+                                | ".field-dynamic-symbol"
                                 | ".field-object"
                                 | ".field-array"
                                 | ".field-dictionary"
@@ -4555,10 +4568,31 @@ fn parse_unit_ir_context(
                                         "unsupported field value contract",
                                     )
                                 })?
-                        } else if parts[0] == ".field-number" {
-                            FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
+                        } else if matches!(
+                            parts[0].as_str(),
+                            ".field-number" | ".field-dynamic-number"
+                        ) {
+                            let initial = parts[2].parse::<i32>().map_err(|_| {
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
-                            })?)
+                            })?;
+                            if parts[0] == ".field-number" {
+                                FieldKind::Number(initial)
+                            } else {
+                                FieldKind::DynamicNumber(initial)
+                            }
+                        } else if parts[0] == ".field-dynamic-symbol" {
+                            FieldKind::DynamicSymbol(
+                                parts[2]
+                                    .strip_prefix(':')
+                                    .ok_or_else(|| {
+                                        Diagnostic::at(
+                                            text,
+                                            method_at,
+                                            "dynamic Symbol defaults use :identifier",
+                                        )
+                                    })?
+                                    .to_owned(),
+                            )
                         } else if parts[0] == ".field-object" {
                             FieldKind::LangObject {
                                 nullable: match parts[2].as_str() {

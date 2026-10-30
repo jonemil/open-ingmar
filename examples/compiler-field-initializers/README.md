@@ -1,6 +1,6 @@
 # Instance-field declaration initializers
 
-[app.mc](app.mc) and [box.mc](box.mc) check typed/inferred scalar, String,
+[app.mc](app.mc) and [box.mc](box.mc) check typed and untyped scalar, String,
 container, and source-object fields. Declaration expressions run for each
 allocation before `initialize()`, while literal defaults are available to
 computed expressions. Two instances check independent mutable container storage;

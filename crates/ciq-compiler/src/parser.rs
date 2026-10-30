@@ -4084,18 +4084,22 @@ pub(crate) fn declarations<'a>(
                             )
                         } else if binding.annotation.is_none() {
                             match &binding.initializer.kind {
-                                ExpressionKind::Integer(n) => Some(crate::FieldKind::Number(*n)),
-                                ExpressionKind::Symbol(name) => Some(crate::FieldKind::Symbol {
-                                    initial: Some(name.clone()),
-                                    nullable: false,
-                                }),
+                                ExpressionKind::Integer(n) => {
+                                    Some(crate::FieldKind::DynamicNumber(*n))
+                                }
+                                ExpressionKind::Symbol(name) => {
+                                    Some(crate::FieldKind::DynamicSymbol(name.clone()))
+                                }
                                 ExpressionKind::Null => {
                                     binding.annotation = Some(crate::ReturnType::Any);
                                     Some(crate::FieldKind::Value {
                                         value_type: crate::ReturnType::Any,
                                     })
                                 }
-                                _ => None,
+                                _ => {
+                                    binding.annotation = Some(crate::ReturnType::Any);
+                                    None
+                                }
                             }
                         } else {
                             let mut kind =
@@ -4104,6 +4108,13 @@ pub(crate) fn declarations<'a>(
                                         parser.error(binding.span.start, "unsupported field type")
                                     })?;
                             match (&mut kind, &binding.initializer.kind) {
+                                (
+                                    crate::FieldKind::Scalar {
+                                        ty: crate::ScalarFieldType::Number,
+                                        nullable: false,
+                                    },
+                                    ExpressionKind::Integer(n),
+                                ) => Some(crate::FieldKind::Number(*n)),
                                 (
                                     crate::FieldKind::Symbol { initial, .. },
                                     ExpressionKind::Symbol(name),

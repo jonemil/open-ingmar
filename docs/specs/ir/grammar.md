@@ -72,6 +72,8 @@ field-body = ".field-constant" identifier call-result-tag
              (signed-decimal-i32 | "static" | "null")
            | ".field-value" identifier call-result-tag
            | ".field-number" identifier signed-decimal-i32
+           | ".field-dynamic-number" identifier signed-decimal-i32
+           | ".field-dynamic-symbol" identifier ":" identifier
            | ".field-scalar" identifier scalar-field-tag
            | ".field-numeric" identifier numeric-alias-tag
            | ".field-object" identifier ("object" | "nullable-object")
@@ -86,6 +88,11 @@ field-body = ".field-constant" identifier call-result-tag
              ("weak-reference" | "nullable-weak-reference")
            | ".field-byte-array" identifier ("byte-array" | "nullable-byte-array")
 ```
+
+Dynamic Number/Symbol declarations carry an Any contract with the specified
+metadata default. Typed Number and Symbol declarations retain their fixed
+contracts. Default values do not refine subsequent reads or restrict later
+stores. All Symbol defaults require identifier names.
 
 Scalar field tags are `integer`, `long`, `float`, `double`, `boolean`, `char`,
 `string`, and their nullable forms. Alias tags are `integer-union`, `decimal`,

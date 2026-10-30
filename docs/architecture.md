@@ -147,6 +147,10 @@ defaults once, independently of allocation. Application generation places enum
 slots in separate statics records,
 leaving ordinary fields in instance metadata. Source construction uses private allocation/completion
 builders to preserve allocation before user argument effects.
+Mutable unannotated fields retain Any independently of initializer evidence.
+Dynamic Number/Symbol field kinds preserve metadata defaults without claiming
+fixed read/write types. Explicit annotations retain field and structural-witness
+contracts; runtime guards refine snapshots rather than the mutable declaration.
 Typedef targets reuse annotation parsing with cached closed terms and guarded
 recursion/depth checks. Recursive types retain finite binders; value operations unfold one
 constructor rather than erasing or repeatedly expanding a cycle. Contract

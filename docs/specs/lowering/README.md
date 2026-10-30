@@ -406,6 +406,12 @@ setup; CFG paths retain one designated initialization write. Literal-default
 and runtime phases follow the explicit unit/body order. Reinvoking user
 `initialize()` does not rerun the allocation hook.
 
+Dynamic Number/Symbol fields use the same metadata value tags and payloads as
+their typed counterparts. Their Any contracts affect source/IR validation and
+member selection, without changing field storage or adding conversion code.
+Reads and writes use ordinary field operations; runtime initializer expressions
+retain their original value construction even when the slot contract is Any.
+
 ### Shared storage
 
 A shared read uses `getselfv` in its declared owner and `getmv` from another

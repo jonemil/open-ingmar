@@ -54,8 +54,8 @@ fn partial_native_unions_cross_runtime_boundaries_without_erasure() {
         "class C {function take(x as Toybox.Lang.Number) as Void {}} function f(c as C,x as Toybox.Lang.Number or Toybox.Lang.String) as Void {c.take(x);}",
         "class C {function initialize(x as Toybox.Lang.Number){}} function f(x as Toybox.Lang.Number or Toybox.Lang.String) as C {return new C(x);}",
         "function f(n as Toybox.Lang.Number,x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number {n=x;return n;}",
-        "class C {var n=0;function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Void {self.n=x;}}",
-        "class C {var n=0;} function f(c as C,x as Toybox.Lang.Number or Toybox.Lang.String) as Void {c.n=x;}",
+        "class C {var n as Toybox.Lang.Number=0;function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Void {self.n=x;}}",
+        "class C {var n as Toybox.Lang.Number=0;} function f(c as C,x as Toybox.Lang.Number or Toybox.Lang.String) as Void {c.n=x;}",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>,x as Toybox.Lang.Number or Toybox.Lang.String) as Void {a[0]=x;}",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>,x as Toybox.Lang.Number or Toybox.Lang.String) as Void {a.add(x);}",
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.String {return \"abc\".substring(x,null);}",
@@ -444,10 +444,10 @@ fn strict_typed_application_preserves_native_and_saved_prg_output() {
 #[test]
 fn field_stores_and_constructors_report_unknown_values_at_the_write_or_call() {
     let cases = [
-        "class Box {var value=0;function set(x){self.value=x;}}",
-        "class Box {var value=0;} function f(b as Box,x){b.value=x;}",
+        "class Box {var value as Toybox.Lang.Number=0;function set(x){self.value=x;}}",
+        "class Box {var value as Toybox.Lang.Number=0;} function f(b as Box,x){b.value=x;}",
         "typedef T as interface {var value as Toybox.Lang.Number;}; function f(b as T,x){b.value=x;}",
-        "class Box {var value=0;function initialize(x as Toybox.Lang.Number){self.value=x;}} function f(x){return new Box(x);}",
+        "class Box {var value as Toybox.Lang.Number=0;function initialize(x as Toybox.Lang.Number){self.value=x;}} function f(x){return new Box(x);}",
     ];
     for source in cases {
         let report = compile_sources_with_options(&[source], options(TypeCheckLevel::Informative))
@@ -519,11 +519,14 @@ fn union_receivers_check_every_distinct_argument_contract() {
 
 #[test]
 fn exact_interface_witnesses_and_typed_stores_remain_proven() {
-    let source = "typedef T as interface {var value as Toybox.Lang.Number;function read() as Toybox.Lang.Number;}; class Box {var value=0;function set(x as Toybox.Lang.Number) as Void {self.value=x;} function read() as Toybox.Lang.Number {return self.value;}} function pass(x as Box) as T {return x;} function f(b as T,x as Toybox.Lang.Number) as Toybox.Lang.Number {b.value=x;return b.read();}";
+    let source = "typedef T as interface {var value as Toybox.Lang.Number;function read() as Toybox.Lang.Number;}; class Box {var value as Toybox.Lang.Number=0;function set(x as Toybox.Lang.Number) as Void {self.value=x;} function read() as Toybox.Lang.Number {return self.value;}} function pass(x as Box) as T {return x;} function f(b as T,x as Toybox.Lang.Number) as Toybox.Lang.Number {b.value=x;return b.read();}";
     let report = compile_sources_with_options(&[source], options(TypeCheckLevel::Strict)).unwrap();
     assert!(report.warnings.is_empty());
     common::pipeline(report.artifact);
-    let bad = source.replace("var value=0;", "var value as Toybox.Lang.String;");
+    let bad = source.replace(
+        "var value as Toybox.Lang.Number=0;",
+        "var value as Toybox.Lang.String;",
+    );
     for level in [
         TypeCheckLevel::Gradual,
         TypeCheckLevel::Informative,

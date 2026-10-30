@@ -156,7 +156,6 @@ fn required_symbols_must_be_assigned_before_reads_calls_or_return() {
         "class C {var value as Toybox.Lang.Symbol=1;function initialize(){}}",
         "class C {var value as Toybox.Lang.Symbol=:alpha;function initialize(){self.value=null;}}",
         "class C {var value as Toybox.Lang.Symbol or Null;function initialize(){self.value=1;}}",
-        "class C {var value=:alpha;function initialize(){self.value=null;}}",
         "class C {var value as Toybox.Lang.Symbol=:alpha.toString();function initialize(){}}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");

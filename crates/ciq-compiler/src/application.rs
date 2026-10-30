@@ -77,11 +77,14 @@ fn storage_field(
             ..
         } => (1, *n as u32),
         crate::FieldKind::Enum { .. } => (0, 0),
-        crate::FieldKind::Number(initial) => (1, *initial as u32),
+        crate::FieldKind::Number(initial) | crate::FieldKind::DynamicNumber(initial) => {
+            (1, *initial as u32)
+        }
         crate::FieldKind::Symbol {
             initial: Some(name),
             ..
-        } => (8, ids[name]),
+        }
+        | crate::FieldKind::DynamicSymbol(name) => (8, ids[name]),
         crate::FieldKind::Constant { .. }
         | crate::FieldKind::Initialized { .. }
         | crate::FieldKind::Value { .. }

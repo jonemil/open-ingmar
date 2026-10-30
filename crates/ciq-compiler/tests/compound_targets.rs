@@ -44,7 +44,7 @@ fn compound_targets_preserve_complete_pipelines() {
 fn number_fields_share_read_binary_write_lowering_for_all_operators() {
     let source = |body| {
         format!(
-            "using Toybox.WatchUi; class Counter extends WatchUi.View {{ var count = 12; function initialize() {{ View.initialize(); }} function run() {{ {body} }} }}"
+            "using Toybox.WatchUi; class Counter extends WatchUi.View {{ var count as Toybox.Lang.Number = 12; function initialize() {{ View.initialize(); }} function run() {{ {body} }} }}"
         )
     };
     for op in ["+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>"] {

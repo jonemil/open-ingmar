@@ -1657,8 +1657,9 @@ class. These tags do not authorize a cast or an undeclared property.
 ### Number instance fields
 
 Source classes may declare up to 256 fields. An unannotated Number literal
-provides a metadata default and a fixed Number contract; parentheses around the
-literal are accepted. Other declaration forms follow the
+provides a metadata default and an Any contract; parentheses around the literal
+are accepted. An explicit Number annotation retains the fixed Number contract.
+Other declaration forms follow the
 [initializer rules](#field-declaration-initializers) below. The field-count limit
 defines our subset, not a device memory limit.
 
@@ -1668,7 +1669,7 @@ methods, and `View`, `AppBase`, or `init`, which collide with
 native-base/constructor metadata. Different classes may use the same field name.
 
 ```text
-var count = 7;
+var count as Toybox.Lang.Number = 7;
 function bump() { self.count = self.count + 1; }
 ```
 
@@ -1681,8 +1682,7 @@ Number fields also support all ten arithmetic/bitwise compound operators:
 corresponding Number binary operation, then stores the result. A RHS that
 changes the field does not change the captured old value. Branching RHS
 expressions stage the old read through ordinary typed locals. Non-Number results
-are rejected. Arbitrary receiver properties, static fields, and source-inherited
-fields remain unsupported. See
+are rejected. Static fields and source-inherited fields remain unsupported. See
 [target evidence](../../investigations/compiler-compound-targets.md).
 
 `ClassDeclaration.fields` holds names and FieldKind defaults/contracts. Unit
@@ -1706,15 +1706,21 @@ constant initialization precedes its source initialize method. The shared
 Class `var` lists give each name its own optional annotation and expression.
 Expressions use ordinary typing, API checks, and contextual container
 construction; an annotation remains the field's contract. Without an annotation,
-supported non-Null initializers infer a fixed scalar, container, source-object,
-or other ordinary field contract. Inferred Arrays use mutable element contracts
-rather than positional tuple inference. Rebinding must satisfy that contract.
-This fixed inferred-field profile is narrower than the SDK's dynamic untyped
-fields. An unannotated field with no initializer or literal Null uses Any and
-defaults to Null.
+the slot retains Any independently of the initializer, including Number, Symbol,
+String, container, and source-object values. Later writes may change its runtime
+type. An omitted initializer produces Null. Mutable fields do not acquire an
+exact source identity or structural interface contract from their initial value.
 
-Inferred Number and Symbol literals retain metadata defaults. Typed Symbol
-literals and permitted Null defaults also use metadata. Other expressions run
+Reads retain the slot's contract. Gradual checking permits supported dynamic
+member calls and indexing; strict checking rejects unresolved member/type
+uncertainty. A guarded local snapshot or an explicit annotation can establish
+source/structural member contracts without assuming that another field read has
+the same value. Initializer evidence does not authorize a forged saved-IR read
+view or a typed mutable interface field.
+
+Number and Symbol literals retain metadata defaults for both dynamic and typed
+slots; a Number literal needs an exact Number annotation for the typed metadata
+form. Permitted Null defaults also use metadata. Other expressions run
 through the reserved allocation initializer for every instance, before user
 `initialize()` and before constructor argument effects. Application instances
 use the same hook. Containers and source objects are constructed afresh for
@@ -1737,7 +1743,10 @@ These checks apply to mutable and readonly declaration initializers; ordinary
 methods may subsequently rebind only mutable fields.
 
 See the [two-file example](../../../examples/compiler-field-initializers/README.md)
-and [SDK evidence](../../investigations/core-lang-completion.md#instance-field-declaration-initializers).
+for allocation order, the
+[dynamic-field example](../../../examples/compiler-dynamic-fields/README.md) for
+type-changing writes, and
+[SDK evidence](../../investigations/core-lang-completion.md#instance-field-declaration-initializers).
 
 ### Union fields
 
@@ -2043,8 +2052,8 @@ var inferred = :size;
 ```
 
 Annotations accept canonical, imported, and aliased Symbol names. Literal Symbol
-defaults are permitted with either nullability; an omitted type infers non-null
-Symbol. Nullable fields default to Null when no Symbol is supplied. Non-null
+defaults are permitted with either nullability. An omitted type retains Any
+with a Symbol metadata default. Nullable fields default to Null when no Symbol is supplied. Non-null
 fields without defaults must be assigned in source `initialize`, using the same
 straight-line prefix and exposure/callback restrictions as required reference
 fields. A literal default already satisfies initialization. Null requires an

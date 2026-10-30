@@ -9,7 +9,7 @@ fn declaration_initializers_preserve_types_owners_and_complete_pipeline() {
     ];
     let unit = compile_sources(&sources).unwrap();
     let text = unit.to_ir_text();
-    assert!(text.contains(".field-initialized text string"));
+    assert!(text.contains(".field-initialized text any"));
     assert!(text.contains(".field-initialized items number-array"));
     common::application(
         &unit,
@@ -20,15 +20,12 @@ fn declaration_initializers_preserve_types_owners_and_complete_pipeline() {
     );
     common::pipeline(compile_sources(&[sources[1], sources[0]]).unwrap());
     for bad in [
-        text.replace(
-            ".field-initialized text string",
-            ".field-constant text string",
-        ),
+        text.replace(".field-initialized text any", ".field-constant text any"),
         text.replace(
             ".field-initialized items number-array",
             ".field-initialized items string",
         ),
-        text.replace(".field-initialized text string\n", ""),
+        text.replace(".field-initialized text any\n", ""),
         text.lines()
             .filter(|line| !line.starts_with(".assign-self text "))
             .collect::<Vec<_>>()
@@ -62,7 +59,7 @@ fn declarations_share_inference_context_and_initialization_readiness() {
     }
     for source in [
         "class C{var A=1+2;var B=self.A+1;function f(){self.A=4;return self.B;}}",
-        "class C{var A=self.B.length();var B=\"later\";}",
+        "class C{var A=self.B.length();var B as Toybox.Lang.String=\"later\";}",
         "class C{var A as Toybox.Lang.Number=1;var B as Toybox.Lang.Symbol=:key;}",
         "class C{var A as Toybox.Lang.Number or Null=null;var B as Toybox.Lang.String=\"value\";}",
         "class C{var A=true?1:2;var B=true&&false;const X=true?[1]:[2];}",
@@ -72,7 +69,7 @@ fn declarations_share_inference_context_and_initialization_readiness() {
         "class C{var A=[1,2];var B=[3,4]b;var D={\"x\"=>1};}",
         "class C{var A;var B=null;function f(){self.A=1;self.B=\"text\";}}",
         "class C{var A as Toybox.Lang.Method=1.method(:abs);}",
-        "class C{var T=[1];var W as Toybox.Lang.WeakReference=self.T.weak();}",
+        "class C{var T as Toybox.Lang.Array<Toybox.Lang.Number> = [1];var W as Toybox.Lang.WeakReference=self.T.weak();}",
         "class C{var A as Toybox.Lang.Comparable or Null=1;var B as Toybox.Lang.Object=\"value\";}",
         "class C{var A as Toybox.Lang.Number or Toybox.Lang.String=1;var B as Toybox.Lang.Number or Toybox.Lang.String or Null=1;}",
         "class C{var A as Toybox.Lang.Array<Toybox.Lang.String> = [];var B as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Number> = {};}",
@@ -81,8 +78,8 @@ fn declarations_share_inference_context_and_initialization_readiness() {
     }
     for source in [
         "class C{var A as Toybox.Lang.Number=\"bad\";}",
-        "class C{var A=[1];function f(){self.A=[\"wrong\"];}}",
-        "class C{var A=\"x\";function f(){self.A=1;}}",
+        "class C{var A as Toybox.Lang.Array<Toybox.Lang.Number> = [1];function f(){self.A=[\"wrong\"];}}",
+        "class C{var A as Toybox.Lang.String=\"x\";function f(){self.A=1;}}",
         "class C{var A=self.B;var B=self.A;}",
         "class C{var A=self.B;var B=1+2;}",
         "class C{var A as Toybox.Lang.Number;var B=self.A;function initialize(){self.A=1;}}",

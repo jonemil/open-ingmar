@@ -143,7 +143,7 @@ class SymbolStore {
     var explicitNull as Toybox.Lang.Symbol or Null = null;
     var preset as Toybox.Lang.Symbol = :metadataOnly;
     var optionalPreset as Toybox.Lang.Symbol or Null = :optionalMetadata;
-    var selector = :size;
+    var selector as Toybox.Lang.Symbol = :size;
     function initialize(value as Toybox.Lang.Symbol) {self.required=value;}
     function read() as Toybox.Lang.Symbol {return self.required;}
     function replace(value as Toybox.Lang.Symbol) as Void {self.required=value;}

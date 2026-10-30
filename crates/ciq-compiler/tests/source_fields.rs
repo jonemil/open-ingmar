@@ -5,13 +5,13 @@ using Toybox.Lang;
 typedef Pair as [Lang.Number,Lang.String];
 class Token { function value() as Lang.Number {return 41;} }
 class Box {
-    var count = 1;
+    var count as Lang.Number = 1;
     var pair as Pair;
     var token as Token;
     var optional as Token or Null;
     function initialize() {self.pair=[1,"seed"];self.token=new Token();}
 }
-class Other {var count=2;}
+class Other {var count as Lang.Number=2;}
 class Wrong {var count as Lang.String;function initialize(){self.count="wrong";}}
 "#;
 

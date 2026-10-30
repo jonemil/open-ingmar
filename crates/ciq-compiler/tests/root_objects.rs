@@ -112,7 +112,10 @@ fn constructor_identity_scope_and_view_specific_contracts_stay_checked() {
     assert!(parse_function_ir("ciq-ir\n.function initialize receiver=instance\n.base-initialize Lang.Object\n.return-void\n.end\n").is_err());
     let unit = compile_sources(&[APP, OBJECTS]).unwrap();
     let text = unit.to_ir_text();
-    let collision = text.replace(".field-number count 1", ".field-number Object 1");
+    let collision = text.replace(
+        ".field-dynamic-number count 1",
+        ".field-dynamic-number Object 1",
+    );
     assert!(collision != text);
     assert!(parse_unit_ir(&collision).is_err());
     let bad = text.replace("Counter Lang.Object", "Counter WatchUi.View");
