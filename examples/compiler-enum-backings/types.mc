@@ -1,0 +1,1 @@
+typedef FloatChoice as Floats;

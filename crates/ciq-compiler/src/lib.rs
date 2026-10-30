@@ -21,7 +21,7 @@ mod callbacks;
 mod casts;
 mod constants;
 mod enums;
-pub use enums::{EnumDeclaration, EnumInitialization};
+pub use enums::{EnumDeclaration, EnumInitialization, EnumType};
 mod control_flow;
 mod dictionary;
 mod record_flow;
@@ -183,8 +183,8 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayElement {
-    /// A nominal source enum represented by a Lang.Number at runtime.
-    Enum(String),
+    /// A nominal source enum retaining its resolved backing contract.
+    Enum(Box<crate::EnumType>),
     /// A finite recursive contract, unfolded only for the current value operation.
     Recursive(api::Type),
     /// Exact source classes and optional native/Null alternatives. Mutable
@@ -693,8 +693,8 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
-    /// A nominal source enum represented by a Lang.Number at runtime.
-    Enum(String),
+    /// A nominal source enum retaining its resolved backing contract.
+    Enum(Box<crate::EnumType>),
     /// A finite recursive contract, unfolded only for the current value operation.
     Recursive(api::Type),
     /// Structural Symbol-keyed Dictionary; every named field may be absent.
@@ -782,8 +782,8 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
-    /// A nominal source enum represented by a Lang.Number at runtime.
-    Enum(String),
+    /// A nominal source enum retaining its resolved backing contract.
+    Enum(Box<crate::EnumType>),
     /// A finite recursive contract, unfolded only for the current value operation.
     Recursive(api::Type),
     /// Structural Symbol-keyed Dictionary; every named field may be absent.
@@ -1005,8 +1005,8 @@ impl ReturnType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ValueType {
-    /// A nominal source enum represented by a Lang.Number at runtime.
-    Enum(String),
+    /// A nominal source enum retaining its resolved backing contract.
+    Enum(Box<crate::EnumType>),
     /// A finite recursive contract, unfolded only for the current value operation.
     Recursive(api::Type),
     /// A bound Method with a checked fixed argument/result signature.
@@ -1207,7 +1207,7 @@ impl ValueType {
     /// remain unsupported even if the catalogue contains their declarations.
     fn from_api_type(ty: &api::Type) -> Option<Self> {
         if let api::Type::Enum(name) = ty {
-            return Some(Self::Enum(name.clone()));
+            return name.validate().ok().map(|()| Self::Enum(name.clone()));
         }
         if matches!(ty, api::Type::Recursive(_) | api::Type::RecursionRef(_)) {
             return Some(Self::Recursive(ty.clone()));
@@ -1511,11 +1511,11 @@ pub enum Operation {
         field: String,
         value: ValueId,
     },
-    /// Give a Number value the identity of a declared source enum, without
+    /// Give a compatible value the identity of a declared source enum, without
     /// changing its VM representation. Unit validation resolves the declaration.
     EnumValue {
         result: ValueId,
-        name: String,
+        name: Box<crate::EnumType>,
         operand: ValueId,
     },
     /// Define a supported native constant with its declared enum/value contract.
@@ -2885,6 +2885,7 @@ impl Function {
                                 | NativeClass::View
                                 | NativeClass::BehaviorDelegate
                         ) | ValueType::Any
+                            | ValueType::Enum(_)
                             | ValueType::LangObject
                             | ValueType::NullableObject
                             | ValueType::NullableNativeObject(_)
@@ -3077,7 +3078,9 @@ impl Function {
                     (Some(result), vec![left, right])
                 }
                 Operation::Branch { condition, .. } => {
-                    if !matches!(type_of(condition), ValueType::Boolean | ValueType::Any) {
+                    if !matches!(type_of(condition), ValueType::Boolean | ValueType::Any)
+                        && !matches!(type_of(condition), ValueType::Enum(ref ty) if matches!(ty.backing(), Some(api::Type::Named(name)) if name == "Toybox.Lang.Boolean"))
+                    {
                         return Err(fail("branch requires a Boolean value"));
                     }
                     (None, vec![condition])
@@ -3381,12 +3384,14 @@ impl Function {
                     ref name,
                     operand,
                 } => {
-                    enums::validate_name(name).map_err(fail)?;
-                    if !native::accepts(
-                        &api::Type::named("Toybox.Lang.Number"),
-                        &types[&operand].api_type(),
-                    ) {
-                        return Err(fail("enum values require a Number operand"));
+                    name.validate().map_err(fail)?;
+                    let actual = origins
+                        .contract(operand)
+                        .cloned()
+                        .map(|contract| api::Type::SourceValue(Box::new(contract)))
+                        .unwrap_or_else(|| types[&operand].api_type());
+                    if !native::accepts_boundary(name.require_backing().map_err(fail)?, &actual) {
+                        return Err(fail("enum operand does not match its backing contract"));
                     }
                     types.insert(result, ValueType::Enum(name.clone()));
                     (Some(result), vec![operand])
@@ -3723,6 +3728,11 @@ impl Function {
                     index,
                 } => {
                     let element = match type_of(array) {
+                        ValueType::Enum(ref ty) => unions::index_read(
+                            ty.require_backing().map_err(fail)?,
+                            &type_of(index).api_type(),
+                        )
+                        .map_err(|e| fail(&e))?,
                         ValueType::Recursive(ref ty) | ValueType::Union(ref ty) => {
                             let mut results = Vec::new();
                             for part in unions::alternatives(ty) {
@@ -3772,6 +3782,7 @@ impl Function {
                     if !matches!(
                         type_of(array),
                         ValueType::Any
+                            | ValueType::Enum(_)
                             | ValueType::Recursive(_)
                             | ValueType::Union(_)
                             | ValueType::Options(_)
@@ -3790,6 +3801,15 @@ impl Function {
                     value,
                 } => {
                     let element = match type_of(array) {
+                        ValueType::Enum(ref ty) => {
+                            unions::index_write(
+                                ty.require_backing().map_err(fail)?,
+                                &type_of(index).api_type(),
+                                &type_of(value).api_type(),
+                            )
+                            .map_err(|e| fail(&e))?;
+                            api::Type::Any
+                        }
                         ValueType::Recursive(ref ty) | ValueType::Union(ref ty) => {
                             for part in unions::alternatives(ty) {
                                 let (key, value_type) = if matches!(
@@ -3839,6 +3859,7 @@ impl Function {
                     if !matches!(
                         type_of(array),
                         ValueType::Any
+                            | ValueType::Enum(_)
                             | ValueType::Recursive(_)
                             | ValueType::Union(_)
                             | ValueType::Options(_)
@@ -5701,7 +5722,10 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::Structural(shape) => Ok(ValueType::Structural(shape)),
         ReturnType::Callback(signature) => Ok(ValueType::Callback(signature)),
         ReturnType::Union(ty) => ValueType::from_api_type(&ty).ok_or("unsupported union result"),
-        ReturnType::Enum(name) => Ok(ValueType::Enum(name)),
+        ReturnType::Enum(name) => {
+            name.validate()?;
+            Ok(ValueType::Enum(name))
+        }
         ReturnType::Null => Ok(ValueType::Null),
         ReturnType::Any => Ok(ValueType::Any),
         ReturnType::NullableInteger => Ok(ValueType::NullableInteger),

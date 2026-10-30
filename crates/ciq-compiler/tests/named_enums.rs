@@ -23,11 +23,11 @@ fn nominal_values_survive_native_and_saved_ir() {
     let source = "using Toybox.Lang;enum Color{RED,GREEN=5,BLUE}function choose(value as Color) as Color{return value;}function number(value as Color) as Lang.Number{return value;}function text(){return BLUE.toString();}";
     let unit = compile_sources(&[source]).unwrap();
     let text = unit.to_ir_text();
-    assert!(text.contains(".enum $ Color"));
+    assert!(text.contains(".enum $ Color integer"));
     assert!(text.contains(".enum-value "));
-    assert!(text.contains("enum(Color)"));
+    assert!(text.contains("enum(Color=integer)"));
     common::pipeline(unit);
-    assert!(parse_unit_ir(&text.replace(".enum $ Color\n", "")).is_err());
+    assert!(parse_unit_ir(&text.replace(".enum $ Color integer\n", "")).is_err());
 }
 
 #[test]
@@ -43,7 +43,7 @@ fn enum_boundaries_reject_numbers_other_identities_and_mutable_widening() {
         "function take(value as Color){}function f(){var value=RED;value++;take(value);}",
         "function take(values as Lang.Array<Color>){}function f(){take([OTHER]);}",
         "function take(values as Lang.Array<Color>){}function f(){take([1]);}",
-        "function take(values as Lang.Array<Lang.Number>){}function f(){var values as Lang.Array<Color>=[RED];take(values);}",
+        "function take(values as Lang.Array<Lang.Number>){}function make() as Lang.Array<Color>{return [RED];}function f(){take(make());}",
         "function f(){return Color.RED;}",
         "function f(){RED=GREEN;}",
         "function f(){return new Color();}",
@@ -69,20 +69,23 @@ fn enum_boundaries_reject_numbers_other_identities_and_mutable_widening() {
 fn saved_units_require_unique_enum_definitions_in_nested_contracts() {
     for operand in [".float %0 0x3f800000", ".null %0", ".boolean %0 true"] {
         let text = format!(
-            "ciq-ir\n.function bad\n{operand}\n.enum-value %1 Color %0\n.return %1\n.end\n"
+            "ciq-ir\n.function bad\n{operand}\n.enum-value %1 Color=integer %0\n.return %1\n.end\n"
         );
         assert!(ciq_compiler::parse_function_ir(&text).is_err(), "{operand}");
     }
     let text=compile_sources(&["using Toybox.Lang;enum Color{RED}function unused(a as Lang.Array<Color>){}function value() as Color{return RED;}"]).unwrap().to_ir_text();
     for forged in [
-        text.replace(".enum $ Color\n", ""),
-        text.replace(".enum $ Color\n", ".enum $ Color\n.enum $ Color\n"),
-        text.replace(".enum $ Color", ".enum $ bad-name"),
+        text.replace(".enum $ Color integer\n", ""),
         text.replace(
-            "parameter-types=enum(Color)-array",
-            "parameter-types=enum(Missing)-array",
+            ".enum $ Color integer\n",
+            ".enum $ Color integer\n.enum $ Color integer\n",
         ),
-        text.replace("Color %", "Missing %"),
+        text.replace(".enum $ Color integer", ".enum $ bad-name"),
+        text.replace(
+            "parameter-types=enum(Color=integer)-array",
+            "parameter-types=enum(Missing=integer)-array",
+        ),
+        text.replace("Color=integer %", "Missing=integer %"),
     ] {
         assert_ne!(forged, text);
         assert!(parse_unit_ir(&forged).is_err());

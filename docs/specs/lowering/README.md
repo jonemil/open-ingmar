@@ -48,10 +48,11 @@ Structural option records use the Dictionary allocation/fill/finish path:
 `RecordBegin` selects `newd`, and reads/writes use ordinary Dictionary calls.
 Per-key contracts and nullable read types are erased without runtime guards.
 
-Anonymous enum members retain their underlying values. Supported named enum
-identities erase to their underlying Number values. `EnumValue`
+Anonymous enum members retain their underlying values. Named enum identities
+erase to their underlying scalar, container, or object values. `EnumValue`
 emits only its operand; enum type declarations add no VM class, wrapper,
-instruction, or PRG section. Number operators and method calls use their ordinary lowering.
+instruction, or PRG section. Operators and method calls use the ordinary
+lowering selected for the backing contract; Float values remain Floats.
 Class enum member storage uses the class's statics record. `ClassFieldRead`
 loads the source class from globals and selects the member with `getsv`.
 Self/instance reads and allocation-time writes use ordinary field instructions;

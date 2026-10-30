@@ -8,8 +8,8 @@ use crate::{BinaryOp, ComparisonOp, api::Type};
 
 /// Resolve Boolean inversion or integer complement without changing its type.
 fn not_proven_result(operand: &Type) -> Option<Type> {
-    if matches!(operand, Type::Enum(_)) {
-        return not_proven_result(&Type::named("Toybox.Lang.Number"));
+    if let Type::Enum(ty) = operand {
+        return not_proven_result(ty.backing()?);
     }
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
@@ -33,8 +33,8 @@ fn not_proven_result(operand: &Type) -> Option<Type> {
 
 /// Resolve Number/Long complement without widening its width or admitting Null.
 fn complement_proven_result(operand: &Type) -> Option<Type> {
-    if matches!(operand, Type::Enum(_)) {
-        return complement_proven_result(&Type::named("Toybox.Lang.Number"));
+    if let Type::Enum(ty) = operand {
+        return complement_proven_result(ty.backing()?);
     }
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
@@ -58,8 +58,8 @@ fn complement_proven_result(operand: &Type) -> Option<Type> {
 
 /// Resolve unary signs without changing numeric width or admitting Null.
 fn sign_proven_result(operand: &Type) -> Option<Type> {
-    if matches!(operand, Type::Enum(_)) {
-        return sign_proven_result(&Type::named("Toybox.Lang.Number"));
+    if let Type::Enum(ty) = operand {
+        return sign_proven_result(ty.backing()?);
     }
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
@@ -89,8 +89,8 @@ fn numeric(ty: &Type) -> bool {
 
 /// Resolve a numeric step or Char increment, preserving the operand type.
 fn step_proven_result(operand: &Type, increment: bool) -> Option<Type> {
-    if matches!(operand, Type::Enum(_)) {
-        return step_proven_result(&Type::named("Toybox.Lang.Number"), increment);
+    if let Type::Enum(ty) = operand {
+        return step_proven_result(ty.backing()?, increment);
     }
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
@@ -120,17 +120,16 @@ fn step_proven_result(operand: &Type, increment: bool) -> Option<Type> {
 /// Numeric aliases require every concrete pair to be valid; results use an
 /// exact scalar or the narrowest supported numeric alias containing them.
 fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
-    let number = Type::named("Toybox.Lang.Number");
     if matches!(left, Type::Enum(_)) || matches!(right, Type::Enum(_)) {
         return binary_proven_result(
             kind,
-            if matches!(left, Type::Enum(_)) {
-                &number
+            if let Type::Enum(ty) = left {
+                ty.backing()?
             } else {
                 left
             },
-            if matches!(right, Type::Enum(_)) {
-                &number
+            if let Type::Enum(ty) = right {
+                ty.backing()?
             } else {
                 right
             },
@@ -225,17 +224,16 @@ fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Typ
 /// String equality uses object identity with supported String/numeric/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 fn comparison_proven_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
-    let number = Type::named("Toybox.Lang.Number");
     if matches!(left, Type::Enum(_)) || matches!(right, Type::Enum(_)) {
         return comparison_proven_result(
             kind,
-            if matches!(left, Type::Enum(_)) {
-                &number
+            if let Type::Enum(ty) = left {
+                ty.backing()?
             } else {
                 left
             },
-            if matches!(right, Type::Enum(_)) {
-                &number
+            if let Type::Enum(ty) = right {
+                ty.backing()?
             } else {
                 right
             },
@@ -314,6 +312,9 @@ fn string_operand(ty: &Type, boolean: bool) -> bool {
 
 /// Enumerate runtime operand alternatives without losing alias members.
 fn variants(ty: &Type) -> Vec<Type> {
+    if let Type::Enum(ty) = ty {
+        return ty.backing().map_or_else(Vec::new, variants);
+    }
     if let Type::Union(parts) = ty {
         parts.iter().flat_map(variants).collect()
     } else if let Some(parts) = ty.numeric_alternatives() {

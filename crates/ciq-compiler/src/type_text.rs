@@ -263,8 +263,7 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
     if let Some(name) = tag.strip_prefix("enum(").and_then(|s| s.strip_suffix(')')) {
-        crate::enums::validate_name(name)?;
-        return Ok(ReturnType::Enum(name.to_owned()));
+        return Ok(ReturnType::Enum(Box::new(crate::EnumType::parse(name)?)));
     }
     if tag.starts_with("rec(") || tag.starts_with("ref(") {
         crate::structural::split(tag, '\0')?;

@@ -180,6 +180,11 @@ pub(crate) fn validate(ty: &Type) -> Result<(), String> {
             return Err("recursive contract exceeds 64 syntax levels".into());
         }
         match ty {
+            Type::Enum(identity) => {
+                if let Some(backing) = identity.backing() {
+                    visit(backing, &mut Vec::new(), 0, depth + 1)?;
+                }
+            }
             Type::Recursive(body) => {
                 binders.push((guards, false));
                 visit(body, binders, guards, depth + 1)?;

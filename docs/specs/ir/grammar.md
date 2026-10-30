@@ -35,7 +35,7 @@ function-document = "ciq-ir" newline function-header newline
 unit-document = "ciq-unit" newline unit-record+
 unit-record = enum-record | shared-constant-record
             | owner newline function-document | class-record
-enum-record = ".enum" shared-owner identifier newline
+enum-record = ".enum" shared-owner identifier call-result-tag newline
 shared-constant-record = ".shared-constant" shared-owner identifier
                          call-result-tag newline
 shared-owner = "$" | identifier
@@ -60,7 +60,7 @@ spans, and their contracts exclude Void and Graphics.Dc. Each nested function is
 validated before [unit ownership and call
 checks](README.md#compilation-units-and-classes).
 An enum record reuses `shared-owner` syntax, but its identifier may name a
-module or a class: `.enum C Kind` declares the nominal identity `C.Kind`.
+module or a class: `.enum C Kind integer` declares `C.Kind` backed by Number.
 
 ```text
 field-record = field-body newline
@@ -174,7 +174,7 @@ value-operation = ".integer" value-id signed-decimal-i32
                 | ".string" value-id quoted-string
                 | ".symbol" value-id identifier
                 | ".constant" value-id module-name identifier
-                | ".enum-value" value-id qualified-name value-id
+                | ".enum-value" value-id enum-view value-id
 storage-operation = ".read-shared" value-id shared-owner identifier
                     "result=" call-result-tag
                   | ".assign-shared" shared-owner identifier value-id
@@ -370,7 +370,8 @@ numeric-alias-tag = alias-tag | "nullable-" alias-tag
 interface-name-tag = "comparable" | "comparator"
 interface-tag = interface-name-tag | "nullable-" interface-name-tag
 enum-tag = "number-format" | "endian" | source-enum-tag
-source-enum-tag = "enum(" qualified-name ")"
+source-enum-tag = "enum(" enum-view ")"
+enum-view = qualified-name "=" call-result-tag
 qualified-name = identifier
 source-union-tag = "source-union(" source-union-atom ("|" source-union-atom)+ ")"
 source-union-atom = source-tag | native-parameter-tag

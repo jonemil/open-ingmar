@@ -577,8 +577,9 @@ impl Types {
             _ => return,
         };
         if let Some(ty) = ty {
-            let ty = if crate::type_flow::read_place(operation).is_some()
-                || matches!(operation, Operation::LocalTake { .. })
+            let ty = if !matches!(ty, Type::Enum(_))
+                && (crate::type_flow::read_place(operation).is_some()
+                    || matches!(operation, Operation::LocalTake { .. }))
             {
                 self.origins.refined_type(result).unwrap_or(ty)
             } else {

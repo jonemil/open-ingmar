@@ -62,6 +62,9 @@ pub(crate) fn constant(
 /// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
+    if let api::Type::Enum(ty) = receiver {
+        return value_parameters(ty.backing()?, member);
+    }
     if let Some(unfolded) = crate::recursive::unfold(receiver) {
         return value_parameters(&unfolded, member);
     }
@@ -200,6 +203,14 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
+    if let api::Type::Enum(ty) = receiver {
+        return value_call(
+            ty.require_backing().map_err(str::to_owned)?,
+            member,
+            arguments,
+            context,
+        );
+    }
     if let Some(unfolded) = crate::recursive::unfold(receiver) {
         return value_call(&unfolded, member, arguments, context);
     }
@@ -375,7 +386,7 @@ pub(crate) fn value_call(
         }
     }
     let class = match receiver {
-        api::Type::Enum(_) => "Toybox.Lang.Number",
+        api::Type::Enum(_) => unreachable!("enum receiver projected before lookup"),
         api::Type::Options(fields) => {
             crate::records::validate(fields)?;
             "Toybox.Lang.Dictionary"
@@ -658,6 +669,13 @@ fn check_arguments(
 
 /// Check the existing Array sorting profile for one possible element type.
 fn sort_element_supported(element: &api::Type, arguments: &[api::Type]) -> bool {
+    if let api::Type::Enum(ty) = element {
+        return ty.backing().is_some_and(|backing| {
+            crate::unions::alternatives(backing)
+                .iter()
+                .all(|part| sort_element_supported(part, arguments))
+        });
+    }
     match crate::ArrayElement::from_api_type(element) {
         Some(crate::ArrayElement::Null) => false,
         Some(
@@ -721,8 +739,8 @@ fn method_receiver_profile(ty: &api::Type) -> bool {
 /// Their required members must be available by the interface introduction level,
 /// so checking the receiving interface's API level also covers this witness.
 fn scalar_comparable(actual: &api::Type) -> bool {
-    if matches!(actual, api::Type::Enum(_)) {
-        return scalar_comparable(&api::Type::named("Toybox.Lang.Number"));
+    if let api::Type::Enum(ty) = actual {
+        return ty.backing().is_some_and(scalar_comparable);
     }
     let api::Type::Named(class) = actual else {
         return false;
@@ -873,9 +891,11 @@ fn accepts_step(
     if let api::Type::Union(types) = expected {
         return types.iter().any(|ty| accepts(ty, actual));
     }
-    if matches!(actual, api::Type::Enum(_)) {
+    if let api::Type::Enum(ty) = actual {
         return !matches!(expected, api::Type::Enum(_))
-            && accepts(expected, &api::Type::named("Toybox.Lang.Number"));
+            && ty
+                .backing()
+                .is_some_and(|backing| accepts(expected, backing));
     }
     if let (api::Type::Array(expected), api::Type::Array(actual)) = (expected, actual) {
         return crate::tuples::array_elements_match_with(expected, actual, &accepts);

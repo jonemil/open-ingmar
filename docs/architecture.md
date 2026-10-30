@@ -119,8 +119,14 @@ Annotations reuse value-type parsing, source-class resolution, and checked retur
 construction to validate an initializer while retaining its declared contract.
 Enum blocks collect their members into that constant environment. Named enums
 also declare unit-scoped nominal identities; `enums.rs` validates their definitions
-and nested type uses. Supported named enums use Number storage without native
-catalogue entries; anonymous members retain inferred initializer types.
+and nested type uses. `EnumType` retains a nominal name and resolved backing
+contract without a native catalogue entry or runtime wrapper. Anonymous members
+retain inferred initializer types. Named backing discovery accumulates checked
+initializer evidence in bounded passes, refreshing scoped annotations/aliases;
+unresolved references remain collection-only and cannot enter executable IR.
+Normal stored-contract inference and body construction run after stabilization.
+Core type variants box enum descriptors to keep recursive parser and IR stack
+frames compact at the supported source nesting depth.
 The parser numbers them in source order and records default eligibility before
 grouping is erased; inference and initializer scheduling reuse that decision.
 Source initialization separates literal defaults from runtime expression order.

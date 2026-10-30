@@ -170,6 +170,14 @@ fn container_match(expected: &Type, actual: &Type) -> Match {
 /// Classify native value boundaries without conflating unknown/overlapping
 /// types with disjoint types. Exact class witnesses remain unit obligations.
 pub(crate) fn compatibility(expected: &Type, actual: &Type) -> Match {
+    if let Type::Enum(ty) = actual {
+        if !matches!(expected, Type::Enum(_)) {
+            return ty
+                .backing()
+                .map_or(Match::No, |backing| compatibility(expected, backing));
+        }
+    }
+
     if *expected == Type::Void || *actual == Type::Void {
         return if expected == actual {
             Match::Yes

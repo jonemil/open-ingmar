@@ -42,17 +42,17 @@ fn enum_value_types_and_defaults_keep_all_stages() {
 }
 
 #[test]
-fn anonymous_members_keep_types_and_named_non_number_values_remain_rejected() {
+fn anonymous_members_keep_types_and_named_members_keep_backings() {
     for source in [
         "using Toybox.Lang;enum{F=1.5f}function f() as Lang.Number{return F;}",
-        "using Toybox.Lang;enum Kind{F=1.5f}function f() as Lang.Float{return F;}",
-        "using Toybox.Lang;enum Kind{S=\"text\"}function f(){return S.length();}",
         "class C{enum{A=1.5f}function initialize(){self.A=2.5f;}}",
         "class C{enum{A=1.5f}function initialize(){}}function __ciq_initialize_enum_defaults(){}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
     for source in [
+        "using Toybox.Lang;enum Kind{F=1.5f}function f() as Lang.Float{return F;}",
+        "using Toybox.Lang;enum Kind{S=\"text\"}function f(){return S.length();}",
         "using Toybox.Lang;enum{F=1.5f,N}function f() as Lang.Float{return F;}",
         "using Toybox.Lang;enum{S=\"text\"}function f() as Lang.String{return S;}",
         "using Toybox.Lang;enum{N=null}function f(){return N;}",

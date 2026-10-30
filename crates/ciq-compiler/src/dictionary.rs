@@ -180,8 +180,8 @@ pub(crate) fn constant_record(
 /// Supported non-null scalar, Method, and interface Dictionary keys.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictionaryKey {
-    /// A nominal source enum key with Number runtime equality/hash.
-    Enum(String),
+    /// A nominal source enum key using its backing value's equality/hash.
+    Enum(Box<crate::EnumType>),
     Callback(Box<crate::StructuralMethod>),
     /// A non-null source interface key; equality/hash dispatch remain runtime operations.
     Structural(Box<crate::StructuralInterface>),
@@ -231,7 +231,7 @@ impl DictionaryKey {
 pub enum DictionaryValue {
     /// A nominal enum value, optionally permitting stored Null.
     Enum {
-        name: String,
+        name: Box<crate::EnumType>,
         nullable: bool,
     },
     /// A retained nested container or recursive reference contract.

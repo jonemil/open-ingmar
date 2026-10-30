@@ -650,7 +650,7 @@ pub(crate) fn parse_function_ir_context(
                 }
                 Directive::EnumValue => Operation::EnumValue {
                     result: parse_value(&fields[1])?,
-                    name: fields[2].clone(),
+                    name: Box::new(crate::EnumType::parse(&fields[2]).map_err(|e| fail(*at, e))?),
                     operand: parse_value(&fields[3])?,
                 },
                 Directive::Constant => Operation::NativeConstant {

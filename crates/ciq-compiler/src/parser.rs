@@ -591,6 +591,7 @@ pub(crate) struct Declarations<'a> {
     constants: BTreeMap<String, DeclarationText<'a>>,
     enum_groups: BTreeMap<String, usize>,
     enum_types: BTreeMap<String, (usize, usize)>,
+    enum_backings: RefCell<BTreeMap<String, crate::api::Type>>,
     enum_members: BTreeMap<String, String>,
     value_names: BTreeSet<String>,
     constant_values: RefCell<BTreeMap<String, crate::constants::Immediate>>,
@@ -602,6 +603,37 @@ pub(crate) struct Declarations<'a> {
 }
 
 impl Declarations<'_> {
+    pub(crate) fn refresh_aliases(self: &Rc<Self>) -> Result<(), crate::SourceDiagnostic> {
+        for (key, alias) in &self.aliases {
+            let mut parser = Parser::new(alias.source, self.clone());
+            parser.source_index = alias.source_index;
+            parser.owner = alias.owner.clone();
+            parser
+                .alias_parameter(key, alias.name_at)
+                .map_err(|diagnostic| crate::SourceDiagnostic {
+                    source: alias.source_index,
+                    diagnostic,
+                })?;
+        }
+        Ok(())
+    }
+    pub(crate) fn enum_type(&self, name: &str) -> Box<crate::EnumType> {
+        Box::new(crate::EnumType::reference(
+            name,
+            self.enum_backings.borrow().get(name).cloned(),
+        ))
+    }
+    pub(crate) fn set_enum_backings(&self, backings: BTreeMap<String, crate::api::Type>) {
+        *self.enum_backings.borrow_mut() = backings;
+        self.resolved.borrow_mut().clear();
+    }
+    pub(crate) fn enum_backings(&self) -> BTreeMap<String, crate::api::Type> {
+        self.enum_backings.borrow().clone()
+    }
+    pub(crate) fn has_enums(&self) -> bool {
+        !self.enum_types.is_empty()
+    }
+
     pub(crate) fn enum_declarations(&self) -> Vec<crate::EnumDeclaration> {
         self.enum_types
             .keys()
@@ -614,6 +646,12 @@ impl Declarations<'_> {
                 crate::EnumDeclaration {
                     module,
                     name: name.into(),
+                    backing: self
+                        .enum_backings
+                        .borrow()
+                        .get(path)
+                        .expect("resolved enum backing")
+                        .clone(),
                 }
             })
             .collect()
@@ -745,7 +783,7 @@ impl<'a> Parser<'a> {
         name: String,
         span: Span,
         next: &mut i32,
-        enum_type: Option<String>,
+        enum_type: Option<Box<crate::EnumType>>,
     ) -> Result<ParsedConstant, Diagnostic> {
         let (initializer, literal_default) = if self.peek()? == Kind::Punctuation('=') {
             self.token()?;
@@ -827,7 +865,10 @@ impl<'a> Parser<'a> {
                     name.into(),
                     token.span,
                     &mut next,
-                    self.declarations.enum_members.get(&key).cloned(),
+                    self.declarations
+                        .enum_members
+                        .get(&key)
+                        .map(|name| self.declarations.enum_type(name)),
                 )?
             } else {
                 self.constant_tail(name.into(), token.span)?
@@ -1397,7 +1438,10 @@ pub(crate) fn collect_declarations<'a>(
                     name,
                     span,
                     enum_next.entry(*group).or_insert(0),
-                    aliases.enum_members.get(key).cloned(),
+                    aliases
+                        .enum_members
+                        .get(key)
+                        .map(|name| aliases.enum_type(name)),
                 )?
             } else {
                 parser.constant_tail(name, span)?
@@ -2086,6 +2130,7 @@ impl<'a> Parser<'a> {
             };
             if crate::casts::type_tag(&target).is_none()
                 && crate::source_objects::target_contract(&target).is_none()
+                && !crate::enums::has_unresolved(&target)
             {
                 return Err(self.error(at, "unsupported lexical cast target"));
             }
@@ -3653,7 +3698,9 @@ impl Parser<'_> {
                     .then_some(&path)
             })
         {
-            return Ok(crate::ParameterType::Enum(name.clone()));
+            return Ok(crate::ParameterType::Enum(
+                self.declarations.enum_type(name),
+            ));
         }
         if let Some(ty) = self.alias_parameter(&path, at)? {
             return Ok(ty);
@@ -3880,10 +3927,11 @@ pub(crate) struct ParsedUnit {
     pub functions: Vec<(Option<String>, ParsedFunction)>,
     pub classes: Vec<ParsedClass>,
 }
+#[derive(Clone)]
 pub(crate) struct ParsedConstant {
     pub name: String,
     pub annotation: Option<crate::ReturnType>,
-    pub enum_type: Option<String>,
+    pub enum_type: Option<Box<crate::EnumType>>,
     pub enumeration: bool,
     pub initializer: Expression,
     /// Preserve source-dependent default eligibility before enum grouping is lost.

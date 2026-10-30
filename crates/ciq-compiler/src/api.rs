@@ -101,8 +101,8 @@ impl ApiContext {
     pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
         match ty {
             Type::Enum(name) => {
-                crate::enums::validate_name(name).map_err(str::to_owned)?;
-                self.check_class(catalogue, "Toybox.Lang.Number")
+                name.validate().map_err(str::to_owned)?;
+                self.check_type(catalogue, name.require_backing().map_err(str::to_owned)?)
             }
             Type::Recursive(body) => self.check_type(catalogue, body),
             Type::RecursionRef(_) => Ok(()),
@@ -223,8 +223,8 @@ impl ApiContext {
 /// Null and Void are distinct from classes, and unions retain their alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
-    /// A unit-declared nominal enum, compatible with Number but not another enum.
-    Enum(String),
+    /// A unit-declared nominal enum with explicit native backing types.
+    Enum(Box<crate::EnumType>),
     /// A finite recursive contract binding reference zero in its body.
     Recursive(Box<Type>),
     /// Lexically bound reference; zero denotes the nearest recursive binder.
@@ -486,7 +486,7 @@ impl Catalogue {
     pub fn method_for_type(&self, receiver: &Type, member: &str) -> Option<InstantiatedMethod<'_>> {
         let bindings;
         let (class, substitutions): (&str, &[(&str, &Type)]) = match receiver {
-            Type::Enum(_) => ("Toybox.Lang.Number", &[]),
+            Type::Enum(ty) => return self.method_for_type(ty.backing()?, member),
             Type::Named(name) => (name, &[]),
             Type::TupleValue(_) => {
                 bindings = vec![("Element", &Type::Any)];

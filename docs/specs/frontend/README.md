@@ -904,20 +904,37 @@ enum names cannot collide with other declarations in that scope.
 
 Enum annotations retain identity in parameters, results, locals, class fields,
 nullable unions, and generic containers. A Color value satisfies Number or
-Object, but a raw Number or another enum does not satisfy Color. An explicit
-`as Color` assertion changes the lexical view without a runtime check. Mutable
+Object because its members are Numbers, but a raw Number or another enum does
+not satisfy Color. An explicit `as Color` assertion changes the lexical view
+without a runtime check. Mutable
 typed Arrays and Dictionaries retain their existing invariant contracts;
 inferred tuple literals retain their existing tuple-to-Array adaptation rules.
 
-Number methods and numeric operators accept enum values. Arithmetic, negation,
-bitwise operations, and updates produce ordinary Number results; comparisons
-also permit different enums. Unary `+` preserves the original identity. A named
-member initializer is checked as Number and then given the declared enum type;
-this differs from an ordinary `const X as Color=4`, which fails assignability.
-Named enum support currently requires Number-valued initializers. The SDK also
-accepts named enums with other backing types; those contracts are outside this
-profile until their nominal identity and backing-type sets are represented
-together. Anonymous member inference does not erase values to Number.
+Each named enum also retains the union of its member initializer contracts,
+including Number for implicit members. Native operations use those backing
+types without converting the values. A Float-only enum satisfies Float and
+supports Float methods; a String-only enum supports String methods. Raw Floats
+or Strings still cannot satisfy those enum annotations. Native container and
+source-object backings retain their element contracts and exact class identities.
+Indexed access and source/native method dispatch reuse those contracts.
+
+Default gradual checking permits a partial match against backing alternatives:
+`enum Mixed { TEXT="text", REAL=1.5f }` can satisfy a Float return or call
+`length()`. The wrong runtime member can still fail; no guard or conversion is
+inserted. An implicit member adds Number to that set. Number-only enums keep
+ordinary Number behavior; Float arithmetic produces Float results. Operations
+produce their native result contracts rather than an enum identity. Unary `+`
+preserves the original identity. A named member initializer is checked against
+the resolved backing contract and then receives its nominal identity; an ordinary
+`const X as Color=4` still fails assignability. Anonymous members retain their
+inferred contracts without acquiring nominal identities.
+
+Backing resolution uses initializer evidence across all files, refreshing
+dependent annotations until contracts stabilize. Unknown enum references do not
+stand in for Number or Any. Unresolved dependencies, non-finite expansion, and
+contracts exceeding the type-depth/256-pass bounds fail before normal body
+compilation. Initializer evaluation order and pre-assignment Null snapshots
+remain governed by the ordinary owner-initialization rules.
 
 Each block starts an implicit counter at zero. An omitted initializer receives
 the counter and advances it with 32-bit wrapping. A direct integer token,
@@ -965,6 +982,7 @@ See the [anonymous](../../../examples/compiler-anonymous-enums/README.md) and
 [named](../../../examples/compiler-named-enums/README.md) global/module specimens,
 the [class specimen](../../../examples/compiler-class-enums/README.md),
 [non-Number anonymous values](../../../examples/compiler-enum-values/README.md), and
+[named backing types](../../../examples/compiler-enum-backings/README.md), and
 [SDK evidence](../../investigations/core-lang-completion.md#enumerations).
 
 ### Type aliases
@@ -3700,9 +3718,10 @@ contextual construction, lookup, and writes; nullable nested values are allowed.
 
 Object slots accept supported scalar classes, numeric aliases, source/native
 objects, comparison interfaces, and container/Method/WeakReference references.
-Known enum values may widen to Object with their Number runtime representation;
-this does not make them assignable to Number or permit numeric operators on
-nominal enum types. Nullable Object slots additionally accept Null. Mutable
+Native NumberFormat/Endian values may widen to Object with their Number runtime
+representation; this does not make those native enum contracts assignable to
+Number or admit numeric operators. Source enums instead use their declared
+[backing contracts](#enums). Nullable Object slots additionally accept Null. Mutable
 containers are invariant: existing Array/Dictionary references cannot widen
 their parameters to Object, even though individual values can be stored there.
 

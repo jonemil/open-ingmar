@@ -78,6 +78,15 @@ impl Origins {
     /// Record a checked native type without turning its projection into an
     /// exact class witness. Used for native alternatives at mixed boundaries.
     pub(crate) fn note_type(&mut self, value: ValueId, ty: crate::api::Type) {
+        if let crate::api::Type::Enum(identity) = &ty {
+            if let Some(contract) = identity
+                .backing()
+                .and_then(|ty| crate::unions::result(ty.clone()))
+                .and_then(|r| r.source_contract())
+            {
+                self.values.insert(value, contract);
+            }
+        }
         self.native_values.insert(value, ty);
     }
     /// Return a storage read's refined projection, including native-only results

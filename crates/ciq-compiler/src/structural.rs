@@ -444,6 +444,7 @@ pub(crate) fn type_depth(ty: &Type, depth: usize) -> bool {
         return false;
     }
     match ty {
+        Type::Enum(ty) => ty.backing().is_none_or(|ty| type_depth(ty, depth + 1)),
         Type::SourceValue(contract) => contract.native().iter().all(|ty| type_depth(ty, depth + 1)),
         Type::TupleValue(tuple) => tuple.slots.iter().all(|ty| result_depth(ty, depth + 1)),
         Type::Structural(shape) => shape_depth(shape, depth + 1),

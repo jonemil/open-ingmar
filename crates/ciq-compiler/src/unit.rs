@@ -997,9 +997,8 @@ impl CompilationUnit {
                 } = &field.kind
                 {
                     if matches!(initial, crate::EnumInitialization::Number(_))
-                        && !matches!(value_type, ReturnType::Enum(_))
                         && !crate::native::accepts(
-                            &value_type.api_type(),
+                            crate::enums::project(&value_type.api_type()),
                             &crate::api::Type::named("Toybox.Lang.Number"),
                         )
                     {
@@ -1705,6 +1704,17 @@ impl CompilationUnit {
                 })
                 .collect::<BTreeMap<_, _>>();
             for (operation, located) in function.operations().iter().enumerate() {
+                if let Operation::EnumValue { name, operand, .. } = &located.operation {
+                    self.check_api_value_contract(
+                        function,
+                        &origins,
+                        *operand,
+                        name.require_backing()
+                            .map_err(|e| fail(Some(index), Some(operation), e.into()))?,
+                        context,
+                    )
+                    .map_err(|e| fail(Some(index), Some(operation), e))?;
+                }
                 if let Operation::ClassFieldRead {
                     class,
                     field,
@@ -2597,11 +2607,15 @@ impl CompilationUnit {
         expected: &crate::api::Type,
         context: Option<crate::api::ApiContext>,
     ) -> Result<(), String> {
-        let actual = origins
-            .contract(value)
-            .cloned()
-            .map(|c| crate::api::Type::SourceValue(Box::new(c)))
-            .unwrap_or_else(|| function.value_types[&value].api_type());
+        let actual = if matches!(function.value_types[&value], crate::ValueType::Enum(_)) {
+            function.value_types[&value].api_type()
+        } else {
+            origins
+                .contract(value)
+                .cloned()
+                .map(|c| crate::api::Type::SourceValue(Box::new(c)))
+                .unwrap_or_else(|| function.value_types[&value].api_type())
+        };
         if let crate::api::Type::SourceValue(contract) = expected {
             if origins.contract(value).is_some()
                 && !crate::tuples::contains(&function.value_types[&value].api_type())
@@ -3291,9 +3305,12 @@ impl CompilationUnit {
         let mut text = String::from("ciq-unit\n");
         for definition in &self.enums {
             text.push_str(&format!(
-                ".enum {} {}\n",
+                ".enum {} {} {}\n",
                 definition.module.as_deref().unwrap_or("$"),
-                definition.name
+                definition.name,
+                crate::type_text::result_tag(
+                    &crate::unions::result(definition.backing.clone()).expect("validated backing")
+                )
             ));
         }
         for constant in &self.shared {
@@ -3484,163 +3501,39 @@ pub(crate) fn compile_sources_mapped(
     let mut origins = Vec::new();
     let mut class_origins = Vec::new();
     let aliases = parser::collect_declarations(sources)?;
+    let mut attempts = 0;
+    let (mut parsed_sources, mut calls) = loop {
+        aliases.refresh_aliases()?;
+        let (parsed, mut calls) = prepare_sources(sources, &aliases, unchecked)?;
+        if !aliases.has_enums() {
+            break (parsed, calls);
+        }
+        let (backings, error) =
+            infer_stored_constants(sources, &parsed, context, &mut calls, true)?;
+        if backings == aliases.enum_backings() {
+            if let Some(error) = error {
+                return Err(error);
+            }
+            break (parsed, calls);
+        }
+        aliases.set_enum_backings(backings);
+        attempts += 1;
+        if attempts > 256 {
+            return Err(SourceDiagnostic {
+                source: 0,
+                diagnostic: Diagnostic::at(
+                    sources[0],
+                    0,
+                    "enum backing contracts do not reach a finite fixed point",
+                ),
+            });
+        }
+    };
     if let Some(context) = context {
         aliases.validate_api(context)?;
     }
-    let mut parsed_sources = sources
-        .iter()
-        .enumerate()
-        .map(|(source, text)| {
-            parser::declarations(text, aliases.clone(), source)
-                .map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    // Normalize Object's default initializer before collecting signatures, so
-    // source calls and saved IR use the same ordinary method contract.
-    for class in parsed_sources.iter_mut().flat_map(|p| &mut p.classes) {
-        if class.base == ClassBase::LangObject
-            && !class.methods.iter().any(|m| m.name == "initialize")
-        {
-            class.methods.push(parser::ParsedFunction {
-                name: "initialize".into(),
-                parameters: Vec::new(),
-                parameter_types: Vec::new(),
-                result_type: Some(ReturnType::Void),
-                statements: Vec::new(),
-                body_span: class.name_span,
-            });
-        }
-    }
-    // Constructors retain their implicit Void ABI independently of ordinary
-    // unannotated methods, which expose Any to callers.
-    for class in parsed_sources.iter_mut().flat_map(|p| &mut p.classes) {
-        for method in &mut class.methods {
-            if method.name == "initialize" && method.result_type.is_none() {
-                method.result_type = Some(ReturnType::Void);
-            }
-        }
-    }
-    let bases = parsed_sources
-        .iter()
-        .flat_map(|p| p.classes.iter())
-        .map(|class| (class.name.clone(), class.base))
-        .collect::<BTreeMap<_, _>>();
-    aliases.validate_constant_members(&bases)?;
-    for (index, parsed) in parsed_sources.iter_mut().enumerate() {
-        let mut resolve = |reference: &mut crate::SourceClass| -> Result<(), SourceDiagnostic> {
-            reference.base =
-                bases
-                    .get(&reference.name)
-                    .copied()
-                    .ok_or_else(|| SourceDiagnostic {
-                        source: index,
-                        diagnostic: Diagnostic::at(
-                            sources[index],
-                            0,
-                            format!(
-                                "source reference {} must resolve to a declared class",
-                                reference.name
-                            ),
-                        ),
-                    })?;
-            Ok(())
-        };
-        for ast in parsed.functions.iter_mut().map(|(_, ast)| ast).chain(
-            parsed
-                .classes
-                .iter_mut()
-                .flat_map(|class| class.methods.iter_mut()),
-        ) {
-            for parameter in ast.parameter_types.iter_mut().flatten() {
-                crate::structural::resolve_parameter(parameter, &mut resolve)?;
-            }
-            if let Some(result) = &mut ast.result_type {
-                crate::structural::resolve_result(result, &mut resolve)?;
-            }
-        }
-        for field in parsed
-            .classes
-            .iter_mut()
-            .flat_map(|class| class.fields.iter_mut())
-        {
-            let mut result = field.result_type();
-            crate::structural::resolve_result(&mut result, &mut resolve)?;
-            if result != field.result_type() {
-                field.kind = FieldKind::from_result(result).expect("resolved field contract");
-            }
-        }
-        for constant in parsed
-            .shared
-            .iter_mut()
-            .map(|(_, constant)| constant)
-            .chain(
-                parsed
-                    .classes
-                    .iter_mut()
-                    .flat_map(|class| &mut class.constants),
-            )
-        {
-            if let Some(annotation) = &mut constant.annotation {
-                crate::structural::resolve_result(annotation, &mut resolve)?;
-            }
-        }
-    }
-    let mut calls = source_ir::CallContext::new();
-    calls.constants = aliases.immediate_constants();
-    calls.unchecked = unchecked;
-    for parsed in &parsed_sources {
-        for (module, ast) in &parsed.functions {
-            calls.insert(
-                (module.clone().unwrap_or_default(), ast.name.clone()),
-                source_ir::declared_signature(ast),
-            );
-        }
-        for class in &parsed.classes {
-            calls.class_bases.insert(class.name.clone(), class.base);
-            calls.source_fields.insert(
-                class.name.clone(),
-                class
-                    .fields
-                    .iter()
-                    .map(|field| (field.name.clone(), field.result_type()))
-                    .collect(),
-            );
-            for ast in &class.methods {
-                calls.insert(
-                    (class.name.clone(), ast.name.clone()),
-                    source_ir::declared_signature(ast),
-                );
-            }
-        }
-    }
     let mut shared = Vec::new();
-    for parsed in &parsed_sources {
-        for (owner, declaration) in &parsed.shared {
-            if let Some(name) = &declaration.enum_type {
-                calls
-                    .enum_members
-                    .insert((owner.clone(), declaration.name.clone()), name.clone());
-            }
-        }
-    }
-    for parsed in &parsed_sources {
-        for class in &parsed.classes {
-            for declaration in &class.constants {
-                if declaration.enumeration {
-                    calls
-                        .class_enums
-                        .insert((class.name.clone(), declaration.name.clone()));
-                }
-                if let Some(name) = &declaration.enum_type {
-                    calls.enum_members.insert(
-                        (Some(class.name.clone()), declaration.name.clone()),
-                        name.clone(),
-                    );
-                }
-            }
-        }
-    }
-    infer_stored_constants(sources, &parsed_sources, context, &mut calls)?;
+    infer_stored_constants(sources, &parsed_sources, context, &mut calls, false)?;
     for parsed in &parsed_sources {
         for (module, declaration) in &parsed.shared {
             shared.push(SharedConstant {
@@ -3915,6 +3808,166 @@ fn shared_initialization_order(parsed: &[parser::ParsedUnit]) -> Vec<(Option<Str
     order
 }
 
+fn prepare_sources<'a>(
+    sources: &[&'a str],
+    aliases: &std::rc::Rc<parser::Declarations<'a>>,
+    unchecked: bool,
+) -> Result<(Vec<parser::ParsedUnit>, source_ir::CallContext), SourceDiagnostic> {
+    let mut parsed_sources = sources
+        .iter()
+        .enumerate()
+        .map(|(source, text)| {
+            parser::declarations(text, aliases.clone(), source)
+                .map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    // Normalize Object's default initializer before collecting signatures, so
+    // source calls and saved IR use the same ordinary method contract.
+    for class in parsed_sources.iter_mut().flat_map(|p| &mut p.classes) {
+        if class.base == ClassBase::LangObject
+            && !class.methods.iter().any(|m| m.name == "initialize")
+        {
+            class.methods.push(parser::ParsedFunction {
+                name: "initialize".into(),
+                parameters: Vec::new(),
+                parameter_types: Vec::new(),
+                result_type: Some(ReturnType::Void),
+                statements: Vec::new(),
+                body_span: class.name_span,
+            });
+        }
+    }
+    // Constructors retain their implicit Void ABI independently of ordinary
+    // unannotated methods, which expose Any to callers.
+    for class in parsed_sources.iter_mut().flat_map(|p| &mut p.classes) {
+        for method in &mut class.methods {
+            if method.name == "initialize" && method.result_type.is_none() {
+                method.result_type = Some(ReturnType::Void);
+            }
+        }
+    }
+    let bases = parsed_sources
+        .iter()
+        .flat_map(|p| p.classes.iter())
+        .map(|class| (class.name.clone(), class.base))
+        .collect::<BTreeMap<_, _>>();
+    aliases.validate_constant_members(&bases)?;
+    for (index, parsed) in parsed_sources.iter_mut().enumerate() {
+        let mut resolve = |reference: &mut crate::SourceClass| -> Result<(), SourceDiagnostic> {
+            reference.base =
+                bases
+                    .get(&reference.name)
+                    .copied()
+                    .ok_or_else(|| SourceDiagnostic {
+                        source: index,
+                        diagnostic: Diagnostic::at(
+                            sources[index],
+                            0,
+                            format!(
+                                "source reference {} must resolve to a declared class",
+                                reference.name
+                            ),
+                        ),
+                    })?;
+            Ok(())
+        };
+        for ast in parsed.functions.iter_mut().map(|(_, ast)| ast).chain(
+            parsed
+                .classes
+                .iter_mut()
+                .flat_map(|class| class.methods.iter_mut()),
+        ) {
+            for parameter in ast.parameter_types.iter_mut().flatten() {
+                crate::structural::resolve_parameter(parameter, &mut resolve)?;
+            }
+            if let Some(result) = &mut ast.result_type {
+                crate::structural::resolve_result(result, &mut resolve)?;
+            }
+        }
+        for field in parsed
+            .classes
+            .iter_mut()
+            .flat_map(|class| class.fields.iter_mut())
+        {
+            let mut result = field.result_type();
+            crate::structural::resolve_result(&mut result, &mut resolve)?;
+            if result != field.result_type() {
+                field.kind = FieldKind::from_result(result).expect("resolved field contract");
+            }
+        }
+        for constant in parsed
+            .shared
+            .iter_mut()
+            .map(|(_, constant)| constant)
+            .chain(
+                parsed
+                    .classes
+                    .iter_mut()
+                    .flat_map(|class| &mut class.constants),
+            )
+        {
+            if let Some(annotation) = &mut constant.annotation {
+                crate::structural::resolve_result(annotation, &mut resolve)?;
+            }
+        }
+    }
+    let mut calls = source_ir::CallContext::new();
+    calls.constants = aliases.immediate_constants();
+    calls.unchecked = unchecked;
+    for parsed in &parsed_sources {
+        for (module, ast) in &parsed.functions {
+            calls.insert(
+                (module.clone().unwrap_or_default(), ast.name.clone()),
+                source_ir::declared_signature(ast),
+            );
+        }
+        for class in &parsed.classes {
+            calls.class_bases.insert(class.name.clone(), class.base);
+            calls.source_fields.insert(
+                class.name.clone(),
+                class
+                    .fields
+                    .iter()
+                    .map(|field| (field.name.clone(), field.result_type()))
+                    .collect(),
+            );
+            for ast in &class.methods {
+                calls.insert(
+                    (class.name.clone(), ast.name.clone()),
+                    source_ir::declared_signature(ast),
+                );
+            }
+        }
+    }
+    for parsed in &parsed_sources {
+        for (owner, declaration) in &parsed.shared {
+            if let Some(name) = &declaration.enum_type {
+                calls
+                    .enum_members
+                    .insert((owner.clone(), declaration.name.clone()), name.clone());
+            }
+        }
+    }
+    for parsed in &parsed_sources {
+        for class in &parsed.classes {
+            for declaration in &class.constants {
+                if declaration.enumeration {
+                    calls
+                        .class_enums
+                        .insert((class.name.clone(), declaration.name.clone()));
+                }
+                if let Some(name) = &declaration.enum_type {
+                    calls.enum_members.insert(
+                        (Some(class.name.clone()), declaration.name.clone()),
+                        name.clone(),
+                    );
+                }
+            }
+        }
+    }
+    Ok((parsed_sources, calls))
+}
+
 /// Identify same-owner slots still containing their Null DATA default at entry
 /// to this binding's initializer, including the binding being initialized.
 fn uninitialized_shared(
@@ -3946,7 +3999,9 @@ fn infer_stored_constants(
     parsed: &[parser::ParsedUnit],
     context: Option<crate::api::ApiContext>,
     calls: &mut source_ir::CallContext,
-) -> Result<(), SourceDiagnostic> {
+    discover: bool,
+) -> Result<(BTreeMap<String, crate::api::Type>, Option<SourceDiagnostic>), SourceDiagnostic> {
+    let mut backings: BTreeMap<String, crate::api::Type> = BTreeMap::new();
     let mut pending = Vec::new();
     let mut class_names = BTreeMap::new();
     for (source, unit) in parsed.iter().enumerate() {
@@ -4009,28 +4064,64 @@ fn infer_stored_constants(
                     Some(base)
                 }
             };
-            match infer_constant(sources[source], declaration, context, base, &owner_calls) {
-                Ok(value_type) => match owner {
-                    Owner::Class(class) => {
-                        calls
-                            .source_fields
-                            .get_mut(class)
-                            .unwrap()
-                            .insert(declaration.name.clone(), value_type);
+            let mut probe_declaration = declaration.clone();
+            if discover && probe_declaration.enum_type.is_some() {
+                probe_declaration.annotation = None;
+                probe_declaration.enum_type = None;
+            }
+            match infer_constant(
+                sources[source],
+                &probe_declaration,
+                context,
+                base,
+                &owner_calls,
+            ) {
+                Ok(mut value_type) => {
+                    if discover {
+                        if let Some(identity) = &declaration.enum_type {
+                            let backing =
+                                crate::enums::project(&crate::tuples::exact_type(&value_type))
+                                    .clone();
+                            let next = backings.get(identity.name()).map_or_else(
+                                || backing.clone(),
+                                |previous| {
+                                    crate::unions::normalize(vec![
+                                        previous.clone(),
+                                        backing.clone(),
+                                    ])
+                                },
+                            );
+                            backings.insert(identity.name().into(), next);
+                            // Only publish resolved nominal views. Unresolved groups supply
+                            // evidence for the next pass, not executable placeholder types.
+                            if identity.backing().is_none() {
+                                continue;
+                            }
+                            value_type = ReturnType::Enum(identity.clone());
+                        }
                     }
-                    _ => {
-                        let module = match owner {
-                            Owner::Module(module) => Some(module.to_owned()),
-                            _ => None,
-                        };
-                        calls
-                            .shared_pending
-                            .remove(&(module.clone(), declaration.name.clone()));
-                        calls
-                            .shared_fields
-                            .insert((module, declaration.name.clone()), value_type);
+                    match owner {
+                        Owner::Class(class) => {
+                            calls
+                                .source_fields
+                                .get_mut(class)
+                                .unwrap()
+                                .insert(declaration.name.clone(), value_type);
+                        }
+                        _ => {
+                            let module = match owner {
+                                Owner::Module(module) => Some(module.to_owned()),
+                                _ => None,
+                            };
+                            calls
+                                .shared_pending
+                                .remove(&(module.clone(), declaration.name.clone()));
+                            calls
+                                .shared_fields
+                                .insert((module, declaration.name.clone()), value_type);
+                        }
                     }
-                },
+                }
                 Err(diagnostic) => {
                     first_error.get_or_insert(SourceDiagnostic { source, diagnostic });
                     unresolved.push((source, owner, declaration));
@@ -4038,11 +4129,14 @@ fn infer_stored_constants(
             }
         }
         if unresolved.len() == count {
+            if discover {
+                return Ok((backings, first_error));
+            }
             return Err(first_error.unwrap());
         }
         pending = unresolved;
     }
-    Ok(())
+    Ok((backings, None))
 }
 
 /// Check an initializer with ordinary expression IR and return its stored contract.
@@ -4060,7 +4154,7 @@ fn infer_constant(
         parameters: Vec::new(),
         parameter_types: Vec::new(),
         result_type: if declaration.enum_type.is_some() {
-            Some(ReturnType::Integer)
+            None
         } else {
             declaration.annotation.clone()
         },
@@ -4191,9 +4285,13 @@ fn parse_unit_ir_context(
             .collect::<Vec<_>>()
             .as_slice()
         {
-            [".enum", owner, name] => enums.push(crate::EnumDeclaration {
+            [".enum", owner, name, backing] => enums.push(crate::EnumDeclaration {
                 module: (*owner != "$").then(|| (*owner).to_owned()),
                 name: (*name).to_owned(),
+                backing: crate::tuples::exact_type(
+                    &crate::type_text::call_result(backing)
+                        .map_err(|e| Diagnostic::at(text, at, e))?,
+                ),
             }),
             [".shared-constant", owner, name, tag] => {
                 let value_type = crate::type_text::call_result(tag)

@@ -183,6 +183,9 @@ pub(crate) fn printable(ty: &Type) -> bool {
 
 /// Check an index against every possible receiver, joining the read contracts.
 pub(crate) fn index_read(receiver: &Type, key: &Type) -> Result<Type, String> {
+    if let Type::Enum(ty) = receiver {
+        return index_read(ty.require_backing().map_err(str::to_owned)?, key);
+    }
     if let Some(unfolded) = crate::recursive::unfold(receiver) {
         return index_read(&unfolded, key);
     }
@@ -222,6 +225,9 @@ pub(crate) fn index_read(receiver: &Type, key: &Type) -> Result<Type, String> {
 
 /// Check a write against every possible receiver without widening its elements.
 pub(crate) fn index_write(receiver: &Type, key: &Type, value: &Type) -> Result<(), String> {
+    if let Type::Enum(ty) = receiver {
+        return index_write(ty.require_backing().map_err(str::to_owned)?, key, value);
+    }
     if let Some(unfolded) = crate::recursive::unfold(receiver) {
         return index_write(&unfolded, key, value);
     }

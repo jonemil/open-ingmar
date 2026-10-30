@@ -289,16 +289,24 @@ the unit body limit. Explicit calls or known-selector Method bindings to these
 functions are rejected; source identifiers reserve their prefix.
 
 Global/module enum members use these same separate bindings and initializer bodies. Anonymous
-members retain their inferred value contracts. Named enums add `.enum OWNER NAME` declarations
-(`$` for global scope) and `enum(QUALIFIED_NAME)` type tags. These identities
+members retain their inferred value contracts. Named enums add
+`.enum OWNER NAME BACKING` declarations (`$` for global scope) and
+`enum(QUALIFIED_NAME=BACKING)` type tags. BACKING is an ordinary stored value tag,
+such as `integer`, `float`, `string`, or `union(float|string)`. These identities
 must be unique and declared throughout nested signatures, storage, and value
 contracts, including unused declarations. The unit permits at most 256 enum
-types; standalone functions leave declaration resolution to their enclosing unit.
+types; standalone functions retain complete enum views and leave declaration
+resolution to their enclosing unit. Every view must agree with its unit
+definition, including nested/unused contracts and exact backing source classes.
+Unknown, unresolved, mismatched, or excessively deep backing contracts fail.
 
-`EnumValue` / `.enum-value %RESULT QUALIFIED_NAME %OPERAND` gives a
-Number-compatible operand that nominal identity, without runtime conversion.
-Ordinary assignability permits an enum to widen to Number, not the reverse or
-to another enum. The frontend inserts this operation for named member
+`EnumValue` / `.enum-value %RESULT QUALIFIED_NAME=BACKING %OPERAND` gives a
+compatible operand that nominal identity, without runtime conversion. Native
+matching projects backing alternatives while enum destinations retain identity;
+raw backing values and other enum identities do not satisfy them. Default
+gradual native boundaries permit partial backing matches, following the same
+policy as ordinary unions. Source/structural witnesses remain checked separately.
+The frontend inserts this operation for named member
 initializers after checking their underlying value. Implicit numbering and
 source-form default eligibility are resolved before IR construction; saved IR
 retains values, operations, contracts, and order, not an enum block or counter.
@@ -2210,7 +2218,7 @@ its locals require a separate call frame. It is not user `initialize()`.
 declares a readonly shared class enum slot under an ordinary stored value
 contract, excluding Void and Graphics.Dc. `EnumInitialization` selects an i32
 metadata default, `static`, or `null`. A Number default must satisfy the
-anonymous field contract, or belong to a nominal enum. `null` requires exactly
+field's native or enum backing contract. `null` requires exactly
 one write in each allocation initializer invocation. `static` requires exactly
 one write in `__ciq_initialize_enum_defaults`, invoked once as the class statics
 initialization hook; it has an instance-shaped receiver, no parameters, and a

@@ -417,8 +417,16 @@ For `enum Kind { S="text", F=1.5f }`, a Kind parameter can both call `length()`
 and satisfy a Float return under the SDK's default checking policy. This is
 evidence of a partial match against backing types, not proof that every member
 supports those uses. Direct Float/String member reads and an ordinary alias
-retain those native capabilities. The compiler's Number-only named enum model
-does not yet represent this behavior; the plan names the backing-type work.
+retain those native capabilities.
+
+The [named backing specimen](../../examples/compiler-enum-backings/README.md)
+produces the same 19 expected lines with SDK and generated programs under this
+profile. It checks Float arithmetic/results, String methods, mixed partial
+matches, an implicit Number member, Null, module/class-owned enums, typed
+Arrays/Dictionaries, indexed mutation, Boolean conditions, and exact source-object
+method dispatch. The mixed functions receive the matching runtime member; this
+does not establish safe execution for the other alternative. Saved-stage
+generation agrees and SDK/generated PRGs reconstruct with structured CODE/DATA.
 
 The [anonymous value specimen](../../examples/compiler-enum-values/README.md)
 covers scalar, container, Null, and source-object members. Non-Number explicit

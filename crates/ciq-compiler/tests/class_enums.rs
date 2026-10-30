@@ -9,8 +9,8 @@ fn class_enums_preserve_shared_defaults_types_and_allocation_effects() {
     ];
     let unit = compile_sources(&sources).unwrap();
     let text = unit.to_ir_text();
-    assert!(text.contains(".field-enum ON enum(C.Kind) 7"));
-    assert!(text.contains(".field-enum CURRENT enum(C.Kind) null"));
+    assert!(text.contains(".field-enum ON enum(C.Kind=integer) 7"));
+    assert!(text.contains(".field-enum CURRENT enum(C.Kind=integer) null"));
     assert!(text.contains(".read-class "));
     common::application(
         &unit,
@@ -21,14 +21,23 @@ fn class_enums_preserve_shared_defaults_types_and_allocation_effects() {
     );
     common::pipeline(compile_sources(&[sources[1], sources[0]]).unwrap());
     for forged in [
-        text.replace(".field-enum ON enum(C.Kind) 7", ".field-enum ON integer 7"),
-        text.replace(".field-enum ON enum(C.Kind) 7", ".field-enum ON string 7"),
-        text.replace(".enum C Kind\n", ""),
-        text.replace("C ON result=enum(C.Kind)", "C ON result=integer"),
-        text.replace("C ON result=enum(C.Kind)", "C missing result=enum(C.Kind)"),
         text.replace(
-            ".field-enum ON enum(C.Kind) 7",
-            ".field-value ON enum(C.Kind)",
+            ".field-enum ON enum(C.Kind=integer) 7",
+            ".field-enum ON integer 7",
+        ),
+        text.replace(
+            ".field-enum ON enum(C.Kind=integer) 7",
+            ".field-enum ON string 7",
+        ),
+        text.replace(".enum C Kind integer\n", ""),
+        text.replace("C ON result=enum(C.Kind=integer)", "C ON result=integer"),
+        text.replace(
+            "C ON result=enum(C.Kind=integer)",
+            "C missing result=enum(C.Kind=integer)",
+        ),
+        text.replace(
+            ".field-enum ON enum(C.Kind=integer) 7",
+            ".field-value ON enum(C.Kind=integer)",
         ),
     ] {
         assert_ne!(forged, text);

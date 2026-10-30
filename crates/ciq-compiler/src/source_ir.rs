@@ -3929,7 +3929,7 @@ pub(crate) struct CallContext {
     pub(crate) shared_snapshots: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) shared_pending: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) shared_initializer: bool,
-    pub(crate) enum_members: BTreeMap<(Option<String>, String), String>,
+    pub(crate) enum_members: BTreeMap<(Option<String>, String), Box<crate::EnumType>>,
     pub(crate) class_enums: std::collections::BTreeSet<(String, String)>,
     pub(crate) shared_fields: BTreeMap<(Option<String>, String), crate::ReturnType>,
     pub(crate) readonly_fields: std::collections::BTreeSet<String>,

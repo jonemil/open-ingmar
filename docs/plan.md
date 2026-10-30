@@ -36,11 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Derive named enum backing-type sets from member initializers and implicit
-  Number members; retain those sets with nominal identities across annotations,
-  calls, native methods, containers, saved IR, and assignment checks. Enable
-  non-Number named members without erasing their backing types; validate the
-  SDK's partial-match behavior for mixed String/Float enums.
 - [ ] Support global and module `var` fields, typed/untyped defaults, reads, and
   writes; implement initialization order and diagnose initialization cycles.
 - [ ] Support scalar/String/container and computed instance-field declaration

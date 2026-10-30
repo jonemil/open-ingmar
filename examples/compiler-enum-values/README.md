@@ -18,5 +18,5 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-enum-values/generat
 
 SDK reference: 9.2.0, `fr265`, minimum API 5.0.0, `-O 0`, default checking policy.
 Use the [minimal console scaffold](../minimal-console/README.md) with this source
-and minimum API 5.0.0. Named non-Number enums await backing-type support; this specimen covers
-anonymous members.
+and minimum API 5.0.0. This specimen covers anonymous members; see
+[named backing types](../compiler-enum-backings/README.md) for nominal enums.
