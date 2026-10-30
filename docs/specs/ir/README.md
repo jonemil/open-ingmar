@@ -35,7 +35,8 @@ mandatory model validation; it does not replay source-only policy diagnostics.
 ### Semantic model
 
 Value IDs identify computations; local IDs identify stored state; parameters
-identify positions; private builders identify incomplete construction.
+identify positions; private builders identify incomplete construction or a
+captured shared-store owner.
 None selects a VM slot, native symbol/import ID, or section address. Source
 spans carry diagnostic provenance. Immutable validated models are the boundary
 between source checking and VM instruction selection.
@@ -268,8 +269,10 @@ bindings. Text is not mandatory between stages.
 
 ## Compilation units and classes
 
-`SharedConstant` records an optional module owner, a name, and an ordinary field
-value contract. Global ownership is `None` in memory and `$` in saved text.
+`SharedBinding` records an optional module owner, a name, an ordinary field
+value contract, and mutability. `.shared-constant` declares a readonly binding;
+`.shared-variable` permits ordinary stores. Untyped source variables use Any.
+Global ownership is `None` in memory and `$` in saved text.
 `CompilationUnit::with_shared` checks shared declarations with functions and
 classes. Declaration types retain exact source identities and API requirements;
 Void and Graphics.Dc are excluded. Shared slots start as Null in DATA, but source
@@ -312,8 +315,8 @@ source-form default eligibility are resolved before IR construction; saved IR
 retains values, operations, contracts, and order, not an enum block or counter.
 
 `SharedRead` / `.read-shared` retains the owner, field, and checked result view.
-An annotated source constant stores its checked declaration type in the existing
-shared/readonly-field contract. Declaration-list boundaries and typedef spellings
+An annotated source binding stores its checked declaration type in the existing
+shared-field contract. Declaration-list boundaries and typedef spellings
 are source syntax; saved IR retains separate bindings and resolved types. An
 omitted initializer becomes an ordinary Null value and write.
 Ordinary reads use the exact declared contract. In a reserved shared initializer,
@@ -338,6 +341,17 @@ They permit checked same-owner Null snapshots and reject owner re-entry;
 shutdown effects from module initialization also reach class initialization
 checks. Unknown callbacks retain conservative restrictions. Standalone function
 IR leaves these owner/declaration obligations for unit validation.
+
+`SharedBegin` / `.begin-shared &id OWNER FIELD` activates and captures the
+declared mutable slot's owner before RHS effects. `SharedWrite` /
+`.write-shared &id %value` stores a contract-checked value and releases the
+capture. Neither produces a value. They use the private builder namespace and
+must pair exactly once on every continuing control-flow path; an active capture
+cannot escape a returning path, be restarted, or complete as a container/source
+builder. Unit validation checks target mutability, value/source/enum contracts,
+and initialization readiness, including lazy activation effects. Readonly slots
+reject captures. `.assign-shared` remains restricted to reserved initialization,
+even for mutable bindings.
 
 `ClassDeclaration` records a name, native `ClassBase`, ordered fields, and
 ordered methods. Bases are identities rather than VM import indexes.
@@ -1329,8 +1343,8 @@ Dictionary.
 
 ### Private container checks
 
-Container and source-allocation builders share one identity namespace and
-lifetime checker. See [source construction](#source-construction-and-native-constants)
+Container, source-allocation, and shared-store builders share one identity
+namespace and lifetime checker. See [source construction](#source-construction-and-native-constants)
 for allocation/completion operands.
 Begin declarations are unique within a function; operations cannot substitute
 one builder kind for the other. Every CFG join requires identical active-builder

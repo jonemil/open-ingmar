@@ -64,7 +64,7 @@ pub use ir_text::{parse_function_ir, parse_function_ir_with_api};
 pub use joins::JoinType;
 pub use unit::{
     ClassBase, ClassDeclaration, CompilationUnit, FieldKind, FunctionDeclaration, InstanceField,
-    NumericAlias, ScalarFieldType, SharedConstant, SourceDiagnostic, UnitError, compile_sources,
+    NumericAlias, ScalarFieldType, SharedBinding, SourceDiagnostic, UnitError, compile_sources,
     compile_sources_with_api, parse_unit_ir, parse_unit_ir_with_api,
 };
 
@@ -1481,10 +1481,22 @@ pub enum Operation {
         result_type: ReturnType,
     },
     /// Initialize a shared binding in its reserved owner's initializer frame.
-    /// Unit validation rejects ordinary rebinding and checks the stored value.
+    /// Unit validation restricts this operation to initialization and checks its value.
     SharedAssign {
         module: Option<String>,
         field: String,
+        value: ValueId,
+    },
+    /// Capture and activate a mutable shared binding's owner before RHS effects.
+    /// The private builder must complete with exactly one SharedWrite.
+    SharedBegin {
+        builder: BuilderId,
+        module: Option<String>,
+        field: String,
+    },
+    /// Store into the captured shared binding and release its private owner slot.
+    SharedWrite {
+        builder: BuilderId,
         value: ValueId,
     },
     /// Read the actual current-instance field under a checked result contract.
@@ -1993,6 +2005,8 @@ impl Operation {
             | Self::LocalAssign { .. }
             | Self::Return { .. }
             | Self::ReturnVoid
+            | Self::SharedBegin { .. }
+            | Self::SharedWrite { .. }
             | Self::SourceBegin { .. } => None,
         }
     }
@@ -2722,7 +2736,9 @@ impl Function {
                     }
                     (None, vec![])
                 }
-                Operation::DictionaryBegin { .. } | Operation::ArrayBegin { .. } => (None, vec![]),
+                Operation::SharedBegin { .. }
+                | Operation::DictionaryBegin { .. }
+                | Operation::ArrayBegin { .. } => (None, vec![]),
                 Operation::DictionaryFill {
                     builder,
                     ref entries,
@@ -3215,6 +3231,7 @@ impl Function {
                     types.insert(result, call_result_type(result_type.clone()).map_err(fail)?);
                     (Some(result), vec![])
                 }
+                Operation::SharedWrite { value, .. } => (None, vec![value]),
                 Operation::SharedAssign {
                     ref module,
                     ref field,
@@ -4574,6 +4591,7 @@ impl Function {
                     | Operation::TupleWrite { .. }
                     | Operation::TupleAppend { .. }
                     | Operation::SourceBegin { .. }
+                    | Operation::SharedBegin { .. }
                     | Operation::SourceNew { .. }
                     | Operation::NativeCallStatement { .. }
                     | Operation::NativeCall { .. }
@@ -4596,6 +4614,7 @@ impl Function {
                     | Operation::ClassFieldRead { .. }
                     | Operation::SharedRead { .. }
                     | Operation::SharedAssign { .. }
+                    | Operation::SharedWrite { .. }
                     | Operation::SelfFieldAssign { .. }
                     | Operation::NativeBaseInitialize { .. }
             )
@@ -4625,6 +4644,7 @@ impl Function {
                     Operation::LocalVariable { value: None, .. }
                     | Operation::LocalDeclare { .. }
                     | Operation::SourceBegin { .. }
+                    | Operation::SharedBegin { .. }
                     | Operation::DictionaryBegin { .. }
                     | Operation::RecordBegin { .. }
                     | Operation::ArrayBegin { .. }
@@ -4644,6 +4664,7 @@ impl Function {
                     | Operation::ParameterAssign { value, .. }
                     | Operation::SelfFieldAssign { value, .. }
                     | Operation::SharedAssign { value, .. }
+                    | Operation::SharedWrite { value, .. }
                     | Operation::Return { value }
                     | Operation::Println { value }
                     | Operation::Discard { value } => vec![*value],
@@ -5029,6 +5050,18 @@ impl Function {
                     module.as_deref().unwrap_or("$"),
                     crate::type_text::result_tag(result_type)
                 ),
+                Operation::SharedBegin {
+                    builder,
+                    ref module,
+                    ref field,
+                } => format!(
+                    ".begin-shared &{} {} {field}",
+                    builder.0,
+                    module.as_deref().unwrap_or("$")
+                ),
+                Operation::SharedWrite { builder, value } => {
+                    format!(".write-shared &{} %{}", builder.0, value.0)
+                }
                 Operation::ClassFieldRead {
                     result,
                     ref class,

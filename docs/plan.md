@@ -36,8 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Support global and module `var` fields, typed/untyped defaults, reads, and
-  writes; implement initialization order and diagnose initialization cycles.
 - [ ] Support scalar/String/container and computed instance-field declaration
   initializers for typed and inferred fields; infer declaration types beyond
   Number/Symbol defaults and preserve per-instance evaluation order.

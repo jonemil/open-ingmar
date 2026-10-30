@@ -355,7 +355,7 @@ pub fn build_console_application(
                 .iter()
                 .flat_map(|c| c.methods.iter().map(|f| f.name().to_owned())),
         )
-        .chain(unit.shared_constants().iter().map(|c| c.name.clone()))
+        .chain(unit.shared_bindings().iter().map(|c| c.name.clone()))
         .chain(modules.iter().cloned())
         .chain(unit.classes().iter().map(|class| class.name.clone()))
         .chain(
@@ -449,7 +449,7 @@ pub fn build_console_application(
             bindings.insert(format!("__ciq_field_{}", field.name), ids[&field.name]);
         }
     }
-    for constant in unit.shared_constants() {
+    for constant in unit.shared_bindings() {
         bindings.insert(
             format!("__ciq_field_{}", constant.name),
             ids[&constant.name],
@@ -547,14 +547,14 @@ pub fn build_console_application(
         )
     };
     let shared_owners = unit
-        .shared_constants()
+        .shared_bindings()
         .iter()
         .map(|c| c.module.as_deref())
         .collect::<BTreeSet<_>>();
     for module in &shared_owners {
         items.push(Item::Label(shared_hook(*module)));
         for constant in unit
-            .shared_constants()
+            .shared_bindings()
             .iter()
             .filter(|c| c.module.as_deref() == *module)
         {
@@ -598,11 +598,7 @@ pub fn build_console_application(
             },
         ),
     ];
-    for constant in unit
-        .shared_constants()
-        .iter()
-        .filter(|c| c.module.is_none())
-    {
+    for constant in unit.shared_bindings().iter().filter(|c| c.module.is_none()) {
         global_fields.push(field(ids[&constant.name], 0, 0, Reference::Raw(0)));
     }
     for d in unit.declarations().iter().filter(|d| d.module.is_none()) {
@@ -787,7 +783,7 @@ pub fn build_console_application(
         };
         let mut fields = vec![method(INIT, 0x30, &hook)];
         for constant in unit
-            .shared_constants()
+            .shared_bindings()
             .iter()
             .filter(|c| c.module.as_ref() == Some(module))
         {

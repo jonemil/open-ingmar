@@ -33,10 +33,12 @@ document = function-document | unit-document
 function-document = "ciq-ir" newline function-header newline
                     operation+ ".end" newline
 unit-document = "ciq-unit" newline unit-record+
-unit-record = enum-record | shared-constant-record
+unit-record = enum-record | shared-constant-record | shared-variable-record
             | owner newline function-document | class-record
 enum-record = ".enum" shared-owner identifier call-result-tag newline
 shared-constant-record = ".shared-constant" shared-owner identifier
+                         call-result-tag newline
+shared-variable-record = ".shared-variable" shared-owner identifier
                          call-result-tag newline
 shared-owner = "$" | identifier
 owner = ".owner" "global" | ".owner" "module" identifier
@@ -178,6 +180,8 @@ value-operation = ".integer" value-id signed-decimal-i32
 storage-operation = ".read-shared" value-id shared-owner identifier
                     "result=" call-result-tag
                   | ".assign-shared" shared-owner identifier value-id
+                  | ".begin-shared" builder-id shared-owner identifier
+                  | ".write-shared" builder-id value-id
                   | ".read-class" value-id identifier identifier
                     "result=" call-result-tag
                   | ".parameter" value-id decimal-usize

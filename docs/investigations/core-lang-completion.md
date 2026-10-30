@@ -6,6 +6,30 @@ is the runtime reference environment; individual probes below distinguish
 compiler acceptance from simulator observations.
 The [prioritized checklist][inventory] owns remaining work.
 
+## Shared variables
+
+Experimentally observed, 2026-10-30: SDK 9.2.0, `fr265`, `-O 0`, default
+checking, minimum API 5.0.0. The
+[two-file specimen](../../examples/compiler-shared-variables/README.md) runs with
+the same [console output](../../examples/compiler-shared-variables/expected.txt)
+from SDK and generated PRGs. It covers untyped Number-to-String rebinding,
+Null defaults, typed scalar/container stores, module/self writes, compounds,
+updates, local/parameter shadowing, and reopened modules.
+
+Module initializer markers `20` and `50` precede write-RHS markers `30` and `60`,
+respectively, including the conditional RHS. This establishes activation before
+RHS evaluation. The global initializer's print is absent from the captured
+console; the subsequent read returns its initialized value, 10. Do not infer
+startup print ordering from that capture.
+
+A separate SDK build rejects `var TYPED as Lang.Number;` with “may not be
+initialized but does not accept Null”; `Lang.Number or Null` compiles and reads
+Null. Untyped `var GLOBAL=1;` permits later `GLOBAL="global";` and a String
+method call. Reproduce these declarations in the minimal console scaffold and
+compile with the same settings. These probes distinguish mutable dynamic slots
+from inferred readonly bindings; the [frontend contract](../specs/frontend/README.md#shared-variables)
+owns the supported rules.
+
 ## Type-checking policies
 
 Experimentally observed, 2026-10-25, SDK 9.2.0, `fr265`: functions with untyped

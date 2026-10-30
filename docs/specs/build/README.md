@@ -173,6 +173,8 @@ Generated lifecycle behavior:
   and owner hooks that follow the unit's checked initialization order. Source
   compilation places literal defaults before runtime expressions. Globals
   initialize during startup; user modules initialize lazily on first access.
+  Mutable variables and readonly const/enum bindings use the same slot layout;
+  mutability is checked before generation, without a new DATA flag.
 - A leading empty bootstrap body occupies CODE offset zero before lifecycle and
   user code.
 

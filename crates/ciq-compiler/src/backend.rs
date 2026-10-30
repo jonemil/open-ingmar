@@ -65,6 +65,14 @@ pub(crate) fn lower_owned<'a>(
     let mut literals = Vec::new();
     let mut slots = BTreeMap::new();
     let mut builders = BTreeMap::new();
+    let shared_fields = function
+        .operations()
+        .iter()
+        .filter_map(|o| match &o.operation {
+            Operation::SharedBegin { builder, field, .. } => Some((*builder, field)),
+            _ => None,
+        })
+        .collect::<BTreeMap<_, _>>();
     for located in function.operations() {
         if let Operation::String { value, .. } = &located.operation {
             if !literal_aliases.contains_key(&LiteralKey::String(value.clone())) {
@@ -206,7 +214,8 @@ pub(crate) fn lower_owned<'a>(
                     (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
                 );
             }
-            Operation::SourceBegin { builder, .. }
+            Operation::SharedBegin { builder, .. }
+            | Operation::SourceBegin { builder, .. }
             | Operation::DictionaryBegin { builder, .. }
             | Operation::RecordBegin { builder, .. }
             | Operation::ArrayBegin { builder, .. }
@@ -251,6 +260,56 @@ pub(crate) fn lower_owned<'a>(
     }
     for located in function.operations() {
         match located.operation {
+            Operation::SharedBegin {
+                builder,
+                ref module,
+                ..
+            } => {
+                if owner == Some(module.as_deref()) {
+                    items.push(instruction(Opcode::Getself, vec![]));
+                } else {
+                    items.push(instruction(
+                        Opcode::Spush,
+                        vec![Operand::Symbol(module.as_ref().map_or_else(
+                            || "__ciq_source_globals".into(),
+                            |m| format!("__ciq_module_{m}"),
+                        ))],
+                    ));
+                    items.push(instruction(Opcode::Getm, vec![]));
+                }
+                items.push(instruction(
+                    Opcode::Lputv,
+                    vec![Operand::Bits(builders[&builder])],
+                ));
+                continue;
+            }
+            Operation::SharedWrite { builder, value } => {
+                let field = shared_fields[&builder];
+                items.push(instruction(
+                    Opcode::Lgetv,
+                    vec![Operand::Bits(builders[&builder])],
+                ));
+                items.push(instruction(
+                    Opcode::Spush,
+                    vec![Operand::Symbol(format!("__ciq_field_{field}"))],
+                ));
+                expression(
+                    value,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &function.value_types,
+                    &literal_aliases,
+                    &mut items,
+                );
+                items.push(instruction(Opcode::Putv, vec![]));
+                items.push(instruction(Opcode::Npush, vec![]));
+                items.push(instruction(
+                    Opcode::Lputv,
+                    vec![Operand::Bits(builders[&builder])],
+                ));
+                continue;
+            }
             Operation::SourceBegin {
                 builder, ref class, ..
             } => {

@@ -405,7 +405,7 @@ A shared read uses `getselfv` in its declared owner and `getmv` from another
 owner. Module lookup triggers lazy initialization; same-owner reads avoid
 reactivating an initializing module. Global source-class lookup during
 construction and `instanceof` likewise uses the current global receiver.
-Shared writes use `getself; spush <field>; <value>; putv` in the checked
+Initialization writes use `getself; spush <field>; <value>; putv` in the checked
 initializer frame. They reuse existing VM operations and field-symbol aliases.
 Pre-assignment Null snapshots retain the same lookup instructions; their checked
 IR result view does not replace the read with a literal or change VM encoding.
@@ -419,6 +419,14 @@ Owner allocation hooks invoke reserved shared initializer methods with
 `getselfv; invokemz; popv` in the unit's initialization order, then return. Each initializer
 has an ordinary call frame for temporary storage. Shared slots and these method
 records are materialized by application generation, without an SDK template.
+
+Ordinary mutable stores capture their owner at `.begin-shared`: `getself` for
+the current owner, otherwise `spush <owner>; getm`, then `lputv` into a private
+frame slot. This activates a lazy module before RHS evaluation. `.write-shared`
+loads that capture with `lgetv`, pushes the field symbol and checked RHS value,
+and uses `putv`. It clears the private frame slot with `npush; lputv` afterward.
+RHS control flow retains the captured owner across branches. Binding mutability
+is an IR/unit rule; these stores introduce no VM opcode or DATA record kind.
 
 The frontend selects literal-default initialization before runtime expressions.
 This uses the same checked writes and ordinary frames as other initialization;

@@ -239,7 +239,7 @@ pub(crate) fn validate_unit(unit: &crate::CompilationUnit) -> Result<(), crate::
             .map_err(|e| fail(None, None, e.into()))?;
         check(&definition.backing, &names, unit.classes()).map_err(|e| fail(None, None, e))?;
     }
-    for constant in unit.shared_constants() {
+    for constant in unit.shared_bindings() {
         check(&constant.value_type.api_type(), &names, unit.classes())
             .map_err(|e| fail(None, None, e))?;
     }

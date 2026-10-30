@@ -89,6 +89,10 @@ fn activation_callees<'a>(
             module: Some(module),
             ..
         }
+        | Operation::SharedBegin {
+            module: Some(module),
+            ..
+        }
         | Operation::ModuleCall { module, .. }
         | Operation::ModuleCallStatement { module, .. } => Some(module.as_str()),
         _ => None,
@@ -845,20 +849,22 @@ impl SharedReads {
     }
 }
 
-/// A readonly slot shared by all accesses to a global or module declaration.
+/// A slot shared by all accesses to a global or module declaration.
 /// The matching reserved function initializes the binding once at owner startup.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SharedConstant {
+pub struct SharedBinding {
     /// None selects globals; Some selects a source module.
     pub module: Option<String>,
     /// Identifier within the owner; it must not collide with another value.
     pub name: String,
-    /// Stored field contract, excluding Void and Graphics.Dc. Referenced contents
-    /// may mutate while the binding remains readonly.
+    /// Stored field contract, excluding Void and Graphics.Dc. Untyped variables
+    /// use Any; mutability is independent of the referenced contents.
     pub value_type: ReturnType,
+    /// Permit ordinary stores after owner initialization; false for const/enums.
+    pub mutable: bool,
 }
-impl SharedConstant {
-    /// Return the reserved ordinary function invoked by the owner's allocation hook.
+impl SharedBinding {
+    /// Return the reserved ordinary function invoked by the owner's initialization hook.
     pub fn initializer(&self) -> String {
         format!("__ciq_initialize_shared_{}", self.name)
     }
@@ -875,7 +881,7 @@ impl SharedConstant {
 pub struct CompilationUnit {
     declarations: Vec<FunctionDeclaration>,
     classes: Vec<ClassDeclaration>,
-    shared: Vec<SharedConstant>,
+    shared: Vec<SharedBinding>,
     enums: Vec<crate::EnumDeclaration>,
 }
 
@@ -962,13 +968,13 @@ impl CompilationUnit {
         Self::with_shared(declarations, classes, Vec::new())
     }
 
-    /// Validate shared constants with their owner initializer functions, classes,
+    /// Validate shared bindings with their owner initializer functions, classes,
     /// and ordinary declarations. Types, readonly writes, and initialization
     /// dependencies must agree in native construction and saved IR.
     pub fn with_shared(
         declarations: Vec<FunctionDeclaration>,
         classes: Vec<ClassDeclaration>,
-        shared: Vec<SharedConstant>,
+        shared: Vec<SharedBinding>,
     ) -> Result<Self, UnitError> {
         Self::with_enums(declarations, classes, shared, Vec::new())
     }
@@ -978,7 +984,7 @@ impl CompilationUnit {
     pub fn with_enums(
         declarations: Vec<FunctionDeclaration>,
         mut classes: Vec<ClassDeclaration>,
-        mut shared: Vec<SharedConstant>,
+        mut shared: Vec<SharedBinding>,
         enums: Vec<crate::EnumDeclaration>,
     ) -> Result<Self, UnitError> {
         for constant in &mut shared {
@@ -986,7 +992,7 @@ impl CompilationUnit {
                 .ok_or_else(|| UnitError {
                     declaration: None,
                     operation: None,
-                    message: "unsupported shared constant contract".into(),
+                    message: "unsupported shared binding contract".into(),
                 })?;
         }
         for class in &mut classes {
@@ -2787,7 +2793,7 @@ impl CompilationUnit {
         Ok(())
     }
 
-    /// Check readonly shared slots, reserved initialization bodies, and the
+    /// Check shared slot contracts, reserved initialization bodies, and the
     /// readiness of fields reached through source calls or lazy module startup.
     fn validate_shared(
         &self,
@@ -2806,7 +2812,10 @@ impl CompilationUnit {
                     || function.operations().iter().any(|op| {
                         matches!(
                             op.operation,
-                            Operation::SharedRead { .. } | Operation::SharedAssign { .. }
+                            Operation::SharedRead { .. }
+                                | Operation::SharedAssign { .. }
+                                | Operation::SharedBegin { .. }
+                                | Operation::SharedWrite { .. }
                         )
                     })
                 {
@@ -2822,7 +2831,7 @@ impl CompilationUnit {
         let mut fields = BTreeMap::new();
         let mut initializers = BTreeMap::new();
         if self.shared.len() > 256 {
-            return Err(fail(None, None, "unit exceeds 256 shared constants"));
+            return Err(fail(None, None, "unit exceeds 256 shared bindings"));
         }
         for constant in &self.shared {
             crate::validate_call_names(None, &constant.name)
@@ -2837,7 +2846,7 @@ impl CompilationUnit {
                 return Err(fail(
                     None,
                     None,
-                    "unsupported or noncanonical shared constant contract",
+                    "unsupported or noncanonical shared binding contract",
                 ));
             }
             if let Some(context) = context {
@@ -2871,7 +2880,7 @@ impl CompilationUnit {
                     .iter()
                     .any(|(o, f)| *o == owner && f.name() == constant.name)
             {
-                return Err(fail(None, None, "duplicate or conflicting shared constant"));
+                return Err(fail(None, None, "duplicate or conflicting shared binding"));
             }
             if constant.module.is_none()
                 && (self.classes.iter().any(|c| c.name == constant.name)
@@ -2883,7 +2892,7 @@ impl CompilationUnit {
                 return Err(fail(
                     None,
                     None,
-                    "shared constant conflicts with a class or module",
+                    "shared binding conflicts with a class or module",
                 ));
             }
             let initializer = constant.initializer();
@@ -2895,7 +2904,7 @@ impl CompilationUnit {
                 return Err(fail(
                     None,
                     None,
-                    "shared constant requires its reserved initializer",
+                    "shared binding requires its reserved initializer",
                 ));
             };
             if function.is_instance_method()
@@ -2947,6 +2956,12 @@ impl CompilationUnit {
                     });
                 }
                 for op in function.operations() {
+                    if let Operation::SharedBegin { module, field, .. } = &op.operation {
+                        summary.fields.insert((module.clone(), field.clone()));
+                        if module.as_deref().map_or(Owner::Global, Owner::Module) != *owner {
+                            summary.owners.insert(module.clone());
+                        }
+                    }
                     if let Operation::SharedRead {
                         module,
                         field,
@@ -3000,6 +3015,12 @@ impl CompilationUnit {
                             && !state.unwritten)
                 };
                 let mut required = SharedReads::default();
+                if let Operation::SharedBegin { module, field, .. } = &op.operation {
+                    required.fields.insert((module.clone(), field.clone()));
+                    if module.as_deref().map_or(Owner::Global, Owner::Module) != owner {
+                        required.owners.insert(module.clone());
+                    }
+                }
                 if let Operation::SharedRead {
                     module,
                     field,
@@ -3111,8 +3132,52 @@ impl CompilationUnit {
             }
             let origins =
                 crate::source_objects::Origins::for_function(function).expect("checked function");
+            let stores = function
+                .operations()
+                .iter()
+                .filter_map(|o| match &o.operation {
+                    Operation::SharedBegin {
+                        builder,
+                        module,
+                        field,
+                    } => Some((*builder, (module, field))),
+                    _ => None,
+                })
+                .collect::<BTreeMap<_, _>>();
             for (operation, op) in function.operations().iter().enumerate() {
                 match &op.operation {
+                    Operation::SharedBegin { module, field, .. } => {
+                        let target = module.as_deref().map_or(Owner::Global, Owner::Module);
+                        if !fields
+                            .get(&(target, field.as_str()))
+                            .is_some_and(|binding| binding.mutable)
+                        {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                "shared stores require a declared mutable binding",
+                            ));
+                        }
+                    }
+                    Operation::SharedWrite { builder, value } => {
+                        let (module, field) = stores[builder];
+                        let target = module.as_deref().map_or(Owner::Global, Owner::Module);
+                        let binding = fields.get(&(target, field.as_str())).ok_or_else(|| {
+                            fail(
+                                Some(index),
+                                Some(operation),
+                                "shared write requires a declared binding",
+                            )
+                        })?;
+                        self.check_value_contract(
+                            function,
+                            &origins,
+                            *value,
+                            &binding.value_type,
+                            context,
+                        )
+                        .map_err(|message| fail(Some(index), Some(operation), &message))?;
+                    }
                     Operation::SharedRead {
                         module,
                         field,
@@ -3146,7 +3211,7 @@ impl CompilationUnit {
                             return Err(fail(
                                 Some(index),
                                 Some(operation),
-                                "cannot rebind a shared constant",
+                                "shared assignment requires its reserved initializer",
                             ));
                         }
                         self.check_value_contract(
@@ -3252,7 +3317,7 @@ impl CompilationUnit {
     }
 
     /// Return shared bindings in initialization order within each owner.
-    pub fn shared_constants(&self) -> &[SharedConstant] {
+    pub fn shared_bindings(&self) -> &[SharedBinding] {
         &self.shared
     }
 
@@ -3315,7 +3380,12 @@ impl CompilationUnit {
         }
         for constant in &self.shared {
             text.push_str(&format!(
-                ".shared-constant {} {} {}\n",
+                "{} {} {} {}\n",
+                if constant.mutable {
+                    ".shared-variable"
+                } else {
+                    ".shared-constant"
+                },
                 constant.module.as_deref().unwrap_or("$"),
                 constant.name,
                 crate::type_text::result_tag(&constant.value_type)
@@ -3536,9 +3606,10 @@ pub(crate) fn compile_sources_mapped(
     infer_stored_constants(sources, &parsed_sources, context, &mut calls, false)?;
     for parsed in &parsed_sources {
         for (module, declaration) in &parsed.shared {
-            shared.push(SharedConstant {
+            shared.push(SharedBinding {
                 module: module.clone(),
                 name: declaration.name.clone(),
+                mutable: declaration.mutable,
                 value_type: calls.shared_fields[&(module.clone(), declaration.name.clone())]
                     .clone(),
             });
@@ -3941,6 +4012,11 @@ fn prepare_sources<'a>(
     }
     for parsed in &parsed_sources {
         for (owner, declaration) in &parsed.shared {
+            if declaration.mutable {
+                calls
+                    .shared_mutable
+                    .insert((owner.clone(), declaration.name.clone()));
+            }
             if let Some(name) = &declaration.enum_type {
                 calls
                     .enum_members
@@ -3985,7 +4061,7 @@ fn uninitialized_shared(
 
 /// Preserve each phase's declaration order using default eligibility recorded
 /// by the parser. Enum syntax can distinguish grouped and ungrouped literals.
-fn constant_initialization_order(constants: &[&parser::ParsedConstant]) -> Vec<usize> {
+fn constant_initialization_order(constants: &[&parser::ParsedBinding]) -> Vec<usize> {
     let (defaults, runtime): (Vec<_>, Vec<_>) =
         (0..constants.len()).partition(|index| constants[*index].literal_default);
     defaults.into_iter().chain(runtime).collect()
@@ -4006,6 +4082,15 @@ fn infer_stored_constants(
     let mut class_names = BTreeMap::new();
     for (source, unit) in parsed.iter().enumerate() {
         for (module, declaration) in &unit.shared {
+            if declaration.mutable {
+                let contract = declaration
+                    .annotation
+                    .clone()
+                    .expect("mutable declarations have explicit or dynamic contracts");
+                calls
+                    .shared_fields
+                    .insert((module.clone(), declaration.name.clone()), contract);
+            }
             calls
                 .shared_pending
                 .insert((module.clone(), declaration.name.clone()));
@@ -4144,7 +4229,7 @@ fn infer_stored_constants(
 /// inferred Array literals use mutable element contracts rather than positional slots.
 fn infer_constant(
     source: &str,
-    declaration: &parser::ParsedConstant,
+    declaration: &parser::ParsedBinding,
     context: Option<crate::api::ApiContext>,
     base: Option<ClassBase>,
     calls: &source_ir::CallContext,
@@ -4293,14 +4378,20 @@ fn parse_unit_ir_context(
                         .map_err(|e| Diagnostic::at(text, at, e))?,
                 ),
             }),
-            [".shared-constant", owner, name, tag] => {
+            [
+                kind @ (".shared-constant" | ".shared-variable"),
+                owner,
+                name,
+                tag,
+            ] => {
                 let value_type = crate::type_text::call_result(tag)
                     .ok()
                     .and_then(FieldKind::value_contract)
-                    .ok_or_else(|| Diagnostic::at(text, at, "unsupported shared constant type"))?;
-                shared.push(SharedConstant {
+                    .ok_or_else(|| Diagnostic::at(text, at, "unsupported shared binding type"))?;
+                shared.push(SharedBinding {
                     module: (*owner != "$").then(|| (*owner).to_owned()),
                     name: (*name).to_owned(),
+                    mutable: *kind == ".shared-variable",
                     value_type,
                 });
             }

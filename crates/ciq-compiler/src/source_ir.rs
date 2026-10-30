@@ -2923,6 +2923,9 @@ impl Builder<'_> {
     ) -> Result<(), Diagnostic> {
         use parser::{Expression, ExpressionKind as E};
         let target_span = target.span;
+        if let Some((module, field)) = self.calls.shared_target(&target, locals, &self.parameters) {
+            return self.write_shared(module, field, change(target), span, locals);
+        }
         if let E::MemberRead { receiver, member } = target.kind {
             let receiver = self.snapshot(*receiver, locals)?;
             let E::Temporary(local) = receiver.kind else {
@@ -3052,6 +3055,13 @@ impl Builder<'_> {
             },
             span,
         };
+        if self
+            .calls
+            .shared_target(&target, locals, &self.parameters)
+            .is_some()
+        {
+            return self.place_change(target, span, locals, step);
+        }
         if matches!(target.kind, E::ArrayRead { .. } | E::MemberRead { .. }) {
             return self.place_change(target, span, locals, step);
         }
@@ -3289,7 +3299,7 @@ impl Builder<'_> {
                         .calls
                         .field_expression(target, locals, &self.parameters)
                         .is_some_and(|e| {
-                            matches!(e.kind, parser::ExpressionKind::SharedField { .. })
+                            matches!(e.kind, parser::ExpressionKind::SharedField { ref module, ref field } if !self.calls.shared_mutable.contains(&(module.clone(),field.clone())))
                         })
                 {
                     return Err(Diagnostic::at(
@@ -3316,7 +3326,11 @@ impl Builder<'_> {
                         && self
                             .calls
                             .shared_fields
-                            .contains_key(&(Some(path), member.clone()))
+                            .contains_key(&(Some(path.clone()), member.clone()))
+                        && !self
+                            .calls
+                            .shared_mutable
+                            .contains(&(Some(path), member.clone()))
                 });
                 if constant.is_some() || stored {
                     return Err(Diagnostic::at(
@@ -3338,7 +3352,7 @@ impl Builder<'_> {
                         .calls
                         .field_expression(target, locals, &self.parameters)
                         .is_some_and(|e| {
-                            matches!(e.kind, parser::ExpressionKind::SharedField { .. })
+                            matches!(e.kind, parser::ExpressionKind::SharedField { ref module, ref field } if !self.calls.shared_mutable.contains(&(module.clone(),field.clone())))
                         })
             })
         {
@@ -3351,8 +3365,35 @@ impl Builder<'_> {
         Ok(())
     }
 
+    fn write_shared(
+        &mut self,
+        module: Option<String>,
+        field: String,
+        value: parser::Expression,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<(), Diagnostic> {
+        let expected = self.calls.shared_fields[&(module.clone(), field.clone())].clone();
+        let builder = crate::BuilderId(self.local_id(span)?.0);
+        self.push(
+            Operation::SharedBegin {
+                builder,
+                module,
+                field,
+            },
+            Some(span),
+        );
+        let value = self.value_for_setup_with_context(
+            value,
+            locals,
+            construction_type(&expected.api_type()),
+        )?;
+        self.push(Operation::SharedWrite { builder, value }, Some(span));
+        Ok(())
+    }
+
     /// Initialize a declared owner field using its existing construction context.
-    /// Shared writes are emitted only in reserved shared initializer bodies.
+    /// SharedAssign is emitted only in reserved shared initializer bodies.
     fn assign_owner_field(
         &mut self,
         name: String,
@@ -3435,6 +3476,43 @@ impl Builder<'_> {
         Ok(())
     }
 
+    /// Lower an ordinary assignment to shared storage when name resolution
+    /// selects a mutable binding. Other places keep their existing lowering.
+    fn assign_shared(
+        &mut self,
+        statement: &parser::Statement,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<bool, Diagnostic> {
+        use parser::{Expression, ExpressionKind as E, Statement as S};
+        let span = statement.span();
+        let (kind, value) = match statement {
+            S::Assign { name, value, .. } => (E::Local(name.clone()), value),
+            S::FieldAssign { name, value, .. } if !self.calls.shared_initializer => {
+                (E::SelfField(name.clone()), value)
+            }
+            S::MemberAssign {
+                receiver,
+                member,
+                value,
+                ..
+            } => (
+                E::MemberRead {
+                    receiver: Box::new(receiver.clone()),
+                    member: member.clone(),
+                },
+                value,
+            ),
+            _ => return Ok(false),
+        };
+        let target = Expression { kind, span };
+        let Some((module, field)) = self.calls.shared_target(&target, locals, &self.parameters)
+        else {
+            return Ok(false);
+        };
+        self.write_shared(module, field, value.clone(), span, locals)?;
+        Ok(true)
+    }
+
     /// Emit a statement sequence and report whether all paths terminate the
     /// current block with return, break, or continue. Declarations stay scoped
     /// to the supplied name map; controls select a loop latch or structured exit.
@@ -3455,6 +3533,7 @@ impl Builder<'_> {
             }
             self.check_constant_rebinding(&statement, locals)?;
             match statement {
+                _ if self.assign_shared(&statement, locals)? => {}
                 parser::Statement::Block { body, .. } => {
                     terminated = self.sequence(body, &mut locals.clone())?;
                 }
@@ -3929,6 +4008,7 @@ pub(crate) struct CallContext {
     pub(crate) shared_snapshots: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) shared_pending: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) shared_initializer: bool,
+    pub(crate) shared_mutable: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) enum_members: BTreeMap<(Option<String>, String), Box<crate::EnumType>>,
     pub(crate) class_enums: std::collections::BTreeSet<(String, String)>,
     pub(crate) shared_fields: BTreeMap<(Option<String>, String), crate::ReturnType>,
@@ -3944,6 +4024,23 @@ pub(crate) struct CallContext {
     pub(crate) current_class: Option<crate::SourceClass>,
 }
 impl CallContext {
+    fn shared_target(
+        &self,
+        expression: &parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        parameters: &BTreeMap<String, usize>,
+    ) -> Option<(Option<String>, String)> {
+        match self.field_expression(expression, locals, parameters)?.kind {
+            parser::ExpressionKind::SharedField { module, field }
+                if self
+                    .shared_mutable
+                    .contains(&(module.clone(), field.clone())) =>
+            {
+                Some((module, field))
+            }
+            _ => None,
+        }
+    }
     fn shared_contains(&self, module: Option<&str>, field: &str) -> bool {
         let key = (module.map(str::to_owned), field.to_owned());
         self.shared_fields.contains_key(&key) || self.shared_pending.contains(&key)
@@ -3987,6 +4084,9 @@ impl CallContext {
                     kind: E::SelfField(name.clone()),
                     span: expression.span,
                 });
+            }
+            if self.current_class.is_some() && self.field_types.contains_key(name) {
+                return None;
             }
         }
         if self.shared_fields.is_empty() && self.shared_pending.is_empty() {

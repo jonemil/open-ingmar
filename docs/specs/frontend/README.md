@@ -886,6 +886,34 @@ See the [scalar example](../../../examples/compiler-constants/README.md),
 [anonymous enum example](../../../examples/compiler-anonymous-enums/README.md), and
 [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
+### Shared variables
+
+Global and module `var` declarations create shared mutable bindings. Each name
+in a declaration list has its own optional annotation and initializer. Missing
+initializers produce Null; an annotated slot must therefore accept Null or
+provide a compatible initializer. Untyped slots retain Any, permitting later
+values of different types even when the initializer has a concrete type.
+Annotated writes preserve source-class, enum, and container contracts.
+
+Reads, `=`, compound assignments, and `++`/`--` use the declared slot contract
+and ordinary operator rules. Module members support qualified `M.NAME` access
+and bare or `self.NAME` access within the module. Locals and parameters shadow
+bare shared names. Reopened modules across source files share the same slots.
+Const and enum bindings remain readonly; referenced container contents may
+mutate independently of binding mutability.
+
+Variables use the [shared initialization rules](#constants): literal defaults
+precede runtime expressions in source-file/declaration order within each phase,
+globals initialize at startup, and modules initialize on first lookup. An
+ordinary store activates and captures its owner before evaluating the RHS,
+including a conditional or short-circuit RHS. Same-owner stores reuse the
+current receiver. Reads and stores participate in initialization dependency
+checks; stores before slot initialization, owner re-entry, and dependency cycles
+are diagnosed rather than given a dependency-based execution order.
+
+See the [two-file example](../../../examples/compiler-shared-variables/README.md)
+and [SDK evidence](../../investigations/core-lang-completion.md#shared-variables).
+
 ### Enums
 
 Global and module `enum { ... }` declarations introduce readonly

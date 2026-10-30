@@ -28,13 +28,15 @@ establish availability, assignability, or executable API support.
 source-input = source-file
 source-file = native-declaration* declaration*
 declaration = function | module | class | typedef | constant | enumeration
+            | shared-variable
 typedef = "typedef" identifier "as" value-type ";"
 constant = "const" constant-binding ("," constant-binding)* ";"
 constant-binding = identifier ("as" value-type)? ("=" expression)?
+shared-variable = "var" constant-binding ("," constant-binding)* ";"
 enumeration = "enum" identifier? "{" enum-member ("," enum-member)* ","? "}"
 enum-member = identifier ("=" expression)?
 module = "module" identifier "{" native-declaration*
-         (function | typedef | constant | enumeration)+ "}"
+         (function | typedef | constant | enumeration | shared-variable)+ "}"
 class = "class" identifier ("extends" native-base)?
         "{" native-declaration* (field | function | typedef | constant | enumeration)* "}"
 native-declaration = "using" native-module ("as" identifier)? ";"
@@ -59,6 +61,12 @@ rules below; each binding must satisfy the
 [scope-specific constant profile](README.md#constants). Constants are declarations,
 not function statements. Evaluation restrictions do not create a second
 expression grammar.
+
+`shared-variable` reuses the binding-list syntax at global/module scope.
+An omitted initializer produces Null; an omitted annotation gives the mutable
+slot the dynamic Any contract, independently of its initializer. See
+[shared variables](README.md#shared-variables). Class `field` declarations retain
+their separate default and type restrictions.
 
 `enumeration` is accepted at global, module, and class scope. It requires at least
 one member, permits a trailing comma, and has no trailing semicolon. Member

@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Clone)]
 pub(crate) enum Contract {
+    Shared,
     Array(ArrayElement),
     ByteArray,
     Source {
@@ -24,7 +25,7 @@ impl Contract {
                 crate::api::Type::named("Toybox.Lang.Number"),
                 crate::api::Type::named("Toybox.Lang.Char"),
             ])),
-            Self::Dictionary(_) | Self::Record(_) | Self::Source { .. } => None,
+            Self::Shared | Self::Dictionary(_) | Self::Record(_) | Self::Source { .. } => None,
         }
     }
     pub(crate) fn dictionary(&self) -> Option<DictionaryType> {
@@ -47,6 +48,22 @@ pub(crate) fn validate(
         message: message.into(),
     };
     let mut declarations = BTreeMap::new();
+    for (index, op) in operations.iter().enumerate() {
+        if let Operation::SharedBegin {
+            builder,
+            module,
+            field,
+        } = &op.operation
+        {
+            crate::validate_call_names(module.as_deref(), field).map_err(|e| fail(index, e))?;
+            if declarations
+                .insert(*builder, (Contract::Shared, 0))
+                .is_some()
+            {
+                return Err(fail(index, "duplicate shared store builder"));
+            }
+        }
+    }
     for (index, op) in operations.iter().enumerate() {
         if let Operation::ArrayBegin {
             builder,
@@ -157,6 +174,7 @@ pub(crate) fn validate(
             matches!(
                 o.operation,
                 Operation::SourceNew { .. }
+                    | Operation::SharedWrite { .. }
                     | Operation::DictionaryFill { .. }
                     | Operation::DictionaryFinish { .. }
                     | Operation::ArrayFill { .. }
@@ -183,12 +201,23 @@ pub(crate) fn validate(
         for &index in &blocks[&block] {
             match operations[index].operation {
                 Operation::SourceBegin { builder, .. }
+                | Operation::SharedBegin { builder, .. }
                 | Operation::DictionaryBegin { builder, .. }
                 | Operation::RecordBegin { builder, .. }
                 | Operation::ArrayBegin { builder, .. }
                 | Operation::ByteArrayBegin { builder, .. } => {
                     if active.insert(builder, 0).is_some() {
                         return Err(fail(index, "container builder restarted before completion"));
+                    }
+                }
+                Operation::SharedWrite { builder, .. } => {
+                    if !matches!(declarations.get(&builder), Some((Contract::Shared, _)))
+                        || active.remove(&builder).is_none()
+                    {
+                        return Err(fail(
+                            index,
+                            "shared write requires its active owner builder",
+                        ));
                     }
                 }
                 Operation::SourceNew {

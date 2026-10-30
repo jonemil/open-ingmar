@@ -10,7 +10,7 @@ owning files for the definition to read or change.
 | Concern | Implementation entry points | Contract |
 |---|---|---|
 | Source syntax and names | [parser.rs], [names.rs] | [Source grammar] |
-| Constant storage and initialization | [constants.rs], [parser.rs], [unit.rs], [source_ir.rs], [control_flow.rs] | [Constants] |
+| Shared storage and initialization | [constants.rs], [parser.rs], [unit.rs], [source_ir.rs], [control_flow.rs] | [Constants] |
 | Source enum identities | [enums.rs], [parser.rs], [unit.rs] | [Enums] |
 | Source receiver member candidates | [source_calls.rs] | [Source identities] |
 | Source → IR candidates | [source_ir.rs], [source_types.rs], [unchecked.rs] | [Source semantics] |
@@ -106,15 +106,17 @@ remain deferred in [the plan](plan.md).
 ## Implementation conventions
 
 The declaration parser returns one `ParsedUnit` per source file. Shared
-`Declarations` collect typedef and constant environments across files. Direct
-non-heap global/class literals are cached before IR construction; module
-members always become shared bindings so lookup preserves initialization effects.
+`Declarations` collect typedef and binding environments across files. Direct
+non-heap global/class constants are cached before IR construction. Mutable
+variables always use shared slots; module members also retain shared storage
+so lookup preserves initialization effects.
 References and operators use ordinary typed initialization rather than a
-separate constant evaluator. Stored global/module constants retain shared
+separate constant evaluator. Stored global/module bindings retain shared
 declaration types and reserved initializer bodies. Stored contracts are inferred
 across all scopes
 before bodies, retrying unresolved dependencies without placeholder types.
-Constant lists share one binding parser across global, module, and class scopes.
+Const/var lists share a binding parser; class variable fields retain their
+separate declaration/default parser.
 Annotations reuse value-type parsing, source-class resolution, and checked return
 construction to validate an initializer while retaining its declared contract.
 Enum blocks collect their members into that constant environment. Named enums
