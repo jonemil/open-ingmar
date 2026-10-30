@@ -1498,6 +1498,14 @@ pub enum Operation {
         /// validation anchors it to the class; function validation derives the view.
         declared_type: Option<ReturnType>,
     },
+    /// Read a declared class enum slot without allocating an instance. Its
+    /// runtime value may still be Null before the first allocation write.
+    ClassFieldRead {
+        result: ValueId,
+        class: String,
+        field: String,
+        result_type: ReturnType,
+    },
     /// Replace a declared field on the current instance, preserving its type.
     SelfFieldAssign {
         field: String,
@@ -1909,6 +1917,7 @@ impl Operation {
             | Self::ObjectCall { result, .. }
             | Self::SelfValue { result, .. }
             | Self::SelfFieldRead { result, .. }
+            | Self::ClassFieldRead { result, .. }
             | Self::SharedRead { result, .. }
             | Self::EnumValue { result, .. }
             | Self::NativeConstant { result, .. }
@@ -3213,6 +3222,19 @@ impl Function {
                     }
                     validate_call_names(None, field).map_err(fail)?;
                     (None, vec![value])
+                }
+                Operation::ClassFieldRead {
+                    result,
+                    ref class,
+                    ref field,
+                    ref result_type,
+                } => {
+                    validate_call_names(Some(class), field).map_err(fail)?;
+                    if !matches!(result_type, ReturnType::Integer | ReturnType::Enum(_)) {
+                        return Err(fail("class enum reads require a Number or enum contract"));
+                    }
+                    types.insert(result, call_result_type(result_type.clone()).map_err(fail)?);
+                    (Some(result), vec![])
                 }
                 Operation::SelfFieldRead {
                     result,
@@ -4550,6 +4572,7 @@ impl Function {
                     | Operation::MemberRead { .. }
                     | Operation::MemberWrite { .. }
                     | Operation::SelfFieldRead { .. }
+                    | Operation::ClassFieldRead { .. }
                     | Operation::SharedRead { .. }
                     | Operation::SharedAssign { .. }
                     | Operation::SelfFieldAssign { .. }
@@ -4984,6 +5007,16 @@ impl Function {
                     result.0,
                     module.as_deref().unwrap_or("$"),
                     crate::type_text::result_tag(result_type)
+                ),
+                Operation::ClassFieldRead {
+                    result,
+                    ref class,
+                    ref field,
+                    ref result_type,
+                } => format!(
+                    ".read-class %{} {class} {field} result={}",
+                    result.0,
+                    type_text::result_tag(result_type)
                 ),
                 Operation::SharedAssign {
                     ref module,

@@ -394,6 +394,16 @@ methods receive validated constructor arguments; the native base constructor
 still takes none. See the [reference-field
 profile](../frontend/README.md#source-reference-fields).
 
+Class enum slots occupy a separate DATA class record, associated through the
+source class's statics reference and registered in the root statics table. Their
+sorted member entries use key bits `0x50`, Number (`0x01`) literal defaults or
+Null (`0x00`) runtime defaults, plus a no-op statics initialization hook.
+The allocation hook writes runtime enum expressions through the instance; the
+VM's statics association makes those writes visible through every instance and
+the class. Ordinary instance fields remain in the source class record.
+See the [enum contracts](../frontend/README.md#enums) and
+[controlled evidence](../../investigations/core-lang-completion.md#enumerations).
+
 ## Planned project builds and targets
 
 Project builds are planned; no Rust Jungle parser or project build driver

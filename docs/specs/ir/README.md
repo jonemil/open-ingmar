@@ -288,7 +288,7 @@ Separate functions preserve each source file's diagnostic spans and count toward
 the unit body limit. Explicit calls or known-selector Method bindings to these
 functions are rejected; source identifiers reserve their prefix.
 
-Enum members use these same separate bindings and initializer bodies. Anonymous
+Global/module enum members use these same separate bindings and initializer bodies. Anonymous
 members have Number contracts. Named enums add `.enum OWNER NAME` declarations
 (`$` for global scope) and `enum(QUALIFIED_NAME)` type tags. These identities
 must be unique and declared throughout nested signatures, storage, and value
@@ -2199,11 +2199,27 @@ fields remain incomplete. Ordinary methods, including user `initialize()`,
 cannot rebind constants. Container contents remain mutable. Mutable structural
 interface fields require mutable implementation bindings.
 
-The reserved allocation method must exist exactly when constants exist. Unit
+The reserved allocation method must exist exactly when allocation writes are
+required by constants or runtime class enum members. Unit
 validation rejects explicit source/IR calls and known-selector Method binding to
 it. Source identifiers cannot use its reserved name. Application generation
 provides an internal DATA method slot for the allocation hook's ordinary call;
 its locals require a separate call frame. It is not user `initialize()`.
+
+`FieldKind::Enum { value_type, initial }` / `.field-enum name tag default`
+declares a readonly shared class enum slot. Its contract is `integer` or
+`enum(Owner.Name)`; its metadata default is an i32 or `null`. A Null default
+requires exactly one write in each allocation initializer invocation. A literal
+default has no allocation write. Self/instance reads retain the field contract,
+but all instances see the same class storage. Readonly/interface checks apply
+to enum slots as well as per-instance constants.
+
+`ClassFieldRead` / `.read-class %RESULT CLASS FIELD result=TAG` reads an enum
+slot through its class without allocating. Unit validation requires the class,
+enum field, and exact contract to match their declaration; an ordinary instance
+field is not a class read target. Reads remain ordered relative to allocations
+and their effects. The declared contract does not prove that a runtime enum
+initializer has executed: a pre-allocation read can still return Null.
 
 `FieldKind::Value { value_type: ReturnType }` carries field contracts without an
 existing specialized storage form, including general unions and nullable

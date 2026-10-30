@@ -67,11 +67,12 @@ fn field(id: u32, flags: u8, kind: u8, value: Reference) -> FieldDeclaration {
 
 /// Encode a field's literal default using the application's shared Symbol IDs.
 /// Fields requiring source initialization and nullable defaults use Null slots.
-fn instance_field(
+fn storage_field(
     declaration: &crate::InstanceField,
     ids: &BTreeMap<String, u32>,
 ) -> FieldDeclaration {
     let (kind, value) = match &declaration.kind {
+        crate::FieldKind::Enum { initial, .. } => initial.map_or((0, 0), |n| (1, n as u32)),
         crate::FieldKind::Number(initial) => (1, *initial as u32),
         crate::FieldKind::Symbol {
             initial: Some(name),
@@ -92,7 +93,16 @@ fn instance_field(
         | crate::FieldKind::ByteArray { .. }
         | crate::FieldKind::Interface { .. } => (0, 0),
     };
-    field(ids[&declaration.name], 0, kind, Reference::Raw(value))
+    field(
+        ids[&declaration.name],
+        if matches!(declaration.kind, crate::FieldKind::Enum { .. }) {
+            0x50
+        } else {
+            0
+        },
+        kind,
+        Reference::Raw(value),
+    )
 }
 fn method(id: u32, flags: u8, label: &str) -> FieldDeclaration {
     field(id, flags, 6, Reference::Code(label.into()))
@@ -388,6 +398,15 @@ pub fn build_console_application(
         module_ids.insert(module.clone(), next);
         next += 1;
     }
+    let mut class_statics = BTreeMap::new();
+    for c in unit.classes().iter().filter(|c| {
+        c.fields
+            .iter()
+            .any(|f| matches!(f.kind, crate::FieldKind::Enum { .. }))
+    }) {
+        class_statics.insert(c.name.clone(), next);
+        next += 1;
+    }
     let mut bindings = crate::native_bindings::code_bindings();
 
     for (name, id) in &ids {
@@ -554,6 +573,9 @@ pub fn build_console_application(
     for id in module_ids.values() {
         statics_fields.push(field(*id, 0, 10, Reference::Raw(0)));
     }
+    for id in class_statics.values() {
+        statics_fields.push(field(*id, 0, 10, Reference::Raw(0)));
+    }
     let statics = class(
         "__ciq_data_statics",
         [None, None, None, Some(Reference::Raw(STATICS))],
@@ -628,7 +650,8 @@ pub fn build_console_application(
             source_class
                 .fields
                 .iter()
-                .map(|declaration| instance_field(declaration, &ids)),
+                .filter(|f| !matches!(f.kind, crate::FieldKind::Enum { .. }))
+                .map(|declaration| storage_field(declaration, &ids)),
         );
         if source_class
             .methods
@@ -663,6 +686,9 @@ pub fn build_console_application(
             Key::Raw(key) => key,
             _ => unreachable!(),
         });
+        application.references[1] = class_statics
+            .get(&source_class.name)
+            .map(|id| Reference::Raw(*id));
     }
     let has_delegate = unit
         .classes()
@@ -694,7 +720,8 @@ pub fn build_console_application(
             source_class
                 .fields
                 .iter()
-                .map(|declaration| instance_field(declaration, &ids)),
+                .filter(|f| !matches!(f.kind, crate::FieldKind::Enum { .. }))
+                .map(|declaration| storage_field(declaration, &ids)),
         );
         fields.extend(
             source_class
@@ -710,11 +737,30 @@ pub fn build_console_application(
             &format!("__ciq_data_class_{}", source_class.name),
             [
                 Some(Reference::Raw(import_word)),
-                None,
+                class_statics
+                    .get(&source_class.name)
+                    .map(|id| Reference::Raw(*id)),
                 Some(Reference::Raw(GLOBALS)),
                 None,
             ],
             fields,
+        ));
+    }
+    for source_class in unit
+        .classes()
+        .iter()
+        .filter(|c| class_statics.contains_key(&c.name))
+    {
+        classes.push(class(
+            &format!("__ciq_data_statics_{}", source_class.name),
+            [None, None, Some(Reference::Raw(GLOBALS)), None],
+            source_class
+                .fields
+                .iter()
+                .filter(|f| matches!(f.kind, crate::FieldKind::Enum { .. }))
+                .map(|f| storage_field(f, &ids))
+                .chain(std::iter::once(method(INIT, 0x30, "__ciq_noop")))
+                .collect(),
         ));
     }
     for module in &modules {
@@ -764,6 +810,8 @@ pub fn build_console_application(
         let id = key >> 8;
         let alias = if id == GLOBALS {
             "__ciq_data_globals".to_owned()
+        } else if let Some((name, _)) = class_statics.iter().find(|(_, v)| **v == id) {
+            format!("__ciq_data_statics_{name}")
         } else {
             module_alias(module_ids.iter().find(|(_, v)| **v == id).unwrap().0)
         };

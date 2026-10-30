@@ -504,6 +504,12 @@ impl ScalarFieldType {
 /// A supported field's default and initialization requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldKind {
+    /// A readonly class enum slot shared by all instances. A literal default is
+    /// available before allocation; a Null default requires an allocation write.
+    Enum {
+        value_type: ReturnType,
+        initial: Option<i32>,
+    },
     /// A readonly binding populated once by the allocation initializer.
     /// Its referenced contents may remain mutable; metadata starts as Null.
     /// Requires an instance method named `__ciq_initialize_fields` with no
@@ -559,6 +565,15 @@ pub enum FieldKind {
 }
 
 impl FieldKind {
+    fn readonly(&self) -> bool {
+        matches!(self, Self::Constant { .. } | Self::Enum { .. })
+    }
+    fn allocation_write(&self) -> bool {
+        matches!(
+            self,
+            Self::Constant { .. } | Self::Enum { initial: None, .. }
+        )
+    }
     /// Normalize a field value contract, excluding Void and graphics contexts.
     pub(crate) fn value_contract(ty: ReturnType) -> Option<ReturnType> {
         crate::recursive::validate(&ty.api_type()).ok()?;
@@ -685,7 +700,7 @@ impl FieldKind {
     }
 }
 
-/// An instance field declaration with a checked initialization contract.
+/// A class member storage declaration with a checked initialization contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceField {
     /// Unqualified member name, unique within the class.
@@ -696,9 +711,9 @@ pub struct InstanceField {
 impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
-            FieldKind::Constant { value_type } | FieldKind::Value { value_type } => {
-                value_type.clone()
-            }
+            FieldKind::Enum { value_type, .. }
+            | FieldKind::Constant { value_type }
+            | FieldKind::Value { value_type } => value_type.clone(),
             FieldKind::Number(_) => ReturnType::Integer,
             FieldKind::LangObject { nullable } => {
                 if *nullable {
@@ -962,6 +977,15 @@ impl CompilationUnit {
         }
         for class in &mut classes {
             for field in &mut class.fields {
+                if let FieldKind::Enum { value_type, .. } = &field.kind {
+                    if !matches!(value_type, ReturnType::Integer | ReturnType::Enum(_)) {
+                        return Err(UnitError {
+                            declaration: None,
+                            operation: None,
+                            message: "class enum fields require a Number or enum contract".into(),
+                        });
+                    }
+                }
                 if let FieldKind::Value { value_type } = &field.kind {
                     field.kind =
                         FieldKind::from_result(value_type.clone()).ok_or_else(|| UnitError {
@@ -1207,7 +1231,7 @@ impl CompilationUnit {
             let has_constants = class
                 .fields
                 .iter()
-                .any(|field| matches!(field.kind, FieldKind::Constant { .. }));
+                .any(|field| field.kind.allocation_write());
             if has_constants
                 != class
                     .methods
@@ -1341,7 +1365,7 @@ impl CompilationUnit {
                 let mut pending = declaration
                     .fields
                     .iter()
-                    .filter(|field| matches!(field.kind, FieldKind::Constant { .. }))
+                    .filter(|field| field.kind.allocation_write())
                     .map(|field| field.name.as_str())
                     .collect::<BTreeSet<_>>();
                 let unreadable = declaration
@@ -1618,6 +1642,27 @@ impl CompilationUnit {
                 })
                 .collect::<BTreeMap<_, _>>();
             for (operation, located) in function.operations().iter().enumerate() {
+                if let Operation::ClassFieldRead {
+                    class,
+                    field,
+                    result_type,
+                    ..
+                } = &located.operation
+                {
+                    let actual = self
+                        .classes
+                        .iter()
+                        .find(|c| c.name == *class)
+                        .and_then(|c| c.fields.iter().find(|f| f.name == *field))
+                        .filter(|f| matches!(f.kind, FieldKind::Enum { .. }));
+                    if !actual.is_some_and(|f| f.result_type() == *result_type) {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "class enum read must match its declaration".into(),
+                        ));
+                    }
+                }
                 if let Operation::SelfFieldAssign { field, .. } = &located.operation {
                     if function.name() != FIELD_INITIALIZER
                         && self
@@ -1625,10 +1670,7 @@ impl CompilationUnit {
                             .iter()
                             .filter(|class| owner == Owner::Class(class.name.as_str()))
                             .flat_map(|class| &class.fields)
-                            .any(|decl| {
-                                decl.name == *field
-                                    && matches!(decl.kind, FieldKind::Constant { .. })
-                            })
+                            .any(|decl| decl.name == *field && decl.kind.readonly())
                     {
                         return Err(fail(
                             Some(index),
@@ -1647,10 +1689,7 @@ impl CompilationUnit {
                                 .iter()
                                 .filter(|class| class.name == target.name)
                                 .flat_map(|class| &class.fields)
-                                .any(|field| {
-                                    field.name == *member
-                                        && matches!(field.kind, FieldKind::Constant { .. })
-                                })
+                                .any(|field| field.name == *member && field.kind.readonly())
                         })
                     }) {
                         return Err(fail(
@@ -3066,7 +3105,7 @@ impl CompilationUnit {
                 .iter()
                 .find(|f| f.name == *name)
                 .ok_or_else(|| format!("{class} does not implement field {name}"))?;
-            if matches!(field.kind, FieldKind::Constant { .. }) {
+            if field.kind.readonly() {
                 return Err(format!(
                     "{class}.{name} is readonly; interface fields require mutable bindings"
                 ));
@@ -3213,6 +3252,15 @@ impl CompilationUnit {
             text.push_str(&format!(".class {} {}\n", class.name, class.base.text()));
             for field in &class.fields {
                 text.push_str(&match &field.kind {
+                    FieldKind::Enum {
+                        value_type,
+                        initial,
+                    } => format!(
+                        ".field-enum {} {} {}\n",
+                        field.name,
+                        crate::type_text::result_tag(value_type),
+                        initial.map_or_else(|| "null".into(), |n| n.to_string())
+                    ),
                     FieldKind::Constant { value_type } => format!(
                         ".field-constant {} {}\n",
                         field.name,
@@ -3512,6 +3560,23 @@ pub(crate) fn compile_sources_mapped(
             }
         }
     }
+    for parsed in &parsed_sources {
+        for class in &parsed.classes {
+            for declaration in &class.constants {
+                if declaration.enumeration {
+                    calls
+                        .class_enums
+                        .insert((class.name.clone(), declaration.name.clone()));
+                }
+                if let Some(name) = &declaration.enum_type {
+                    calls.enum_members.insert(
+                        (Some(class.name.clone()), declaration.name.clone()),
+                        name.clone(),
+                    );
+                }
+            }
+        }
+    }
     infer_stored_constants(sources, &parsed_sources, context, &mut calls)?;
     for parsed in &parsed_sources {
         for (module, declaration) in &parsed.shared {
@@ -3588,18 +3653,37 @@ pub(crate) fn compile_sources_mapped(
                 let result = calls.source_fields[&class.name][&declaration.name].clone();
                 class.fields.push(InstanceField {
                     name: declaration.name.clone(),
-                    kind: FieldKind::Constant {
-                        value_type: result.clone(),
+                    kind: if declaration.enumeration {
+                        let initial = if declaration.literal_default {
+                            match crate::constants::literal(&declaration.initializer) {
+                                Some(crate::constants::Immediate::Number(n)) => Some(n),
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
+                        FieldKind::Enum {
+                            value_type: result,
+                            initial,
+                        }
+                    } else {
+                        FieldKind::Constant { value_type: result }
                     },
                 });
             }
             for index in order {
                 let declaration = &class.constants[index];
+                if declaration.enumeration && declaration.literal_default {
+                    continue;
+                }
                 assignments.push(parser::Statement::FieldAssign {
                     name: declaration.name.clone(),
                     value: declaration.initializer.clone(),
                     span: declaration.span,
                 });
+            }
+            if assignments.is_empty() {
+                continue;
             }
             assignments.push(parser::Statement::Return {
                 value: None,
@@ -4092,7 +4176,8 @@ fn parse_unit_ir_context(
                     if parts.first().is_some_and(|part| {
                         matches!(
                             part.as_str(),
-                            ".field-constant"
+                            ".field-enum"
+                                | ".field-constant"
                                 | ".field-value"
                                 | ".field-number"
                                 | ".field-object"
@@ -4108,7 +4193,9 @@ fn parse_unit_ir_context(
                                 | ".field-byte-array"
                         )
                     }) {
-                        if (parts.len() != 3 && !(parts[0] == ".field-symbol" && parts.len() == 4))
+                        if (parts.len() != 3
+                            && !(matches!(parts[0].as_str(), ".field-symbol" | ".field-enum")
+                                && parts.len() == 4))
                             || !methods.is_empty()
                             || instance_fields.len() >= 256
                         {
@@ -4118,7 +4205,28 @@ fn parse_unit_ir_context(
                                 "expected a three-part field declaration before methods, at most 256 fields",
                             ));
                         }
-                        let kind = if parts[0] == ".field-constant" {
+                        let kind = if parts[0] == ".field-enum" {
+                            if parts.len() != 4 {
+                                return Err(Diagnostic::at(
+                                    text,
+                                    method_at,
+                                    "expected enum contract and Number/null default",
+                                ));
+                            }
+                            let value_type = crate::type_text::call_result(&parts[2])
+                                .map_err(|e| Diagnostic::at(text, method_at, e))?;
+                            let initial = if parts[3] == "null" {
+                                None
+                            } else {
+                                Some(parts[3].parse().map_err(|_| {
+                                    Diagnostic::at(text, method_at, "invalid enum default")
+                                })?)
+                            };
+                            FieldKind::Enum {
+                                value_type,
+                                initial,
+                            }
+                        } else if parts[0] == ".field-constant" {
                             let value_type = crate::type_text::call_result(&parts[2])
                                 .ok()
                                 .and_then(FieldKind::value_contract)

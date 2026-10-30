@@ -311,6 +311,23 @@ fn emit_non_call(
         parser::ExpressionKind::MemberRead { .. } => {
             unreachable!("member chain dispatched before non-call emission")
         }
+        parser::ExpressionKind::ClassField { class, field } => Operation::ClassFieldRead {
+            result: ValueId(operations.len() as u32),
+            result_type: calls
+                .source_fields
+                .get(&class)
+                .and_then(|fields| fields.get(&field))
+                .cloned()
+                .ok_or_else(|| {
+                    Diagnostic::at(
+                        source,
+                        expression.span.start,
+                        "class enum contract is unresolved",
+                    )
+                })?,
+            class,
+            field,
+        },
         parser::ExpressionKind::SharedField { module, field } => Operation::SharedRead {
             result: ValueId(operations.len() as u32),
             result_type: if calls
@@ -3387,6 +3404,30 @@ impl Builder<'_> {
             .get(&name)
             .and_then(|ty| construction_type(&ty.api_type()));
         let value = self.value_for_setup_with_context(value, locals, expected)?;
+        let value = if let Some(identity) = self
+            .calls
+            .current_class
+            .as_ref()
+            .and_then(|class| {
+                self.calls
+                    .enum_members
+                    .get(&(Some(class.name.clone()), name.clone()))
+            })
+            .cloned()
+        {
+            let result = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::EnumValue {
+                    result,
+                    name: identity,
+                    operand: value,
+                },
+                Some(span),
+            );
+            result
+        } else {
+            value
+        };
         self.push(
             Operation::SelfFieldAssign { field: name, value },
             Some(span),
@@ -3889,6 +3930,7 @@ pub(crate) struct CallContext {
     pub(crate) shared_pending: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) shared_initializer: bool,
     pub(crate) enum_members: BTreeMap<(Option<String>, String), String>,
+    pub(crate) class_enums: std::collections::BTreeSet<(String, String)>,
     pub(crate) shared_fields: BTreeMap<(Option<String>, String), crate::ReturnType>,
     pub(crate) readonly_fields: std::collections::BTreeSet<String>,
     pub(crate) constants: std::rc::Rc<BTreeMap<String, crate::constants::Immediate>>,
@@ -3917,6 +3959,25 @@ impl CallContext {
         parameters: &BTreeMap<String, usize>,
     ) -> Option<parser::Expression> {
         use parser::ExpressionKind as E;
+        if let Some(path) = crate::constants::path(expression) {
+            if let Some((class, field)) = path.split_once('.') {
+                if self.class_enums.contains(&(class.into(), field.into()))
+                    && !locals.contains_key(class)
+                    && !parameters.contains_key(class)
+                    && !self.readonly_fields.contains(class)
+                    && !self.shared_name(class)
+                    && !self.constants.contains_key(class)
+                {
+                    return Some(parser::Expression {
+                        kind: E::ClassField {
+                            class: class.into(),
+                            field: field.into(),
+                        },
+                        span: expression.span,
+                    });
+                }
+            }
+        }
         if let E::Local(name) = &expression.kind {
             if locals.contains_key(name) || parameters.contains_key(name) {
                 return None;

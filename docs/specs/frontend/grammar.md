@@ -36,7 +36,7 @@ enum-member = identifier ("=" expression)?
 module = "module" identifier "{" native-declaration*
          (function | typedef | constant | enumeration)+ "}"
 class = "class" identifier ("extends" native-base)?
-        "{" native-declaration* (field | function | typedef | constant)* "}"
+        "{" native-declaration* (field | function | typedef | constant | enumeration)* "}"
 native-declaration = "using" native-module ("as" identifier)? ";"
                    | "import" native-module ";"
 native-module = "Toybox" "." ("Application" | "System" | "WatchUi"
@@ -60,11 +60,12 @@ rules below; each binding must satisfy the
 not function statements. Evaluation restrictions do not create a second
 expression grammar.
 
-`enumeration` is accepted at global and module scope. It requires at least
+`enumeration` is accepted at global, module, and class scope. It requires at least
 one member, permits a trailing comma, and has no trailing semicolon. Member
 initializers follow the [enum value and numbering rules](README.md#enums).
 The optional identifier declares a nominal type; members remain in the enclosing
-value scope. Class enums remain unsupported.
+value scope. Class members also permit `Class.MEMBER` reads and share storage
+across instances under the [class enum rules](README.md#enums).
 
 `source-file` consumes the complete input. `function` is shared by global
 functions, module functions, and class methods. Its `block` expands in
@@ -315,7 +316,7 @@ contracts, proof obligations, and field accesses.
   Numeric alias: Lang.Numeric, Lang.Integer, or Lang.Decimal.
 - Core reference: Lang.Object, Symbol, Method, WeakReference, ByteArray.
 - Interface: Lang.Comparable or Lang.Comparator.
-- Enum: Lang.NumberFormat, Lang.Endian, or a declared global/module enum path.
+- Enum: Lang.NumberFormat, Lang.Endian, or a declared source enum path.
 - Object, View, delegate, and AppBase type leaves resolve to Lang.Object,
   WatchUi.View, WatchUi.BehaviorDelegate, and Application.AppBase respectively.
 - Source class: an exact declared source-class name from this unit. AppBase

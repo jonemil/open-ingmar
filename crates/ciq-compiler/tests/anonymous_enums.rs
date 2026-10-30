@@ -42,11 +42,11 @@ fn enum_scope_duplicates_readonly_writes_and_bounds_are_checked() {
         "enum{A=1.5f,B}function f(){}",
         "enum{A=missing}function f(){}",
         "function f(){enum{A}}",
-        "class C{enum{A}}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
     for source in [
+        "class C{enum{A}}",
         "enum Kind{A}function f(){return A;}",
         "enum{A,B,}function f(){return B;}",
         "enum{A=1<2 ? 5:6,B}function f(){return B;}",

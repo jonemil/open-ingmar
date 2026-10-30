@@ -153,6 +153,7 @@ pub(crate) fn lower_owned<'a>(
             | Operation::SelfValue { result, .. }
             | Operation::MemberRead { result, .. }
             | Operation::SelfFieldRead { result, .. }
+            | Operation::ClassFieldRead { result, .. }
             | Operation::SharedRead { result, .. }
             | Operation::Binary { result, .. }
             | Operation::Step { result, .. }
@@ -995,6 +996,26 @@ fn expression(
                             ],
                         )
                     }
+                }
+                Operation::ClassFieldRead { class, field, .. } => {
+                    items.push(if definitions.owner == Some(None) {
+                        instruction(
+                            Opcode::Getselfv,
+                            vec![Operand::Symbol(format!("__ciq_class_{class}"))],
+                        )
+                    } else {
+                        instruction(
+                            Opcode::Getmv,
+                            vec![
+                                Operand::Symbol("__ciq_source_globals".into()),
+                                Operand::Symbol(format!("__ciq_class_{class}")),
+                            ],
+                        )
+                    });
+                    (
+                        Opcode::Getsv,
+                        vec![Operand::Symbol(format!("__ciq_field_{field}"))],
+                    )
                 }
                 Operation::SelfFieldRead { field, .. } => (
                     Opcode::Getselfv,

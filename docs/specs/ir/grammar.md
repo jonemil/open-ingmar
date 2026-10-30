@@ -59,10 +59,14 @@ shared storage; an identifier selects a source module. Shared records carry no
 spans, and their contracts exclude Void and Graphics.Dc. Each nested function is
 validated before [unit ownership and call
 checks](README.md#compilation-units-and-classes).
+An enum record reuses `shared-owner` syntax, but its identifier may name a
+module or a class: `.enum C Kind` declares the nominal identity `C.Kind`.
 
 ```text
 field-record = field-body newline
 field-body = ".field-constant" identifier call-result-tag
+           | ".field-enum" identifier ("integer" | source-enum-tag)
+             (signed-decimal-i32 | "null")
            | ".field-value" identifier call-result-tag
            | ".field-number" identifier signed-decimal-i32
            | ".field-scalar" identifier scalar-field-tag
@@ -174,6 +178,8 @@ value-operation = ".integer" value-id signed-decimal-i32
 storage-operation = ".read-shared" value-id shared-owner identifier
                     "result=" call-result-tag
                   | ".assign-shared" shared-owner identifier value-id
+                  | ".read-class" value-id identifier identifier
+                    "result=" ("integer" | source-enum-tag)
                   | ".parameter" value-id decimal-usize
                   | ".assign-parameter" decimal-usize value-id
                   | ".declare-local" local-id local-contract-tag

@@ -298,6 +298,10 @@ pub(crate) enum ExpressionKind {
     },
     SelfValue,
     SelfField(String),
+    ClassField {
+        class: String,
+        field: String,
+    },
     SharedField {
         module: Option<String>,
         field: String,
@@ -463,6 +467,7 @@ impl Expression {
             | E::DictionaryNew
             | E::Joined(_)
             | E::SelfValue
+            | E::ClassField { .. }
             | E::SelfField(_)
             | E::NativeConstant { .. }
             | E::NativeNew { .. }
@@ -725,6 +730,7 @@ impl<'a> Parser<'a> {
             name,
             annotation,
             enum_type: None,
+            enumeration: false,
             initializer,
             literal_default,
             span,
@@ -790,6 +796,7 @@ impl<'a> Parser<'a> {
                     }),
             ),
             enum_type,
+            enumeration: true,
             initializer,
             literal_default,
             span,
@@ -802,16 +809,6 @@ impl<'a> Parser<'a> {
         let enumeration = self.peek()? == Kind::Word("enum");
         self.token()?;
         if enumeration {
-            if self
-                .owner
-                .as_ref()
-                .is_some_and(|owner| self.declarations.classes.contains(owner))
-            {
-                return Err(self.error(
-                    self.offset,
-                    "class enums require class-qualified default lookup support",
-                ));
-            }
             if self.peek()? != Kind::Punctuation('{') {
                 self.identifier()?;
             }
@@ -1045,16 +1042,6 @@ pub(crate) fn collect_declarations<'a>(
                         let enumeration = parser.token()?.kind == Kind::Word("enum");
                         let mut enum_type = None;
                         let enum_group = if enumeration {
-                            if parser
-                                .owner
-                                .as_ref()
-                                .is_some_and(|owner| aliases.classes.contains(owner))
-                            {
-                                return Err(parser.error(
-                                    parser.offset,
-                                    "class enums require class-qualified default lookup support",
-                                ));
-                            }
                             if parser.peek()? != Kind::Punctuation('{') {
                                 let token = parser.identifier()?;
                                 parser.reject_binding(&token)?;
@@ -3900,6 +3887,7 @@ pub(crate) struct ParsedConstant {
     pub name: String,
     pub annotation: Option<crate::ReturnType>,
     pub enum_type: Option<String>,
+    pub enumeration: bool,
     pub initializer: Expression,
     /// Preserve source-dependent default eligibility before enum grouping is lost.
     pub literal_default: bool,

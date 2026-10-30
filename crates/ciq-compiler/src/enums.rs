@@ -1,9 +1,10 @@
 //! Source enum identities and their unit declarations.
 
-/// A nominal Number-compatible enum in global or module type scope.
+/// A nominal Number-compatible enum in global, module, or class type scope.
 /// Members are separate readonly bindings; this declaration has no VM class.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EnumDeclaration {
+    /// Enclosing module or class, or None for a global type.
     pub module: Option<String>,
     pub name: String,
 }

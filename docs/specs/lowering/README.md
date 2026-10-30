@@ -49,8 +49,12 @@ Structural option records use the Dictionary allocation/fill/finish path:
 Per-key contracts and nullable read types are erased without runtime guards.
 
 Source enum identities erase to their underlying Number values. `EnumValue`
-emits only its operand; enum declarations add no VM class, wrapper, instruction,
-or PRG section. Number operators and method calls use their ordinary lowering.
+emits only its operand; enum type declarations add no VM class, wrapper,
+instruction, or PRG section. Number operators and method calls use their ordinary lowering.
+Class enum member storage uses the class's statics record. `ClassFieldRead`
+loads the source class from globals and selects the member with `getsv`.
+Self/instance reads and allocation-time writes use ordinary field instructions;
+the metadata's statics association selects their shared storage.
 
 
 ### Parameters and positional arguments

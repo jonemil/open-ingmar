@@ -128,7 +128,10 @@ body construction; unit validation rechecks those views and summarizes reads
 and owner activation across calls. Shared initializer assignment proofs use CFG
 dataflow, tracking unwritten/written paths independently of physical block order.
 Class constants retain readonly field
-contracts and a checked allocation initializer. Source construction uses private allocation/completion
+contracts and a checked allocation initializer. Class enums reuse that runtime
+initializer but retain shared slots, literal metadata defaults, and class-qualified
+read operations. Application generation places them in separate statics records,
+leaving ordinary fields in instance metadata. Source construction uses private allocation/completion
 builders to preserve allocation before user argument effects.
 Typedef targets reuse annotation parsing with cached closed terms and guarded
 recursion/depth checks. Recursive types retain finite binders; value operations unfold one

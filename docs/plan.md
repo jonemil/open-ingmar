@@ -36,8 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Implement class enums, reproducing allocation-time initializer effects
-  and class-qualified reads; probe class-member visibility after allocation.
 - [ ] Resolve enum initializer contracts beyond Number: the SDK accepts a
   Float initializer; check its static enum type against the actual VM value.
 - [ ] Support global and module `var` fields, typed/untyped defaults, reads, and

@@ -385,13 +385,25 @@ that Dictionary type makes the specimen compile. Our inference retains both
 enum contracts without the assertion. Both PRGs pass structured CODE/DATA export
 and reconstruction; generated saved IR/assembly paths agree.
 
-**Simulator probe:** for `class EnumBox { enum { A=Trace.number(88), B } }`,
-where the helper prints 88 and returns 4, `EnumBox.A` before allocation is Null.
-Each of two subsequent allocations prints 88; the first instance's A is 4 and
-the second's B is 0. A separate literal class enum permits `C.ON` at build time.
-These observations establish allocation-time effects and class-qualified access,
-not persistent shared static initialization. Class-qualified reads after
-allocation were not checked; the plan retains that question with class enum work.
+**Class enums, experimentally observed (2026-10-29):** the
+[class enum specimen](../../examples/compiler-class-enums/README.md), SDK 9.2.0,
+`fr265`, minimum API 5.0.0, `-O 0`, produces the same 20 expected lines with SDK
+and generated programs. A runtime member begins as Null; implicit/direct integer
+members are readable through the class before allocation. Grouped `(20)` begins
+as Null and does not advance the numbering counter.
+
+The runtime initializer returns 4 on the first allocation and 5 on the second.
+After the second allocation, both instances and `C.CURRENT` read 5: these are
+shared class slots, not per-instance constants. Calling user `initialize()`
+directly leaves the value at 5. Named types work as `C.Kind` across files and
+as `Kind` within the class; an AppBase-derived class also exposes enum members.
+
+The SDK-built specimen's DATA places enum members in a separate class statics
+record, linked through the source class's statics reference. Member key bits
+are `0x50`, with type `0x01` Number defaults or type `0x00` Null. CODE uses
+`getsv` for class-qualified reads and ordinary receiver field operations for
+allocation writes/instance reads. Generated statics records reproduce the
+observed behavior; SDK/generated CODE and DATA exports reconstruct completely.
 
 ## Checking off
 
