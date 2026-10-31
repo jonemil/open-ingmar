@@ -41,7 +41,7 @@ shared-variable = "var" constant-binding ("," constant-binding)* ";"
 enumeration = "enum" identifier? "{" enum-member ("," enum-member)* ","? "}"
 enum-member = identifier ("=" expression)?
 module = "module" identifier "{" native-declaration*
-         (function | typedef | constant | enumeration | shared-variable)+ "}"
+         (module | function | typedef | constant | enumeration | shared-variable)* "}"
 class = "class" identifier ("extends" native-base)?
         "{" native-declaration* (field | function | typedef | constant | enumeration)* "}"
 native-declaration = "using" native-module ("as" identifier)? ";"
@@ -83,7 +83,7 @@ functions, module functions, and class methods. Its `block` expands in
 `native-base`, `field-type`, and `result-type` expand in [Type syntax](#type-syntax).
 
 All source entry points use this file grammar. The fragment entry additionally
-requires exactly one global function and no classes or module-owned functions;
+requires exactly one global function and no classes, modules, or shared storage;
 this is an input-shape restriction, not a separate parser or language grammar.
 Typedef declarations may accompany the fragment. Their targets use `value-type`
 below and must resolve before body construction.
@@ -103,7 +103,10 @@ Null defaults. Non-null fields have no initializer here except Symbol. Inferred 
 shown above.
 Imports, owner collisions, module reopening, and file-local bindings follow
 [declaration resolution](README.md#declarations-and-name-resolution). There are no optional/default
-parameters, nested declarations, source superclass chains, or annotations.
+parameters, function-local function/module/class declarations, source superclass
+chains, nested classes,
+or annotations. Module paths have at most 64 components; a unit has at most 256
+module scopes, including empty scopes and implied parents.
 
 ## Statements
 
@@ -203,7 +206,7 @@ atom = literal | identifier | "self" | self-field
 self-field = "self" "." identifier
 named-call = call-name "(" argument-list? ")"
 call-name = path | "self" "." identifier | root-call-name
-root-call-name = "$" "." identifier ("." identifier)?
+root-call-name = "$" "." identifier ("." identifier)*
 call-expression = named-call | primary member-call | "(" call-expression ")"
 native-constant = path
 array-literal = "[" (argument-list ","?)? "]" "b"?

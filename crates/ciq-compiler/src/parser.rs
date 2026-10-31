@@ -303,6 +303,7 @@ pub(crate) enum ExpressionKind {
         field: String,
     },
     SharedField {
+        lexical: bool,
         module: Option<String>,
         field: String,
     },
@@ -352,11 +353,13 @@ pub(crate) enum ExpressionKind {
         arguments: Vec<Expression>,
     },
     GlobalCall {
+        lexical: bool,
         member: String,
         arguments: Vec<Expression>,
     },
     // Fixed owner identity; lexical values cannot shadow this qualifier.
     OwnerCall {
+        lexical: bool,
         module: String,
         member: String,
         arguments: Vec<Expression>,
@@ -663,7 +666,7 @@ impl Declarations<'_> {
                 .borrow()
                 .iter()
                 .filter(|(key, _)| {
-                    !key.split_once('.')
+                    !key.rsplit_once('.')
                         .is_some_and(|(owner, _)| self.classes.contains(owner))
                 })
                 .map(|(key, value)| (key.clone(), value.clone()))
@@ -676,7 +679,7 @@ impl Declarations<'_> {
         bases: &BTreeMap<String, crate::ClassBase>,
     ) -> Result<(), crate::SourceDiagnostic> {
         for (key, declaration) in &self.constants {
-            if let Some((owner, name)) = key.split_once('.') {
+            if let Some((owner, name)) = key.rsplit_once('.') {
                 if bases.get(owner).is_some_and(|base| {
                     name == "initialize"
                         || crate::api::core().method(base.api_name(), name).is_some()
@@ -898,6 +901,12 @@ impl<'a> Parser<'a> {
                 .as_ref()
                 .is_some_and(|owner| self.declarations.classes.contains(owner));
             if class_field
+                || (self.owner.is_none()
+                    && self
+                        .declarations
+                        .owners
+                        .iter()
+                        .any(|owner| owner.contains('.')))
                 || !self
                     .declarations
                     .constant_values
@@ -926,15 +935,13 @@ impl<'a> Parser<'a> {
     }
 
     fn alias_key(&self, path: &str) -> Option<String> {
-        let owned = self.owner.as_ref().map(|owner| format!("{owner}.{path}"));
-        owned
-            .filter(|key| self.declarations.aliases.contains_key(key))
-            .or_else(|| {
-                self.declarations
-                    .aliases
-                    .contains_key(path)
-                    .then(|| path.into())
-            })
+        self.owner
+            .as_deref()
+            .into_iter()
+            .flat_map(crate::names::scopes)
+            .map(|owner| format!("{owner}.{path}"))
+            .chain(std::iter::once(path.to_owned()))
+            .find(|key| self.declarations.aliases.contains_key(key))
     }
 
     /// Resolve an alias in its declaration's native-name and owner environment.
@@ -1088,7 +1095,7 @@ pub(crate) fn collect_declarations<'a>(
         parser.source_index = source_index;
         let result = (|| {
             parser.imports()?;
-            let mut outer_names = None;
+            let mut outer_names = Vec::new();
             while parser.peek()? != Kind::End {
                 match parser.peek()? {
                     Kind::Word("const" | "enum" | "var")
@@ -1337,15 +1344,31 @@ pub(crate) fn collect_declarations<'a>(
                             );
                         }
                     }
-                    Kind::Word("module" | "class") if parser.owner.is_none() => {
+                    Kind::Word("module" | "class")
+                        if parser.owner.is_none()
+                            || (parser.peek()? == Kind::Word("module")
+                                && !parser
+                                    .owner
+                                    .as_ref()
+                                    .is_some_and(|owner| aliases.classes.contains(owner))) =>
+                    {
                         let class = parser.token()?.kind == Kind::Word("class");
                         let name = parser.identifier()?;
                         let Kind::Word(name) = name.kind else {
                             unreachable!()
                         };
-                        aliases.owners.insert(name.into());
+                        let path = parser
+                            .owner
+                            .as_ref()
+                            .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
+                        if !crate::names::module_path(&path) {
+                            return Err(
+                                parser.error(parser.offset, "module nesting exceeds 64 levels")
+                            );
+                        }
+                        aliases.owners.insert(path.clone());
                         if class {
-                            aliases.classes.insert(name.into());
+                            aliases.classes.insert(path.clone());
                         }
                         while parser.peek()? != Kind::Punctuation('{') {
                             if parser.token()?.kind == Kind::End {
@@ -1353,14 +1376,15 @@ pub(crate) fn collect_declarations<'a>(
                             }
                         }
                         parser.token()?;
-                        parser.owner = Some(name.into());
-                        outer_names = Some(parser.names.clone());
+                        outer_names.push((parser.owner.clone(), parser.names.clone()));
+                        parser.owner = Some(path);
                         parser.imports()?;
                     }
                     Kind::Punctuation('}') if parser.owner.is_some() => {
                         parser.token()?;
-                        parser.owner = None;
-                        parser.names = outer_names.take().unwrap();
+                        let (owner, names) = outer_names.pop().unwrap();
+                        parser.owner = owner;
+                        parser.names = names;
                     }
                     Kind::Word("function") => {
                         parser.token()?;
@@ -2678,27 +2702,30 @@ impl<'a> Parser<'a> {
         let Kind::Word(first) = first.kind else {
             unreachable!()
         };
-        let (module, member) = if self.peek()? == Kind::Punctuation('.') {
+        let mut path = vec![first.to_owned()];
+        while self.peek()? == Kind::Punctuation('.') {
             self.token()?;
             let member = self.identifier()?;
             let Kind::Word(member) = member.kind else {
                 unreachable!()
             };
-            (Some(first), member)
-        } else {
-            (None, first)
-        };
+            path.push(member.to_owned());
+        }
+        let member = path.pop().unwrap();
+        let module = (!path.is_empty()).then(|| path.join("."));
         let (arguments, end) = self.call_arguments(start, depth)?;
         self.node(
             if let Some(module) = module {
                 ExpressionKind::OwnerCall {
-                    module: module.into(),
-                    member: member.into(),
+                    lexical: false,
+                    module,
+                    member,
                     arguments,
                 }
             } else {
                 ExpressionKind::GlobalCall {
-                    member: member.into(),
+                    lexical: false,
+                    member,
                     arguments,
                 }
             },
@@ -3715,19 +3742,17 @@ impl Parser<'_> {
             return Ok(crate::ParameterType::Callback(Box::new(signature)));
         }
         let path = self.path()?;
-        let qualified = self.owner.as_ref().map(|owner| format!("{owner}.{path}"));
-        if let Some(name) = qualified
-            .as_ref()
-            .filter(|name| self.declarations.enum_types.contains_key(*name))
-            .or_else(|| {
-                self.declarations
-                    .enum_types
-                    .contains_key(&path)
-                    .then_some(&path)
-            })
-        {
+        let qualified = self
+            .owner
+            .as_deref()
+            .into_iter()
+            .flat_map(crate::names::scopes)
+            .map(|owner| format!("{owner}.{path}"))
+            .chain(std::iter::once(path.clone()))
+            .find(|name| self.declarations.enum_types.contains_key(name));
+        if let Some(name) = qualified {
             return Ok(crate::ParameterType::Enum(
-                self.declarations.enum_type(name),
+                self.declarations.enum_type(&name),
             ));
         }
         if let Some(ty) = self.alias_parameter(&path, at)? {
@@ -3951,6 +3976,7 @@ impl Parser<'_> {
 }
 
 pub(crate) struct ParsedUnit {
+    pub modules: Vec<String>,
     pub shared: Vec<(Option<String>, ParsedBinding)>,
     pub functions: Vec<(Option<String>, ParsedFunction)>,
     pub classes: Vec<ParsedClass>,
@@ -3988,19 +4014,49 @@ pub(crate) fn declarations<'a>(
     let mut parser = Parser::new(source, declarations);
     parser.source_index = source_index;
     let mut unit = ParsedUnit {
+        modules: Vec::new(),
         shared: Vec::new(),
         functions: Vec::new(),
         classes: Vec::new(),
     };
     let mut count = 0;
+    let mut scopes = Vec::new();
     parser.imports()?;
     while parser.peek()? != Kind::End {
+        if parser.peek()? == Kind::Punctuation('}') && !scopes.is_empty() {
+            parser.token()?;
+            let (owner, names) = scopes.pop().unwrap();
+            parser.owner = owner;
+            parser.names = names;
+            continue;
+        }
+        if parser.peek()? == Kind::Word("module") {
+            parser.token()?;
+            let token = parser.identifier()?;
+            parser.reject_binding(&token)?;
+            let Kind::Word(name) = token.kind else {
+                unreachable!()
+            };
+            let path = parser
+                .owner
+                .as_ref()
+                .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
+            if !crate::names::module_path(&path) {
+                return Err(parser.error(token.span.start, "module nesting exceeds 64 levels"));
+            }
+            parser.expect(Kind::Punctuation('{'), "'{' after module name")?;
+            unit.modules.push(path.clone());
+            scopes.push((parser.owner.clone(), parser.names.clone()));
+            parser.owner = Some(path);
+            parser.imports()?;
+            continue;
+        }
         if matches!(parser.peek()?, Kind::Word("const" | "enum" | "var")) {
             unit.shared.extend(
                 parser
                     .constant_declarations()?
                     .into_iter()
-                    .map(|value| (None, value)),
+                    .map(|value| (parser.owner.clone(), value)),
             );
             continue;
         }
@@ -4008,7 +4064,10 @@ pub(crate) fn declarations<'a>(
             parser.skip_typedef()?;
             continue;
         }
-        if matches!(parser.peek()?, Kind::Word("module" | "class")) {
+        if parser.peek()? == Kind::Word("class") {
+            if parser.owner.is_some() {
+                return Err(parser.error(parser.offset, "classes inside modules are unsupported"));
+            }
             let is_class = parser.token()?.kind == Kind::Word("class");
             let token = parser.identifier()?;
             parser.reject_binding(&token)?;
@@ -4193,12 +4252,16 @@ pub(crate) fn declarations<'a>(
                     .extend(methods.into_iter().map(|f| (Some(name.into()), f)));
             }
         } else {
-            unit.functions.push((None, parser.function()?));
+            unit.functions
+                .push((parser.owner.clone(), parser.function()?));
             count += 1;
         }
         if count > crate::unit::MAX_FUNCTIONS {
             return Err(parser.error(parser.offset, "compilation unit exceeds 256-function limit"));
         }
+    }
+    if !scopes.is_empty() {
+        return Err(parser.error(parser.offset, "unterminated module body"));
     }
     Ok(unit)
 }

@@ -753,6 +753,29 @@ widening is introduced. See the
 
 ## Declarations and name resolution
 
+### Nested modules
+
+Modules may contain modules and may be reopened across source files. Their
+canonical identity is a dotted path such as `Tree.Branch.Leaf`; empty modules
+remain declarations. A relative qualifier resolves its first component in the
+nearest enclosing module scope, then globals, and follows child modules from
+there. A nearer value or namespace blocks a farther namespace with the same
+name. Locals, parameters, and instance fields retain value-receiver precedence.
+Typedefs and enum types follow the same enclosing-scope search.
+
+Bare shared names and function calls search the current module, its parents,
+then globals. The selected declaration's contract applies; an incompatible
+nearer declaration does not select a farther overload. Calls through stored
+values remain unsupported. Classes inside modules remain unsupported.
+
+Module initialization is lazy and independent: directly accessing a child does
+not activate its parents. Lexical lookup activates parent modules while searching
+for the selected member. A lexical store captures its current receiver before
+the RHS, then searches/activates parents at the write. A qualified store activates
+its target before the RHS. Global scalar constants retain storage in units with
+nested modules so their lexical reads preserve these effects. See the
+[nested-module example](../../../examples/compiler-nested-modules/README.md).
+
 ### Bare instance-field names
 
 In source class methods and declaration initializer expressions, a bare value
@@ -1089,12 +1112,13 @@ available; a native Object projection alone cannot establish a witness.
 
 ### User calls and owner lookup
 
-Qualified calls resolve to a top-level user module in the compilation unit.
+Qualified calls resolve to a user module at any supported nesting depth in the
+compilation unit.
 Value calls require a supported non-Void result. Source bodies and ownership
 metadata are collected before call checking; callers need not precede callees.
 Arguments must satisfy the declared types and positional arity: a nullable
 parameter accepts Null, its scalar type, or the same union; scalar parameters
-require exact types. Nested modules remain unsupported. Calls through proven
+require exact types. Calls through proven
 source-instance receivers follow the [class
 contracts](#source-classes). Void module calls are supported as
 [statements](#void-functions-and-statement-calls). The separate
@@ -1103,7 +1127,7 @@ scalars. Module/member names stay symbolic until encoding; neither IDs nor DATA
 method records are generated here.
 
 An unqualified `member(arguments)` resolves to a declared function in the current
-module, or a declared method on the current instance. Forward references and
+module or its enclosing modules, or a declared method on the current instance. Forward references and
 recursion use the collected signatures. A local/parameter with the same spelling
 does not replace that declared call target. A local named after the owning module
 also does not change an unqualified call; explicit qualified calls retain their
@@ -1121,12 +1145,13 @@ lexical callable values and unresolved names remain unsupported.
 
 `$.member(arguments)` selects the global function explicitly, bypassing owner
 lookup and local/parameter names. `$.Module.member(arguments)` selects a function
-in a top-level user module with the same protection from qualifier shadowing.
+in a user module with the same protection from qualifier shadowing; paths such
+as `$.Tree.Branch.member()` are supported.
 Both forms retain ordinary call signatures, argument contexts, and effect order.
 The module form resolves to existing module-call IR; a root prefix is not needed
 after source names have been resolved. Instance methods cannot be selected as
-module functions through the root. Global value reads, nested module/native
-paths, root-object values, and class/static paths remain outside this profile.
+module functions through the root. Global value reads, native paths, root-object values, and class/static paths
+remain outside this profile.
 Unqualified resolution requires collected unit
 declarations; explicit calls in standalone IR/CODE retain external-callee
 obligations.
@@ -1257,7 +1282,7 @@ remain the per-function contracts.
 [Accepted declaration syntax](grammar.md#declarations) is defined in the grammar.
 
 Inputs are one or more source files in caller-supplied order. Global functions
-and flat module members are collected in file/declaration order. Modules may be
+and nested module members are collected in file/declaration order. Modules may be
 reopened within or across files; each `(module, function-name)` identity must be
 unique. Global functions use a separate owner. Reject duplicate globals and a
 global function whose name matches a declared module. `System` is reserved as an
@@ -1321,8 +1346,7 @@ files before calls are checked.
 Forward and recursive calls are accepted; termination is not proven. Calls to
 undeclared external modules/members are rejected. `System.println` remains the
 separate intrinsic. Global functions can serve as entries and checked call
-targets under [owner lookup](#user-calls-and-owner-lookup). General imports, nested/empty modules,
-optional/default parameters, overloading, and arbitrary SDK calls remain
+targets under [owner lookup](#user-calls-and-owner-lookup). General source imports, optional/default parameters, overloading, and arbitrary SDK calls remain
 unsupported.
 
 The unit contains 1..=256 functions total across all files. Function operation,

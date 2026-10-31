@@ -323,6 +323,7 @@ fn native_ir_revalidates_receiver_member_and_effect_order() {
     // later-defined integer first must not move those calls after that print.
     let operations = vec![
         Operation::ModuleCall {
+            lexical: false,
             result: ValueId(0),
             result_type: ciq_compiler::ReturnType::Integer,
             module: "M".into(),

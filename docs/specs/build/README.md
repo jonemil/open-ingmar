@@ -270,9 +270,12 @@ string/constant-array literals in assembly order. Positions are calculated from
 record lengths; no SDK DATA prefix or opaque spans are transplanted.
 
 Statics maps module lookup IDs, including globals, to numeric DATA offsets.
-Globals binds the synthesized app class, global methods, user module fields, and
-a `Toybox` field with type `0x00` and value zero. User modules have parent
-`globals`, their own module lookup ID, member methods, and an empty initializer.
+Globals binds the synthesized app class, global methods, root module fields, and
+a `Toybox` field with type `0x00` and value zero. User modules have their immediate
+containing module as parent (`globals` for
+roots), their own global statics lookup ID, child-module fields, member methods,
+and their shared initializer. Child fields use type `0x0a` and the child lookup
+ID. Direct child lookup therefore activates that child independently of parents.
 Method values resolve their declaration's unit CODE label with the supported
 ordinary-CODE prefix. Parent/module headers retain symbol identities; they are
 not converted to DATA addresses.

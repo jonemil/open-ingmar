@@ -1475,6 +1475,8 @@ pub enum Operation {
     /// use the completed declaration contract; unit validation checks readiness.
     /// Reads retain their VM lookup and reference identity.
     SharedRead {
+        /// Search from the current module through lexical parents instead of direct lookup.
+        lexical: bool,
         result: ValueId,
         module: Option<String>,
         field: String,
@@ -1487,9 +1489,12 @@ pub enum Operation {
         field: String,
         value: ValueId,
     },
-    /// Capture and activate a mutable shared binding's owner before RHS effects.
-    /// The private builder must complete with exactly one SharedWrite.
+    /// Capture a mutable shared binding's receiver before RHS effects.
+    /// Direct mode activates the owner now; lexical mode searches parents at
+    /// SharedWrite. The private builder must complete with exactly one write.
     SharedBegin {
+        /// Search from the current module through lexical parents instead of direct lookup.
+        lexical: bool,
         builder: BuilderId,
         module: Option<String>,
         field: String,
@@ -1539,6 +1544,8 @@ pub enum Operation {
     /// Allocate a source instance into private storage before evaluating user
     /// initializer arguments. The instance cannot escape until SourceNew.
     SourceBegin {
+        /// Search from the current module through lexical parents instead of direct lookup.
+        lexical: bool,
         builder: BuilderId,
         class: String,
         base: ClassBase,
@@ -1814,6 +1821,8 @@ pub enum Operation {
     },
     /// Invoke a global user function with a checked result contract.
     GlobalCall {
+        /// Search from the current module through lexical parents instead of direct lookup.
+        lexical: bool,
         result: ValueId,
         result_type: ReturnType,
         member: String,
@@ -1821,10 +1830,14 @@ pub enum Operation {
     },
     /// Invoke a global user function for effects and discard its VM result.
     GlobalCallStatement {
+        /// Search from the current module through lexical parents instead of direct lookup.
+        lexical: bool,
         member: String,
         arguments: Vec<ValueId>,
     },
     ModuleCall {
+        /// Search from the current module through lexical parents instead of direct lookup.
+        lexical: bool,
         result: ValueId,
         result_type: ReturnType,
         module: String,
@@ -1850,6 +1863,8 @@ pub enum Operation {
     /// Invoke a qualified user method for effects, discarding any VM result.
     /// Unit validation checks its parameter contracts and exact arity.
     ModuleCallStatement {
+        /// Search from the current module through lexical parents instead of direct lookup.
+        lexical: bool,
         module: String,
         member: String,
         arguments: Vec<ValueId>,
@@ -1913,6 +1928,19 @@ pub enum Operation {
 }
 
 impl Operation {
+    pub(crate) fn lexical_lookup(&self) -> bool {
+        match self {
+            Self::SharedRead { lexical, .. }
+            | Self::SharedBegin { lexical, .. }
+            | Self::SourceBegin { lexical, .. }
+            | Self::GlobalCall { lexical, .. }
+            | Self::GlobalCallStatement { lexical, .. }
+            | Self::ModuleCall { lexical, .. }
+            | Self::ModuleCallStatement { lexical, .. } => *lexical,
+            _ => false,
+        }
+    }
+
     /// Return the value defined by this operation, independently of its position.
     pub(crate) fn result(&self) -> Option<ValueId> {
         match self {
@@ -3215,9 +3243,10 @@ impl Function {
                     ref module,
                     ref field,
                     ref result_type,
+                    ..
                 } => {
                     if let Some(module) = module {
-                        validate_call_names(None, module).map_err(fail)?;
+                        validate_call_names(Some(module), "module").map_err(fail)?;
                     }
                     validate_call_names(None, field).map_err(fail)?;
                     if FieldKind::value_contract(result_type.clone()).is_none() {
@@ -3238,7 +3267,7 @@ impl Function {
                     value,
                 } => {
                     if let Some(module) = module {
-                        validate_call_names(None, module).map_err(fail)?;
+                        validate_call_names(Some(module), "module").map_err(fail)?;
                     }
                     validate_call_names(None, field).map_err(fail)?;
                     (None, vec![value])
@@ -4076,6 +4105,7 @@ impl Function {
                 | Operation::GlobalCallStatement {
                     ref member,
                     ref arguments,
+                    ..
                 } => {
                     validate_call_names(None, member).map_err(fail)?;
                     validate_call_arguments(arguments, &types).map_err(fail)?;
@@ -4102,6 +4132,7 @@ impl Function {
                     ref module,
                     ref member,
                     ref arguments,
+                    ..
                 } => {
                     validate_call_names(Some(module), member).map_err(fail)?;
                     validate_call_arguments(arguments, &types).map_err(fail)?;
@@ -5044,6 +5075,7 @@ impl Function {
                     ref module,
                     ref field,
                     ref result_type,
+                    ..
                 } => format!(
                     ".read-shared %{} {} {field} result={}",
                     result.0,
@@ -5054,6 +5086,7 @@ impl Function {
                     builder,
                     ref module,
                     ref field,
+                    ..
                 } => format!(
                     ".begin-shared &{} {} {field}",
                     builder.0,
@@ -5133,6 +5166,7 @@ impl Function {
                     builder,
                     ref class,
                     base,
+                    ..
                 } => format!(".begin-source &{} {class} {}", builder.0, base.text()),
                 Operation::SourceNew {
                     result,
@@ -5469,6 +5503,7 @@ impl Function {
                     ref module,
                     ref member,
                     ref arguments,
+                    ..
                 } => {
                     let arguments = arguments
                         .iter()
@@ -5484,6 +5519,7 @@ impl Function {
                     ref module,
                     ref member,
                     ref arguments,
+                    ..
                 } => {
                     let arguments = arguments
                         .iter()
@@ -5496,6 +5532,7 @@ impl Function {
                     ref result_type,
                     ref member,
                     ref arguments,
+                    ..
                 } => {
                     let arguments = arguments
                         .iter()
@@ -5510,6 +5547,7 @@ impl Function {
                 Operation::GlobalCallStatement {
                     ref member,
                     ref arguments,
+                    ..
                 } => {
                     let arguments = arguments
                         .iter()
@@ -5591,6 +5629,9 @@ impl Function {
                 }
                 Operation::Return { value } => format!(".return %{}", value.0),
             });
+            if operation.operation.lexical_lookup() {
+                text.push_str(" lookup=lexical");
+            }
             if let Some(span) = operation.span {
                 text.push_str(&format!(" span={}:{}", span.start, span.end));
             }
@@ -5639,6 +5680,7 @@ fn compile_fragment(
     let constants = aliases.immediate_constants();
     let parsed = parser::declarations(source, aliases, 0)?;
     if !parsed.shared.is_empty()
+        || !parsed.modules.is_empty()
         || !parsed.classes.is_empty()
         || parsed.functions.len() != 1
         || parsed.functions[0].0.is_some()
@@ -5660,7 +5702,7 @@ fn validate_call_names(module: Option<&str>, member: &str) -> Result<(), &'stati
             .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
             && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
     };
-    if !valid(member) || module.is_some_and(|m| !valid(m)) {
+    if !valid(member) || module.is_some_and(|m| !crate::names::module_path(m)) {
         return Err("invalid module or member name");
     }
     if module == Some("System") {

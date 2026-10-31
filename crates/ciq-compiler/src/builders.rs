@@ -53,6 +53,7 @@ pub(crate) fn validate(
             builder,
             module,
             field,
+            ..
         } = &op.operation
         {
             crate::validate_call_names(module.as_deref(), field).map_err(|e| fail(index, e))?;
@@ -150,6 +151,7 @@ pub(crate) fn validate(
             builder,
             ref class,
             base,
+            ..
         } = op.operation
         {
             if declarations

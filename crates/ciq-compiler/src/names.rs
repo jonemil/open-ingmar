@@ -144,3 +144,26 @@ impl Names {
         self.type_name(path).ok().flatten().as_deref() == Some("Toybox.WatchUi.BehaviorDelegate")
     }
 }
+
+/// Visit a lexical module and each containing module, innermost first.
+pub(crate) fn scopes(owner: &str) -> impl Iterator<Item = &str> {
+    std::iter::successors(Some(owner), |path| {
+        path.rsplit_once('.').map(|(parent, _)| parent)
+    })
+}
+
+/// Encode a module path in an assembly identifier without collisions with roots.
+pub(crate) fn module_key(path: &str) -> String {
+    if !path.contains('.') {
+        return path.into();
+    }
+    path.split('.')
+        .map(|part| format!("{}_{}", part.len(), part))
+        .collect::<Vec<_>>()
+        .join("_")
+}
+
+/// Validate a bounded dotted module path independently of native bindings.
+pub(crate) fn module_path(path: &str) -> bool {
+    path.split('.').count() <= 64 && path.split('.').all(ciq_prg::symbols::source::valid_alias)
+}

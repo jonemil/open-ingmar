@@ -322,11 +322,7 @@ pub fn build_console_application(
     {
         return Err(error("initialize cannot be selected as the startup entry"));
     }
-    let modules: BTreeSet<_> = unit
-        .declarations()
-        .iter()
-        .filter_map(|d| d.module.clone())
-        .collect();
+    let modules = unit.modules().clone();
     if modules
         .iter()
         .any(|m| matches!(m.as_str(), "globals" | "statics" | "Toybox"))
@@ -360,7 +356,11 @@ pub fn build_console_application(
                 .flat_map(|c| c.methods.iter().map(|f| f.name().to_owned())),
         )
         .chain(unit.shared_bindings().iter().map(|c| c.name.clone()))
-        .chain(modules.iter().cloned())
+        .chain(
+            modules
+                .iter()
+                .map(|path| path.rsplit('.').next().unwrap().to_owned()),
+        )
         .chain(unit.classes().iter().map(|class| class.name.clone()))
         .chain(
             unit.declarations()
@@ -422,7 +422,10 @@ pub fn build_console_application(
         bindings.insert(format!("__ciq_native_{name}"), *id);
     }
     for (module, id) in &module_ids {
-        bindings.insert(format!("__ciq_module_{module}"), *id);
+        bindings.insert(
+            format!("__ciq_module_{}", crate::names::module_key(module)),
+            *id,
+        );
     }
     let literal_names: BTreeSet<_> = unit
         .declarations()
@@ -547,7 +550,13 @@ pub fn build_console_application(
     let shared_hook = |module: Option<&str>| {
         module.map_or_else(
             || "__ciq_shared_globals".into(),
-            |module| format!("__ciq_shared_module_{}_{}", module.len(), module),
+            |module| {
+                format!(
+                    "__ciq_shared_module_{}_{}",
+                    module.len(),
+                    crate::names::module_key(module)
+                )
+            },
         )
     };
     let shared_owners = unit
@@ -576,7 +585,13 @@ pub fn build_console_application(
     items.extend(unit.lower().items().iter().cloned());
     let assembly = Program::new(items).map_err(error)?;
     let labels = assembly.labels().map_err(error)?;
-    let module_alias = |name: &str| format!("__ciq_data_module_{}_{}", name.len(), name);
+    let module_alias = |name: &str| {
+        format!(
+            "__ciq_data_module_{}_{}",
+            name.len(),
+            crate::names::module_key(name)
+        )
+    };
     let mut statics_fields = vec![field(GLOBALS, 0, 10, Reference::Raw(0))];
     for id in module_ids.values() {
         statics_fields.push(field(*id, 0, 10, Reference::Raw(0)));
@@ -608,7 +623,7 @@ pub fn build_console_application(
     for d in unit.declarations().iter().filter(|d| d.module.is_none()) {
         global_fields.push(method(ids[d.function.name()], 0x10, &d.code_label()));
     }
-    for module in &modules {
+    for module in modules.iter().filter(|path| !path.contains('.')) {
         global_fields.push(field(
             ids[module],
             0x50,
@@ -786,6 +801,19 @@ pub fn build_console_application(
             "__ciq_noop".into()
         };
         let mut fields = vec![method(INIT, 0x30, &hook)];
+        for child in modules.iter().filter(|child| {
+            child
+                .rsplit_once('.')
+                .is_some_and(|(parent, _)| parent == module)
+        }) {
+            let name = child.rsplit('.').next().unwrap();
+            fields.push(field(
+                ids[name],
+                0x50,
+                10,
+                Reference::Raw(module_ids[child]),
+            ));
+        }
         for constant in unit
             .shared_bindings()
             .iter()
@@ -805,7 +833,11 @@ pub fn build_console_application(
             [
                 None,
                 None,
-                Some(Reference::Raw(GLOBALS)),
+                Some(Reference::Raw(
+                    module
+                        .rsplit_once('.')
+                        .map_or(GLOBALS, |(parent, _)| module_ids[parent]),
+                )),
                 Some(Reference::Raw(module_ids[module])),
             ],
             fields,

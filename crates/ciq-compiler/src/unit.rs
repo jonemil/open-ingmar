@@ -81,6 +81,7 @@ fn source_callees<'a>(owner: Owner<'a>, operation: &'a Operation) -> Vec<(Owner<
 fn activation_callees<'a>(
     owner: Owner<'a>,
     operation: &'a Operation,
+    function: &'a Function,
     bodies: &[(Owner<'a>, &'a Function)],
 ) -> Vec<(Owner<'a>, &'a str)> {
     let mut calls = effect_callees(owner, operation);
@@ -91,6 +92,7 @@ fn activation_callees<'a>(
         }
         | Operation::SharedBegin {
             module: Some(module),
+            lexical: false,
             ..
         }
         | Operation::ModuleCall { module, .. }
@@ -106,6 +108,25 @@ fn activation_callees<'a>(
                 })
                 .map(|(owner, f)| (*owner, f.name())),
         );
+    }
+    if let (Owner::Module(current), Some(target)) = (owner, lexical_target(operation, function)) {
+        if matches!(operation, Operation::SharedBegin { .. }) {
+            return calls;
+        }
+        for scope in crate::names::scopes(current).skip(1) {
+            calls.extend(
+                bodies
+                    .iter()
+                    .filter(|(owner, f)| {
+                        *owner == Owner::Module(scope)
+                            && f.name().starts_with("__ciq_initialize_shared_")
+                    })
+                    .map(|(owner, f)| (*owner, f.name())),
+            );
+            if target == Some(scope) {
+                break;
+            }
+        }
     }
     calls
 }
@@ -306,7 +327,7 @@ fn exit_callers<'a>(bodies: &[(Owner<'a>, &'a Function)]) -> BTreeSet<(Owner<'a>
             if function.operations().iter().any(|located| {
                 requests_exit(&located.operation)
                     || erased_callbacks(function, &located.operation)
-                    || activation_callees(owner, &located.operation, bodies)
+                    || activation_callees(owner, &located.operation, function, bodies)
                         .iter()
                         .any(|key| exits.contains(key))
                     || comparator_callee(function, &located.operation, bodies)
@@ -343,7 +364,7 @@ impl FunctionDeclaration {
             Some(module) => format!(
                 "__ciq_fn_m_{}_{}_{}_{}",
                 module.len(),
-                module,
+                crate::names::module_key(module),
                 name.len(),
                 name
             ),
@@ -889,6 +910,7 @@ impl SharedBinding {
 /// CODE lowering leaves symbol/DATA bindings and application metadata external.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationUnit {
+    modules: BTreeSet<String>,
     declarations: Vec<FunctionDeclaration>,
     classes: Vec<ClassDeclaration>,
     shared: Vec<SharedBinding>,
@@ -993,10 +1015,30 @@ impl CompilationUnit {
     /// Every enum type used by a body or contract must have exactly one declaration.
     pub fn with_enums(
         declarations: Vec<FunctionDeclaration>,
+        classes: Vec<ClassDeclaration>,
+        shared: Vec<SharedBinding>,
+        enums: Vec<crate::EnumDeclaration>,
+    ) -> Result<Self, UnitError> {
+        Self::with_modules(declarations, classes, shared, enums, Vec::new())
+    }
+
+    /// Validate explicit modules, including empty scopes, with all owned declarations.
+    /// Owners imply their containing modules; paths and member collisions are checked.
+    pub fn with_modules(
+        declarations: Vec<FunctionDeclaration>,
         mut classes: Vec<ClassDeclaration>,
         mut shared: Vec<SharedBinding>,
         enums: Vec<crate::EnumDeclaration>,
+        modules: Vec<String>,
     ) -> Result<Self, UnitError> {
+        let modules = module_names(modules, &declarations, &shared);
+        if modules.len() > 256 {
+            return Err(UnitError {
+                declaration: None,
+                operation: None,
+                message: "unit exceeds 256 module scopes".into(),
+            });
+        }
         for constant in &mut shared {
             constant.value_type = FieldKind::value_contract(constant.value_type.clone())
                 .ok_or_else(|| UnitError {
@@ -1058,6 +1100,7 @@ impl CompilationUnit {
             }
         }
         let unit = Self {
+            modules,
             declarations,
             classes,
             shared,
@@ -1117,7 +1160,7 @@ impl CompilationUnit {
         let mut names = std::collections::BTreeSet::new();
         for (index, d) in self.declarations.iter().enumerate() {
             if let Some(module) = &d.module {
-                if !valid(module) || reserved(module) {
+                if !crate::names::module_path(module) || module.split('.').any(reserved) {
                     return Err(fail(
                         Some(index),
                         None,
@@ -1125,6 +1168,32 @@ impl CompilationUnit {
                     ));
                 }
                 names.insert(module.as_str());
+            }
+        }
+        for module in &self.modules {
+            if !crate::names::module_path(module) || module.split('.').any(reserved) {
+                return Err(fail(None, None, "invalid or reserved module path".into()));
+            }
+            names.insert(module.as_str());
+            let (parent, member) = module
+                .rsplit_once('.')
+                .map_or((None, module.as_str()), |(parent, member)| {
+                    (Some(parent), member)
+                });
+            if self
+                .declarations
+                .iter()
+                .any(|d| d.module.as_deref() == parent && d.function.name() == member)
+                || self
+                    .shared
+                    .iter()
+                    .any(|binding| binding.module.as_deref() == parent && binding.name == member)
+            {
+                return Err(fail(
+                    None,
+                    None,
+                    "module conflicts with an owned value or function".into(),
+                ));
             }
         }
         for class in &self.classes {
@@ -1411,6 +1480,56 @@ impl CompilationUnit {
                     ));
                 }
             }
+            for (at, located) in function.operations().iter().enumerate() {
+                let Some(target) = lexical_target(&located.operation, function) else {
+                    continue;
+                };
+                let Owner::Module(current) = owner else {
+                    return Err(fail(
+                        Some(index),
+                        Some(at),
+                        "lexical lookup requires a module-owned body".into(),
+                    ));
+                };
+                if target.is_some_and(|target| {
+                    target == current || !current.starts_with(&format!("{target}."))
+                }) {
+                    return Err(fail(
+                        Some(index),
+                        Some(at),
+                        "lexical target must be an enclosing module or globals".into(),
+                    ));
+                }
+                let member = match &located.operation {
+                    Operation::SharedRead { field, .. } | Operation::SharedBegin { field, .. } => {
+                        Some(field.as_str())
+                    }
+                    Operation::ModuleCall { member, .. }
+                    | Operation::ModuleCallStatement { member, .. }
+                    | Operation::GlobalCall { member, .. }
+                    | Operation::GlobalCallStatement { member, .. } => Some(member.as_str()),
+                    Operation::SourceBegin { class, .. } => Some(class.as_str()),
+                    _ => None,
+                };
+                if let Some(member) = member {
+                    for scope in
+                        crate::names::scopes(current).take_while(|scope| Some(*scope) != target)
+                    {
+                        if self.shared.iter().any(|binding| {
+                            binding.module.as_deref() == Some(scope) && binding.name == member
+                        }) || self.declarations.iter().any(|decl| {
+                            decl.module.as_deref() == Some(scope) && decl.function.name() == member
+                        }) || self.modules.contains(&format!("{scope}.{member}"))
+                        {
+                            return Err(fail(
+                                Some(index),
+                                Some(at),
+                                "lexical target is shadowed by a nearer declaration".into(),
+                            ));
+                        }
+                    }
+                }
+            }
             let base_calls = function
                 .operations()
                 .iter()
@@ -1478,7 +1597,7 @@ impl CompilationUnit {
                     if (incomplete || !unreadable.is_empty())
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
-                            || activation_callees(owner, &located.operation, &bodies)
+                            || activation_callees(owner, &located.operation, function, &bodies)
                                 .iter()
                                 .any(|key| exit_callers.contains(key))
                             || comparator_callee(function, &located.operation, &bodies)
@@ -1560,7 +1679,7 @@ impl CompilationUnit {
                     if !pending.is_empty()
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
-                            || activation_callees(owner, &located.operation, &bodies)
+                            || activation_callees(owner, &located.operation, function, &bodies)
                                 .iter()
                                 .any(|key| exit_callers.contains(key))
                             || comparator_callee(function, &located.operation, &bodies)
@@ -2863,7 +2982,7 @@ impl CompilationUnit {
             crate::validate_call_names(None, &constant.name)
                 .map_err(|message| fail(None, None, message))?;
             if let Some(module) = &constant.module {
-                crate::validate_call_names(None, module)
+                crate::validate_call_names(Some(module), "module")
                     .map_err(|message| fail(None, None, message))?;
             }
             if FieldKind::value_contract(constant.value_type.clone()).as_ref()
@@ -2948,7 +3067,7 @@ impl CompilationUnit {
         // Function summaries include ordinary callees plus lazy initialization of
         // other modules. Globals already exist before any module is activated.
         let callees = |owner, function: &Function, op: &Operation| {
-            let mut targets = activation_callees(owner, op, bodies);
+            let mut targets = activation_callees(owner, op, function, bodies);
             if let Some(key) = comparator_callee(function, op, bodies) {
                 targets.push(key);
             }
@@ -2982,7 +3101,23 @@ impl CompilationUnit {
                     });
                 }
                 for op in function.operations() {
-                    if let Operation::SharedBegin { module, field, .. } = &op.operation {
+                    if let Some((module, field)) = lexical_store(&op.operation, function) {
+                        summary.fields.insert((module.cloned(), field.to_owned()));
+                        if module
+                            .map(String::as_str)
+                            .map_or(Owner::Global, Owner::Module)
+                            != *owner
+                        {
+                            summary.owners.insert(module.cloned());
+                        }
+                    }
+                    if let Operation::SharedBegin {
+                        module,
+                        field,
+                        lexical: false,
+                        ..
+                    } = &op.operation
+                    {
                         summary.fields.insert((module.clone(), field.clone()));
                         if module.as_deref().map_or(Owner::Global, Owner::Module) != *owner {
                             summary.owners.insert(module.clone());
@@ -3041,7 +3176,23 @@ impl CompilationUnit {
                             && !state.unwritten)
                 };
                 let mut required = SharedReads::default();
-                if let Operation::SharedBegin { module, field, .. } = &op.operation {
+                if let Some((module, field)) = lexical_store(&op.operation, function) {
+                    required.fields.insert((module.cloned(), field.to_owned()));
+                    if module
+                        .map(String::as_str)
+                        .map_or(Owner::Global, Owner::Module)
+                        != owner
+                    {
+                        required.owners.insert(module.cloned());
+                    }
+                }
+                if let Operation::SharedBegin {
+                    module,
+                    field,
+                    lexical: false,
+                    ..
+                } = &op.operation
+                {
                     required.fields.insert((module.clone(), field.clone()));
                     if module.as_deref().map_or(Owner::Global, Owner::Module) != owner {
                         required.owners.insert(module.clone());
@@ -3166,6 +3317,7 @@ impl CompilationUnit {
                         builder,
                         module,
                         field,
+                        ..
                     } => Some((*builder, (module, field))),
                     _ => None,
                 })
@@ -3383,6 +3535,11 @@ impl CompilationUnit {
         Program::new(items).expect("unit identities lower to disjoint assembly labels")
     }
 
+    /// Return canonical module paths in parent-before-child order, including empty scopes.
+    pub fn modules(&self) -> &BTreeSet<String> {
+        &self.modules
+    }
+
     /// Return nominal source enums in their saved declaration order.
     pub fn enums(&self) -> &[crate::EnumDeclaration] {
         &self.enums
@@ -3394,6 +3551,9 @@ impl CompilationUnit {
     /// base identity without a VM import index. Source filenames are not stored.
     pub fn to_ir_text(&self) -> String {
         let mut text = String::from("ciq-unit\n");
+        for module in &self.modules {
+            text.push_str(&format!(".module {module}\n"));
+        }
         for definition in &self.enums {
             text.push_str(&format!(
                 ".enum {} {} {}\n",
@@ -3780,6 +3940,10 @@ pub(crate) fn compile_sources_mapped(
             }
         }
     }
+    let modules = parsed_sources
+        .iter()
+        .flat_map(|parsed| parsed.modules.iter().cloned())
+        .collect::<Vec<_>>();
     for (source_index, parsed) in parsed_sources.into_iter().enumerate() {
         let source = sources[source_index];
         let diagnostic = |diagnostic| SourceDiagnostic {
@@ -3866,7 +4030,9 @@ pub(crate) fn compile_sources_mapped(
         }
     }
     origins.extend(class_origins);
+    let modules = module_names(modules, &declarations, &shared);
     let unit = CompilationUnit {
+        modules,
         declarations,
         classes,
         shared,
@@ -4028,6 +4194,10 @@ fn prepare_sources<'a>(
         }
     }
     let mut calls = source_ir::CallContext::new();
+    calls.modules = parsed_sources
+        .iter()
+        .flat_map(|unit| unit.modules.iter().cloned())
+        .collect();
     calls.constants = aliases.immediate_constants();
     calls.unchecked = unchecked;
     for parsed in &parsed_sources {
@@ -4396,6 +4566,7 @@ fn parse_unit_ir_context(
     let mut classes = Vec::new();
     let mut shared = Vec::new();
     let mut enums = Vec::new();
+    let mut modules = Vec::new();
     let mut locations = Vec::new();
     let mut class_locations = Vec::new();
     fn function(
@@ -4427,6 +4598,7 @@ fn parse_unit_ir_context(
             .collect::<Vec<_>>()
             .as_slice()
         {
+            [".module", path] => modules.push((*path).to_owned()),
             [".enum", owner, name, backing] => enums.push(crate::EnumDeclaration {
                 module: (*owner != "$").then(|| (*owner).to_owned()),
                 name: (*name).to_owned(),
@@ -4822,7 +4994,7 @@ fn parse_unit_ir_context(
         }
     }
     locations.extend(class_locations);
-    CompilationUnit::with_enums(declarations, classes, shared, enums)
+    CompilationUnit::with_modules(declarations, classes, shared, enums, modules)
         .and_then(|unit| {
             if let Some(context) = context {
                 unit.validate_declaration_api(context)?;
@@ -4839,4 +5011,75 @@ fn parse_unit_ir_context(
                 e.message,
             )
         })
+}
+
+/// Include explicit modules and every containing scope implied by owned members.
+fn module_names(
+    modules: Vec<String>,
+    declarations: &[FunctionDeclaration],
+    shared: &[SharedBinding],
+) -> BTreeSet<String> {
+    modules
+        .iter()
+        .map(String::as_str)
+        .chain(declarations.iter().filter_map(|d| d.module.as_deref()))
+        .chain(shared.iter().filter_map(|d| d.module.as_deref()))
+        .flat_map(crate::names::scopes)
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Find a lexical store's declared binding when its completion performs lookup.
+fn lexical_store<'a>(
+    operation: &'a Operation,
+    function: &'a Function,
+) -> Option<(Option<&'a String>, &'a str)> {
+    let Operation::SharedWrite { builder, .. } = operation else {
+        return None;
+    };
+    function
+        .operations()
+        .iter()
+        .find_map(|op| match &op.operation {
+            Operation::SharedBegin {
+                builder: begin,
+                module,
+                field,
+                lexical: true,
+            } if begin == builder => Some((module.as_ref(), field.as_str())),
+            _ => None,
+        })
+}
+
+/// Return the declared target for lexical resolution; None within Some means globals.
+fn lexical_target<'a>(operation: &'a Operation, function: &'a Function) -> Option<Option<&'a str>> {
+    match operation {
+        Operation::SharedRead {
+            module,
+            lexical: true,
+            ..
+        }
+        | Operation::SharedBegin {
+            module,
+            lexical: true,
+            ..
+        } => Some(module.as_deref()),
+        Operation::ModuleCall {
+            module,
+            lexical: true,
+            ..
+        }
+        | Operation::ModuleCallStatement {
+            module,
+            lexical: true,
+            ..
+        } => Some(Some(module.as_str())),
+        Operation::GlobalCall { lexical: true, .. }
+        | Operation::GlobalCallStatement { lexical: true, .. }
+        | Operation::SourceBegin { lexical: true, .. } => Some(None),
+        Operation::SharedWrite { .. } => {
+            lexical_store(operation, function).map(|(module, _)| module.map(String::as_str))
+        }
+        _ => None,
+    }
 }

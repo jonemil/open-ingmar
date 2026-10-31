@@ -188,6 +188,20 @@ reference temporaries use this transfer on their final read; source locals keep
 ordinary assignment/frame lifetimes. This is ownership scheduling, not early
 destruction of named locals based on last use.
 
+### Nested module lookup
+
+Direct access uses the resolved module statics ID, independently of namespace
+depth. Lexical shared reads and function/class lookup use `getselfv` from the
+current module receiver, preserving parent-search initialization. Lexical shared
+stores capture `getself` before their RHS and complete with `putv`; direct stores
+retain target activation before the RHS.
+
+Assembly aliases cannot contain dots. Root module names retain their spelling;
+nested paths encode each component as `<byte-length>_<name>`, separated by
+underscores. The leading digit distinguishes nested keys from root identifiers.
+This key is used consistently for module symbols, code labels, and initializer
+hooks; source and IR keep the readable dotted identity.
+
 ### Runtime object predicates
 
 Lowering evaluates the tested value, selects the runtime class with `getmv`,
@@ -545,10 +559,11 @@ Lowering emits all bodies into one assembly model in declaration order, using:
 
 ```text
 global: __ciq_fn_g_<name-byte-length>_<name>
-member: __ciq_fn_m_<module-byte-length>_<module>_<name-byte-length>_<name>
+member: __ciq_fn_m_<module-path-byte-length>_<module-key>_<name-byte-length>_<name>
 ```
 
-Lengths are decimal; source names are ASCII. For example, global `probe` maps to
+Lengths are decimal; source names are ASCII. The module key follows the
+[nested path encoding](#nested-module-lookup). For example, global `probe` maps to
 `__ciq_fn_g_5_probe`, and `Numbers.difference` maps to
 `__ciq_fn_m_7_Numbers_10_difference`. Internal block and string aliases use that
 label as their prefix, preventing collisions across owners. Method metadata must

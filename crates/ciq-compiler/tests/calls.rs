@@ -173,7 +173,7 @@ fn unsupported_call_shapes_are_rejected_with_source_diagnostics() {
     assert!(error.message.contains("expected"));
     for call in [
         ".call %0 Numbers.left",
-        ".call %0 bad.module left",
+        ".call %0 bad..module left",
         ".call %0 Numbers 42",
     ] {
         assert!(

@@ -53,9 +53,9 @@ fn lexical_bindings_do_not_leak_between_owners_or_files() {
     let own_module = "module Sys { function println(n) {} }";
     let caller = "function main() { Sys.println(41); }";
     let unit = compile_sources(&[owner, own_module, caller]).unwrap();
-    assert!(unit.to_ir_text().contains(".call-discard Sys println"));
+    assert!(unit.to_ir_text().contains(" Sys println "));
     let unit = compile_sources(&[&format!("{owner} {own_module} {caller}")]).unwrap();
-    assert!(unit.to_ir_text().contains(".call-discard Sys println"));
+    assert!(unit.to_ir_text().contains(" Sys println "));
     let error = compile_sources(&[owner, caller]).unwrap_err();
     assert_eq!(error.source, 1);
     assert!(error.diagnostic.message.contains("Sys.println"));

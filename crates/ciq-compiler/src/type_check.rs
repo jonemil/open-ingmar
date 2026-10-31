@@ -526,7 +526,9 @@ fn inspect(
             Operation::GlobalCall {
                 member, arguments, ..
             }
-            | Operation::GlobalCallStatement { member, arguments } => {
+            | Operation::GlobalCallStatement {
+                member, arguments, ..
+            } => {
                 if let Some(parameters) = signatures.get(&(String::new(), member.clone())) {
                     boundaries.extend(parameters.iter().cloned().zip(arguments.iter().copied()));
                 }
@@ -541,6 +543,7 @@ fn inspect(
                 module,
                 member,
                 arguments,
+                ..
             } => {
                 if let Some(parameters) = signatures.get(&(module.clone(), member.clone())) {
                     boundaries.extend(parameters.iter().cloned().zip(arguments.iter().copied()));

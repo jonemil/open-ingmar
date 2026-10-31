@@ -146,7 +146,7 @@ fn duplicate_and_conflicting_declarations_fail_for_source_typed_and_text_units()
     let duplicate =
         CompilationUnit::new(vec![declaration.clone(), declaration.clone()]).unwrap_err();
     assert_eq!(duplicate.declaration, Some(1));
-    for module in ["System", "while", "bad.name", ""] {
+    for module in ["System", "while", "bad..name", ""] {
         assert!(
             CompilationUnit::new(vec![FunctionDeclaration {
                 module: Some(module.into()),

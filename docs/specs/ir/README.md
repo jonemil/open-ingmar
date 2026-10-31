@@ -384,6 +384,20 @@ required initialization, and snapshot/null proofs. Unit reload rechecks these
 same contracts. A result tag cannot forge a field or source-class identity
 merely because a native projection matches.
 
+### Lexical module lookup
+
+Shared reads/captures, source allocation, and global/module calls carry a
+`lexical` flag, serialized as trailing `lookup=lexical` before any span. Its
+absence means direct lookup. The named owner remains the resolved declaration,
+so saved IR retains full type and ownership checking.
+
+Lexical mode requires a module-owned body and a strict enclosing module or
+global target. A nearer shared binding, function, or child module must not
+shadow the selected member. Unit effects include lazy initialization of each
+searched parent. A lexical shared capture does not activate parents; its matching
+write does so after RHS effects. Direct captures activate the target immediately.
+This distinction also applies to shutdown and initialization-readiness proofs.
+
 ### Unit IR text
 
 Each owner record wraps exactly one complete function. Class containers wrap
@@ -393,7 +407,9 @@ framing, duplicate owners/members, unresolved references, mismatched receiver
 contracts, wrong arity, incompatible arguments/results, invalid fields, and
 ordinary calls to native lifecycle callbacks.
 
-The unit contains 1..=256 bodies including methods. Error body indexes follow
+The unit contains 1..=256 bodies including methods and at most 256 module
+scopes. Dotted paths have at most 64 components. Explicit `.module` records
+preserve empty namespaces; function/shared owners imply their ancestors. Error body indexes follow
 all global/module bodies, then class methods. [Unit
 layout](../lowering/README.md#unit-layout) owns this grouped order and generated
 CODE labels. Multiple supported helper classes may accompany the application
@@ -1846,8 +1862,8 @@ contribute to the outer append.
 
 ### Module calls and operation order
 
-`.call` defines the result of a positional-argument call to a top-level user
-module. Scalar result types are `integer`, `long`, `float`, `double`, `string`,
+`.call` defines the result of a positional-argument call to a user
+module, including a dotted nested-module path. Scalar result types are `integer`, `long`, `float`, `double`, `string`,
 `boolean`, and `char`, plus `nullable-integer`, `nullable-long`,
 `nullable-float`, `nullable-double`, `nullable-string`, `nullable-boolean`, and
 `nullable-char`. Symbol calls use `symbol` or `nullable-symbol`. Method calls

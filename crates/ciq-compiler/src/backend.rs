@@ -251,7 +251,7 @@ pub(crate) fn lower_owned<'a>(
                 Opcode::Spush,
                 vec![Operand::Symbol(module.map_or_else(
                     || "__ciq_source_globals".into(),
-                    |module| format!("__ciq_module_{module}"),
+                    |module| format!("__ciq_module_{}", crate::names::module_key(module)),
                 ))],
             ),
             instruction(Opcode::Getm, vec![]),
@@ -263,16 +263,17 @@ pub(crate) fn lower_owned<'a>(
             Operation::SharedBegin {
                 builder,
                 ref module,
+                lexical,
                 ..
             } => {
-                if owner == Some(module.as_deref()) {
+                if lexical || owner == Some(module.as_deref()) {
                     items.push(instruction(Opcode::Getself, vec![]));
                 } else {
                     items.push(instruction(
                         Opcode::Spush,
                         vec![Operand::Symbol(module.as_ref().map_or_else(
                             || "__ciq_source_globals".into(),
-                            |m| format!("__ciq_module_{m}"),
+                            |m| format!("__ciq_module_{}", crate::names::module_key(m)),
                         ))],
                     ));
                     items.push(instruction(Opcode::Getm, vec![]));
@@ -311,9 +312,12 @@ pub(crate) fn lower_owned<'a>(
                 continue;
             }
             Operation::SourceBegin {
-                builder, ref class, ..
+                builder,
+                ref class,
+                lexical,
+                ..
             } => {
-                items.push(if owner == Some(None) {
+                items.push(if lexical || owner == Some(None) {
                     instruction(
                         Opcode::Getselfv,
                         vec![Operand::Symbol(format!("__ciq_class_{class}"))],
@@ -738,9 +742,14 @@ pub(crate) fn lower_owned<'a>(
                 ref module,
                 ref member,
                 ref arguments,
+                ..
             } => {
                 statement_call(
-                    CallOwner::Module(module),
+                    if located.operation.lexical_lookup() {
+                        CallOwner::Lexical
+                    } else {
+                        CallOwner::Module(module)
+                    },
                     member,
                     arguments,
                     &definitions,
@@ -768,9 +777,14 @@ pub(crate) fn lower_owned<'a>(
             Operation::GlobalCallStatement {
                 ref member,
                 ref arguments,
+                ..
             } => {
                 statement_call(
-                    CallOwner::Global,
+                    if located.operation.lexical_lookup() {
+                        CallOwner::Lexical
+                    } else {
+                        CallOwner::Global
+                    },
                     member,
                     arguments,
                     &definitions,
@@ -1039,9 +1053,14 @@ fn expression(
                     tasks.push(Task::Value(*operand));
                     continue;
                 }
-                Operation::SharedRead { module, field, .. } => {
+                Operation::SharedRead {
+                    module,
+                    field,
+                    lexical,
+                    ..
+                } => {
                     let field = Operand::Symbol(format!("__ciq_field_{field}"));
-                    if definitions.owner == Some(module.as_deref()) {
+                    if *lexical || definitions.owner == Some(module.as_deref()) {
                         (Opcode::Getselfv, vec![field])
                     } else {
                         (
@@ -1049,7 +1068,9 @@ fn expression(
                             vec![
                                 Operand::Symbol(module.as_ref().map_or_else(
                                     || "__ciq_source_globals".into(),
-                                    |module| format!("__ciq_module_{module}"),
+                                    |module| {
+                                        format!("__ciq_module_{}", crate::names::module_key(module))
+                                    },
                                 )),
                                 field,
                             ],
@@ -1170,10 +1191,14 @@ fn expression(
                         tasks.extend(arguments.iter().rev().map(|value| Task::Value(*value)));
                         tasks.push(Task::Context);
                     }
-                    let owner = match definitions[&value] {
-                        Operation::ModuleCall { module, .. } => CallOwner::Module(module),
-                        Operation::GlobalCall { .. } => CallOwner::Global,
-                        _ => CallOwner::Instance,
+                    let owner = if definitions[&value].lexical_lookup() {
+                        CallOwner::Lexical
+                    } else {
+                        match definitions[&value] {
+                            Operation::ModuleCall { module, .. } => CallOwner::Module(module),
+                            Operation::GlobalCall { .. } => CallOwner::Global,
+                            _ => CallOwner::Instance,
+                        }
                     };
                     let Item::Instruction { opcode, operands } =
                         call_target(owner, member, definitions.owner)
@@ -1403,6 +1428,7 @@ fn expression(
 }
 
 enum CallOwner<'a> {
+    Lexical,
     Global,
     Module(&'a str),
     Instance,
@@ -1417,13 +1443,16 @@ fn call_target(owner: CallOwner<'_>, member: &str, current: Option<Option<&str>>
         CallOwner::Global if current == Some(None) => instruction(Opcode::Getselfv, vec![member]),
         CallOwner::Module(module) => instruction(
             Opcode::Getmv,
-            vec![Operand::Symbol(format!("__ciq_module_{module}")), member],
+            vec![
+                Operand::Symbol(format!("__ciq_module_{}", crate::names::module_key(module))),
+                member,
+            ],
         ),
         CallOwner::Global => instruction(
             Opcode::Getmv,
             vec![Operand::Symbol("__ciq_source_globals".into()), member],
         ),
-        CallOwner::Instance => instruction(Opcode::Getselfv, vec![member]),
+        CallOwner::Lexical | CallOwner::Instance => instruction(Opcode::Getselfv, vec![member]),
     }
 }
 type Frame<'a> = (

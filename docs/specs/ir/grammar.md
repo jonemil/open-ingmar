@@ -33,15 +33,16 @@ document = function-document | unit-document
 function-document = "ciq-ir" newline function-header newline
                     operation+ ".end" newline
 unit-document = "ciq-unit" newline unit-record+
-unit-record = enum-record | shared-constant-record | shared-variable-record
+unit-record = module-record | enum-record | shared-constant-record | shared-variable-record
             | owner newline function-document | class-record
+module-record = ".module" module-name newline
 enum-record = ".enum" shared-owner identifier call-result-tag newline
 shared-constant-record = ".shared-constant" shared-owner identifier
                          call-result-tag newline
 shared-variable-record = ".shared-variable" shared-owner identifier
                          call-result-tag newline
-shared-owner = "$" | identifier
-owner = ".owner" "global" | ".owner" "module" identifier
+shared-owner = "$" | module-name
+owner = ".owner" "global" | ".owner" "module" module-name
 class-record = ".class" identifier native-base newline
                field-record* function-document+ ".end-class" newline
 native-base = "Lang.Object" | "Application.AppBase" | "WatchUi.View"
@@ -54,10 +55,13 @@ next sections. Class records use `field-record` below before their methods.
 
 An owner applies to exactly one following function document. There is no unit
 end directive. Class field records precede all methods; class methods require
-`receiver=instance`. Canonical output places enum types first, shared declarations
+`receiver=instance`. Canonical output places module scopes first (parents before
+children), enum types next, shared declarations
 next, then global/module functions,
 then classes, retaining declaration order inside each group. `$` selects global
-shared storage; an identifier selects a source module. Shared records carry no
+shared storage; a dotted path selects a source module. Module records preserve
+empty namespaces; owned declarations also imply their containing scopes.
+Shared records carry no
 spans, and their contracts exclude Void and Graphics.Dc. Each nested function is
 validated before [unit ownership and call
 checks](README.md#compilation-units-and-classes).
@@ -157,15 +161,23 @@ information is serialized. Editing text may require changing or omitting spans.
 ## Operation syntax
 
 `function-document` contains one or more `operation` records. Each consists of
-one directive body and an optional trailing source span:
+one directive body, an optional lexical lookup modifier, and an optional source
+span:
 
 ```text
-operation = operation-body span? newline
+operation = operation-body lexical-lookup? span? newline
+lexical-lookup = "lookup=lexical"
 operation-body = value-operation | storage-operation | unary-operation
                | binary-operation | comparison-operation | predicate-operation
                | sink-operation | call-operation | object-operation
                | array-operation | dictionary-operation | control-operation
 ```
+
+`lexical-lookup` is permitted only on `.read-shared`, `.begin-shared`,
+`.begin-source`, `.call`, `.call-discard`, `.call-global`, and
+`.call-global-discard`. It must follow all operands and precede the optional span.
+The [lexical lookup contract](README.md#lexical-module-lookup) constrains its owner
+and target; other directives reject the modifier.
 
 In each result-producing directive the first `value-id` defines its result;
 other value IDs consume earlier values under the CFG rules. Repetition is

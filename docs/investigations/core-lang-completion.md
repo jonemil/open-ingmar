@@ -634,3 +634,21 @@ records its resolution across the scalar Comparable implementations.
 [inventory]: ../plan.md#toyboxlang-worklist
 [source]: ../specs/frontend/README.md
 [reading]: official-garmin-documentation.md
+
+## Nested module lookup
+
+Experimentally observed, 2026-10-31: SDK 9.2.0, `fr265`, `-O 0`, minimum API
+3.0.0. The two-file [nested-module specimen](../../examples/compiler-nested-modules/README.md)
+reopens `Tree.Branch` and exercises independent child initialization, lexical
+parent reads/calls, and lexical versus qualified stores. Both SDK and generated
+PRGs produce the [expected console](../../examples/compiler-nested-modules/expected.txt).
+Use the shared console-specimen checker with the documented source/scaffold.
+
+SDK-generated PRG inspection shows each nested module has a distinct statics ID;
+its DATA parent is its immediate containing module's ID. Child module fields
+have type `0x0a` and reference the child's statics ID. Direct calls use `getmv`
+with the full target's ID. A child reading a parent/global constant uses
+`getselfv`: intermediate parents activate during the search. A lexical store
+uses `getself` before the RHS and `putv` afterward, so its RHS marker precedes
+parent-initialization markers. A qualified store activates its declared target
+before the RHS. These observations concern authored programs, not SDK internals.

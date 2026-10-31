@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-nested-modules](compiler-nested-modules/README.md): reopened nested
+  namespaces, lexical parent lookup, and lazy initialization/write order.
 - [compiler-unchecked](compiler-unchecked/README.md): unchecked value boundaries,
   operators, index keys, and conditions with explicit saved IR assertions.
 - [compiler-partial-operations](compiler-partial-operations/README.md): partial

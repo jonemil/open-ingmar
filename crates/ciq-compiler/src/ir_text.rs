@@ -168,6 +168,36 @@ pub(crate) fn parse_function_ir_context(
         offset += line.len();
     }
     let fail = |offset, message: &str| Diagnostic::at(source, offset, message);
+    let mut lexical_rows = std::collections::BTreeSet::new();
+    for (at, fields) in &mut rows {
+        if !matches!(
+            fields[0].as_str(),
+            ".read-shared"
+                | ".begin-shared"
+                | ".begin-source"
+                | ".call"
+                | ".call-discard"
+                | ".call-global"
+                | ".call-global-discard"
+        ) {
+            continue;
+        }
+        if let Some(index) = fields.iter().position(|field| field == "lookup=lexical") {
+            if index + 1 != fields.len()
+                && !(index + 2 == fields.len()
+                    && fields
+                        .last()
+                        .is_some_and(|field| field.starts_with("span=")))
+            {
+                return Err(fail(
+                    *at,
+                    "lookup mode must precede the optional final span",
+                ));
+            }
+            lexical_rows.insert(*at);
+            fields.remove(index);
+        }
+    }
     if !rows
         .first()
         .is_some_and(|(_, fields)| fields == &["ciq-ir"])
@@ -598,6 +628,7 @@ pub(crate) fn parse_function_ir_context(
                     result_type: call_contract(fields, 4, *at, source)?.0,
                 },
                 Directive::SharedBegin => Operation::SharedBegin {
+                    lexical: false,
                     builder: parse_builder(&fields[1])?,
                     module: (fields[2] != "$").then(|| fields[2].clone()),
                     field: fields[3].clone(),
@@ -607,6 +638,7 @@ pub(crate) fn parse_function_ir_context(
                     value: parse_value(&fields[2])?,
                 },
                 Directive::SharedRead => Operation::SharedRead {
+                    lexical: false,
                     result: parse_value(&fields[1])?,
                     module: (fields[2] != "$").then(|| fields[2].clone()),
                     field: fields[3].clone(),
@@ -627,6 +659,7 @@ pub(crate) fn parse_function_ir_context(
                     value: parse_value(&fields[2])?,
                 },
                 Directive::BeginSource => Operation::SourceBegin {
+                    lexical: false,
                     builder: parse_builder(&fields[1])?,
                     class: fields[2].clone(),
                     base: match fields[3].as_str() {
@@ -1101,6 +1134,7 @@ pub(crate) fn parse_function_ir_context(
                 Directive::CallGlobal => {
                     let (result_type, arguments_at) = call_contract(fields, 3, *at, source)?;
                     Operation::GlobalCall {
+                        lexical: false,
                         result: parse_value(&fields[1])?,
                         result_type,
                         member: fields[2].clone(),
@@ -1111,6 +1145,7 @@ pub(crate) fn parse_function_ir_context(
                     }
                 }
                 Directive::CallGlobalDiscard => Operation::GlobalCallStatement {
+                    lexical: false,
                     member: fields[1].clone(),
                     arguments: fields[2..width]
                         .iter()
@@ -1138,6 +1173,7 @@ pub(crate) fn parse_function_ir_context(
                 },
                 Directive::ReturnVoid => Operation::ReturnVoid,
                 Directive::CallDiscard => Operation::ModuleCallStatement {
+                    lexical: false,
                     module: fields[1].clone(),
                     member: fields[2].clone(),
                     arguments: fields[3..width]
@@ -1356,6 +1392,7 @@ pub(crate) fn parse_function_ir_context(
                 Directive::Call => {
                     let (result_type, arguments_at) = call_contract(fields, 4, *at, source)?;
                     Operation::ModuleCall {
+                        lexical: false,
                         result: parse_value(&fields[1])?,
                         result_type,
                         module: fields[2].clone(),
@@ -1407,6 +1444,19 @@ pub(crate) fn parse_function_ir_context(
                 },
             }
         };
+        let mut operation = operation;
+        if lexical_rows.contains(at) {
+            match &mut operation {
+                Operation::SharedRead { lexical, .. }
+                | Operation::SharedBegin { lexical, .. }
+                | Operation::SourceBegin { lexical, .. }
+                | Operation::GlobalCall { lexical, .. }
+                | Operation::GlobalCallStatement { lexical, .. }
+                | Operation::ModuleCall { lexical, .. }
+                | Operation::ModuleCallStatement { lexical, .. } => *lexical = true,
+                _ => return Err(fail(*at, "operation does not support lexical lookup")),
+            }
+        }
         operations.push(LocatedOperation { operation, span });
         operation_offsets.push(*at);
     }

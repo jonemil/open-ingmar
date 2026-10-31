@@ -36,8 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Support nested module declarations and qualified names through multiple
-  module levels; reuse reopened-module collection across files.
 - [ ] Support classes declared inside modules and owner-qualified class names
   in annotations, construction, and runtime type targets.
 - [ ] Resolve `using` aliases and `import` visibility for source namespaces and
@@ -46,7 +44,7 @@ implemented contracts; investigations retain evidence, not another backlog.
 - [ ] Implement `me` and owner-relative `self` in module/global contexts after
   checking their distinct SDK meanings; preserve instance receiver identity.
 - [ ] Support root-object `$.name` field/value access and nested qualified paths
-  beyond the existing global and one-module call forms.
+  beyond the existing root-qualified call forms.
 - [ ] Represent class and module values so they can be stored, passed, returned,
   and used as Method receivers.
 - [ ] Support static fields/methods, their initialization, and class-qualified
