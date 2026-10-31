@@ -69,6 +69,8 @@ and future Rust toolchain experiments.
   untyped declaration expressions, per-instance containers, and allocation order.
 - [compiler-dynamic-fields](compiler-dynamic-fields/README.md): untyped field
   rebinding, metadata defaults, and guarded member access after type changes.
+- [compiler-bare-fields](compiler-bare-fields/README.md): field-name lookup,
+  local/parameter shadowing, receiver qualifiers, and initializer visibility.
 - [compiler-forward-constants](compiler-forward-constants/README.md): later
   literal defaults, cross-class contracts, and preserved runtime initializer order.
 - [compiler-null-snapshots](compiler-null-snapshots/README.md): forward runtime

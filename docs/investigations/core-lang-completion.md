@@ -6,6 +6,34 @@ is the runtime reference environment; individual probes below distinguish
 compiler acceptance from simulator observations.
 The [prioritized checklist][inventory] owns remaining work.
 
+## Bare instance-field names
+
+Experimentally observed, 2026-10-30: SDK 9.2.0, `fr265`, `-O 0`, default
+checking, minimum API 5.0.0. The
+[two-file specimen](../../examples/compiler-bare-fields/README.md) matches
+[console output](../../examples/compiler-bare-fields/expected.txt) across SDK and
+generated PRGs for reads, writes, compounds, updates, containers, and declaration
+expressions.
+Field `VALUE` starts at 7 while the global starts at 100. Updates leave the
+field at 9 and the global at 100. Parameter/local calculations use the lexical
+binding and explicit `self.VALUE` independently. A read before a same-named
+local declaration selects the field; leaving a nested block restores the field.
+The later class String default supplies `CAPTURE`, rather than the outer `REF`.
+
+A field named `M` makes `M.length()` call the String receiver (result 6);
+`$.M.length()` calls the global module function (result 99). Source and saved-IR
+checks retain owner-qualified field operations; bare and explicit `self.` forms
+produce identical symbolic assembly for the tested read/write/update sequence.
+
+A separate SDK probe with minimum API 3.0.0 using `Toybox.System` permits a field
+named `System` whose
+class provides `println(n)` printing `n+1000`. The class method's bare
+`System.println(5)` prints 5, selecting the imported API binding. Reproduce by
+adding that field and receiver class to the console scaffold. Our native-name
+declaration profile rejects this collision; the alias/import work item retains
+that broader namespace case. This observation does not establish general
+module-alias shadowing behavior.
+
 ## Instance-field declaration initializers
 
 Experimentally observed, 2026-10-30: SDK 9.2.0, `fr265`, `-O 0`, default

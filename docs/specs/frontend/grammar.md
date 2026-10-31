@@ -24,6 +24,11 @@ establish availability, assignability, or executable API support.
 
 ## Declarations
 
+Identifier reads and assignment/update targets use the same lexical identifier
+rule throughout the grammar. A bare identifier can resolve to an instance field
+under the [name-resolution rules](README.md#bare-instance-field-names); `self.`
+is not a separate requirement on field targets.
+
 ```text
 source-input = source-file
 source-file = native-declaration* declaration*

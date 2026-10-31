@@ -105,17 +105,21 @@ remain deferred in [the plan](plan.md).
 
 ## Implementation conventions
 
-The declaration parser returns one `ParsedUnit` per source file. Shared
-`Declarations` collect typedef and binding environments across files. Direct
-non-heap global/class constants are cached before IR construction. Mutable
+The declaration parser returns one `ParsedUnit` per source file.
+Instance field-name visibility is retained separately from resolved contracts
+while initializer types are discovered. Source lookup selects locals/parameters
+before fields and fields before outer bindings; unresolved field types cannot
+fall back to outer values or placeholder types. Bare reads/writes normalize to
+the existing instance-field IR and reuse its validation and VM lowering.
+
+Shared `Declarations` collect typedef and binding environments across files.
+Direct non-heap global/class constants are cached before IR construction. Mutable
 global/module variables always use shared slots; module members also retain
-shared storage
-so lookup preserves initialization effects.
+shared storage so lookup preserves initialization effects.
 References and operators use ordinary typed initialization rather than a
 separate constant evaluator. Stored global/module bindings retain shared
 declaration types and reserved initializer bodies. Stored contracts are inferred
-across all scopes
-before bodies, retrying unresolved dependencies without placeholder types.
+across all scopes before bodies, retrying unresolved dependencies without placeholder types.
 Const/var lists share a binding parser. Class field collection separates
 metadata defaults and constructor-required contracts from declaration expressions.
 Annotations reuse value-type parsing, source-class resolution, and checked return

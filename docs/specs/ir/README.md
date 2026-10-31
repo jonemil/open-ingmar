@@ -269,6 +269,13 @@ bindings. Text is not mandatory between stages.
 
 ## Compilation units and classes
 
+Source bare-field lookup is complete before IR construction: it produces the
+same `SelfFieldRead`/`SelfFieldAssign` operations as explicit `self.` access.
+Local/parameter shadowing retains local/parameter operations. Saved IR carries
+the resolved owner and field contract, not the source spelling or an unresolved
+lexical lookup. Unit validation checks declarations and mutability independently
+of which source spelling produced the operations.
+
 `SharedBinding` records an optional module owner, a name, an ordinary field
 value contract, and mutability. `.shared-constant` declares a readonly binding;
 `.shared-variable` permits ordinary stores. Untyped source variables use Any.

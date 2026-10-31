@@ -3821,6 +3821,11 @@ pub(crate) fn compile_sources_mapped(
                 name: class.name.clone(),
                 base: class.base,
             });
+            method_calls.field_names = class
+                .fields
+                .iter()
+                .map(|field| field.name.clone())
+                .collect();
             method_calls.field_types = class
                 .fields
                 .iter()
@@ -4120,6 +4125,7 @@ fn infer_stored_constants(
     let mut backings: BTreeMap<String, crate::api::Type> = BTreeMap::new();
     let mut pending = Vec::new();
     let mut class_names = BTreeMap::new();
+    let mut field_names = BTreeMap::new();
     for (source, unit) in parsed.iter().enumerate() {
         for (module, declaration) in &unit.shared {
             if declaration.mutable {
@@ -4141,6 +4147,15 @@ fn infer_stored_constants(
             ));
         }
         for class in &unit.classes {
+            field_names.insert(
+                class.name.as_str(),
+                class
+                    .fields
+                    .iter()
+                    .map(|field| field.name.clone())
+                    .chain(class.bindings.iter().map(|field| field.name.clone()))
+                    .collect::<BTreeSet<_>>(),
+            );
             class_names.insert(
                 class.name.as_str(),
                 class
@@ -4185,6 +4200,7 @@ fn infer_stored_constants(
                         name: class.into(),
                         base,
                     });
+                    owner_calls.field_names = field_names[class].clone();
                     owner_calls.readonly_fields = class_names[class].clone();
                     owner_calls.field_types = calls.source_fields[class].clone();
                     Some(base)

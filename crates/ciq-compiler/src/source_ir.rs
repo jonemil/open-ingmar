@@ -72,7 +72,7 @@ fn resolve_implicit_call(
     if owner == "self" && (member == "method" || calls.inherited_object_member(owner, &member)) {
         if locals.contains_key(&member)
             || parameters.contains_key(&member)
-            || calls.field_types.contains_key(&member)
+            || calls.field_names.contains(&member)
         {
             return Err(Diagnostic::at(
                 source,
@@ -88,7 +88,7 @@ fn resolve_implicit_call(
             arguments,
         });
     }
-    if owner == "self" && calls.field_types.contains_key(&member) {
+    if owner == "self" && calls.field_names.contains(&member) {
         return Err(Diagnostic::at(
             source,
             span.start,
@@ -352,11 +352,11 @@ fn emit_non_call(
             field,
         },
         parser::ExpressionKind::SelfField(field) => {
-            if calls.readonly_fields.contains(&field) && !calls.field_types.contains_key(&field) {
+            if calls.field_names.contains(&field) && !calls.field_types.contains_key(&field) {
                 return Err(Diagnostic::at(
                     source,
                     expression.span.start,
-                    "constant field type is unresolved; check for a cyclic dependency",
+                    "instance field type is unresolved; check for a cyclic dependency",
                 ));
             }
             let declared = calls
@@ -771,7 +771,7 @@ fn emit_call(
             if locals.contains_key(&module)
                 || parameters.contains_key(&module)
                 || calls.constant_named(&module, locals, parameters).is_some()
-                || (calls.readonly_fields.contains(&module) || calls.shared_name(&module))
+                || (calls.field_names.contains(&module) || calls.shared_name(&module))
             {
                 (
                     Some(parser::Expression {
@@ -2266,7 +2266,7 @@ impl Builder<'_> {
                 member,
                 arguments,
             } => {
-                let receiver = if self.calls.readonly_fields.contains(&module)
+                let receiver = if self.calls.field_names.contains(&module)
                     || self.calls.shared_name(&module)
                     || locals.contains_key(&module)
                     || self.parameters.contains_key(&module)
@@ -3065,6 +3065,10 @@ impl Builder<'_> {
         if matches!(target.kind, E::ArrayRead { .. } | E::MemberRead { .. }) {
             return self.place_change(target, span, locals, step);
         }
+        let target = self
+            .calls
+            .field_expression(&target, locals, &self.parameters)
+            .unwrap_or(target);
         let operation = match &target.kind {
             E::Local(name) => {
                 let place = self.named_place(name, locals, span)?;
@@ -3315,7 +3319,10 @@ impl Builder<'_> {
             } => {
                 let constant = crate::constants::path(receiver).and_then(|path| {
                     let root = path.split('.').next()?;
-                    if locals.contains_key(root) || self.parameters.contains_key(root) {
+                    if locals.contains_key(root)
+                        || self.parameters.contains_key(root)
+                        || self.calls.field_names.contains(root)
+                    {
                         return None;
                     }
                     self.calls.constants.get(&format!("{path}.{member}"))
@@ -3323,6 +3330,7 @@ impl Builder<'_> {
                 let stored = crate::constants::path(receiver).is_some_and(|path| {
                     !locals.contains_key(&path)
                         && !self.parameters.contains_key(&path)
+                        && !self.calls.field_names.contains(&path)
                         && self
                             .calls
                             .shared_fields
@@ -3476,9 +3484,9 @@ impl Builder<'_> {
         Ok(())
     }
 
-    /// Lower an ordinary assignment to shared storage when name resolution
-    /// selects a mutable binding. Other places keep their existing lowering.
-    fn assign_shared(
+    /// Resolve an ordinary assignment to its instance or shared owner.
+    /// Locals and parameters retain their own storage paths and shadow fields.
+    fn assign_owner(
         &mut self,
         statement: &parser::Statement,
         locals: &BTreeMap<String, LocalId>,
@@ -3505,6 +3513,16 @@ impl Builder<'_> {
             _ => return Ok(false),
         };
         let target = Expression { kind, span };
+        if let Some(Expression {
+            kind: E::SelfField(field),
+            ..
+        }) = self
+            .calls
+            .field_expression(&target, locals, &self.parameters)
+        {
+            self.assign_owner_field(field, value.clone(), span, locals)?;
+            return Ok(true);
+        }
         let Some((module, field)) = self.calls.shared_target(&target, locals, &self.parameters)
         else {
             return Ok(false);
@@ -3533,7 +3551,7 @@ impl Builder<'_> {
             }
             self.check_constant_rebinding(&statement, locals)?;
             match statement {
-                _ if self.assign_shared(&statement, locals)? => {}
+                _ if self.assign_owner(&statement, locals)? => {}
                 parser::Statement::Block { body, .. } => {
                     terminated = self.sequence(body, &mut locals.clone())?;
                 }
@@ -3816,7 +3834,7 @@ impl Builder<'_> {
                             .calls
                             .constant_named(&module, locals, &self.parameters)
                             .is_some()
-                        || self.calls.readonly_fields.contains(&module)
+                        || self.calls.field_names.contains(&module)
                         || self.calls.shared_name(&module)
                         || locals.contains_key(&module)
                         || self.parameters.contains_key(&module)
@@ -4012,6 +4030,8 @@ pub(crate) struct CallContext {
     pub(crate) enum_members: BTreeMap<(Option<String>, String), Box<crate::EnumType>>,
     pub(crate) class_enums: std::collections::BTreeSet<(String, String)>,
     pub(crate) shared_fields: BTreeMap<(Option<String>, String), crate::ReturnType>,
+    /// All declared instance field names, including contracts still being inferred.
+    pub(crate) field_names: std::collections::BTreeSet<String>,
     pub(crate) readonly_fields: std::collections::BTreeSet<String>,
     pub(crate) constants: std::rc::Rc<BTreeMap<String, crate::constants::Immediate>>,
     pub(crate) unchecked: bool,
@@ -4061,7 +4081,7 @@ impl CallContext {
                 if self.class_enums.contains(&(class.into(), field.into()))
                     && !locals.contains_key(class)
                     && !parameters.contains_key(class)
-                    && !self.readonly_fields.contains(class)
+                    && !self.field_names.contains(class)
                     && !self.shared_name(class)
                     && !self.constants.contains_key(class)
                 {
@@ -4079,14 +4099,11 @@ impl CallContext {
             if locals.contains_key(name) || parameters.contains_key(name) {
                 return None;
             }
-            if self.readonly_fields.contains(name) {
+            if self.field_names.contains(name) {
                 return Some(parser::Expression {
                     kind: E::SelfField(name.clone()),
                     span: expression.span,
                 });
-            }
-            if self.current_class.is_some() && self.field_types.contains_key(name) {
-                return None;
             }
         }
         if self.shared_fields.is_empty() && self.shared_pending.is_empty() {
@@ -4100,7 +4117,7 @@ impl CallContext {
         }
         let (module, field) = if let Some(field) = parts.next() {
             if first != "self"
-                && (self.readonly_fields.contains(first)
+                && (self.field_names.contains(first)
                     || self.shared_name(first)
                     || self.constant_named(first, locals, parameters).is_some())
             {
@@ -4178,7 +4195,7 @@ impl CallContext {
         }
         if path.contains('.')
             && first != "self"
-            && (self.readonly_fields.contains(first)
+            && (self.field_names.contains(first)
                 || self.shared_name(first)
                 || self.constant_named(first, locals, parameters).is_some())
         {

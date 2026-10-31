@@ -753,6 +753,34 @@ widening is introduced. See the
 
 ## Declarations and name resolution
 
+### Bare instance-field names
+
+In source class methods and declaration initializer expressions, a bare value
+name selects an in-scope local, then a parameter, then a declared instance field,
+then an outer global binding. This includes mutable fields, constants, and enum
+members. A later local declaration does not hide an earlier field read; a local
+inside a nested block stops shadowing when that block ends. Explicit `self.NAME`
+always selects the instance field.
+
+Reads, assignments, compounds, statement updates, indexing, and receiver calls
+reuse the same field contracts and lowering as their `self.` forms. A field used
+as a receiver takes priority over a same-named user module or class-enum
+qualifier. Explicit root calls retain their
+[global lookup rules](#user-calls-and-owner-lookup). Unqualified function-call
+lookup is separate; this does not add calls through stored callable fields.
+
+All field names are visible before initializer contracts are inferred, including
+declarations later in the class. An unresolved field contract delays checking;
+it cannot supply a placeholder Number type or select a same-named outer value.
+The [initialization readiness rules](#field-declaration-initializers) still reject
+reads of pending runtime fields and cycles. Readonly fields remain readonly,
+while a same-named local/parameter can be assigned independently.
+
+Declarations colliding with native bindings retain the existing
+[native-name restrictions](#native-name-declarations).
+See the [two-file example](../../../examples/compiler-bare-fields/README.md) and
+[SDK evidence](../../investigations/core-lang-completion.md#bare-instance-field-names).
+
 ### Constants
 
 `const NAME [as Type] [= expression], ...;` declares readonly bindings at global,
@@ -1675,8 +1703,9 @@ function bump() { self.count = self.count + 1; }
 
 Methods read a field with `self.<name>` and replace it with `self.<name> =
 <expression>;`. The RHS must produce Number and is evaluated before the write. A
-local or parameter with the same name remains separate; bare names keep existing
-local/parameter lookup rules. Assignment is a statement, not a value expression.
+local or parameter with the same name remains separate; bare field names follow
+the [owner lookup rules](#bare-instance-field-names). Assignment is a statement,
+not a value expression.
 Number fields also support all ten arithmetic/bitwise compound operators:
 `self.count += rhs;` reads the old field once before RHS effects, applies the
 corresponding Number binary operation, then stores the result. A RHS that

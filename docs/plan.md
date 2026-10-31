@@ -36,14 +36,13 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Resolve bare field names in instance methods with the SDK's local,
-  parameter, field, and outer-owner shadowing rules.
 - [ ] Support nested module declarations and qualified names through multiple
   module levels; reuse reopened-module collection across files.
 - [ ] Support classes declared inside modules and owner-qualified class names
   in annotations, construction, and runtime type targets.
 - [ ] Resolve `using` aliases and `import` visibility for source namespaces and
-  their classes/types, including conflicting aliases and cross-file lookup.
+  their classes/types, including conflicting aliases, instance-field/native-binding
+  name collisions, and cross-file lookup.
 - [ ] Implement `me` and owner-relative `self` in module/global contexts after
   checking their distinct SDK meanings; preserve instance receiver identity.
 - [ ] Support root-object `$.name` field/value access and nested qualified paths
