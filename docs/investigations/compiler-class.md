@@ -291,6 +291,6 @@ arity, and reordered effectful IR.
 [profile]: ../specs/frontend/README.md#source-classes
 [example]: ../../examples/compiler-class/README.md
 [objects]: https://developer.garmin.com/connect-iq/monkey-c/objects-and-memory/
-[names]: ../specs/frontend/README.md#native-name-declarations
+[names]: ../specs/frontend/README.md#namespace-declarations
 [appbase]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Application/AppBase.html#onStart-instance_function
 [lifecycle-example]: ../../examples/compiler-lifecycle/README.md

@@ -398,6 +398,10 @@ searched parent. A lexical shared capture does not activate parents; its matchin
 write does so after RHS effects. Direct captures activate the target immediately.
 This distinction also applies to shutdown and initialization-readiness proofs.
 
+Source namespace imports are resolved before semantic IR. Function/shared/class
+owners and type identities name canonical declarations, so aliases do not add
+IR operations, unit records, or a second symbol-binding environment.
+
 ### Unit IR text
 
 Source-class identities are canonical dotted paths throughout signatures,

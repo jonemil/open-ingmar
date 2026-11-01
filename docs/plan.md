@@ -36,9 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Resolve `using` aliases and `import` visibility for source namespaces and
-  their classes/types, including conflicting aliases, instance-field/native-binding
-  name collisions, and cross-file lookup.
 - [ ] Implement `me` and owner-relative `self` in module/global contexts after
   checking their distinct SDK meanings; preserve instance receiver identity.
 - [ ] Support root-object `$.name` field/value access and nested qualified paths

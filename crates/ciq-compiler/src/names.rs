@@ -1,4 +1,4 @@
-//! Bounded native name resolution before semantic IR construction.
+//! Lexical native and source namespace bindings before semantic IR construction.
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -23,12 +23,21 @@ impl NativeModule {
     }
 }
 
-/// Lexical module bindings; imports additionally expose native class names.
+/// Lexical module bindings; imports additionally expose their declared types.
 /// No symbol IDs or executable import indexes belong in this environment.
 #[derive(Clone, Default)]
 pub(crate) struct Names {
     bindings: BTreeMap<String, NativeModule>,
     imported: BTreeSet<NativeModule>,
+    pub(crate) source: BTreeMap<String, SourceBinding>,
+}
+
+/// A source module binding keeps its declaration scope until inventory collection finishes.
+#[derive(Clone)]
+pub(crate) struct SourceBinding {
+    pub path: String,
+    pub owner: Option<String>,
+    pub import: bool,
 }
 
 impl Names {
@@ -57,10 +66,12 @@ impl Names {
             || (name == "WatchUi" && module != NativeModule::WatchUi)
             || (name == "Graphics" && module != NativeModule::Graphics)
             || self.bound(name)
+            || self.source.contains_key(name)
             || (import
                 && self
                     .bindings
                     .keys()
+                    .chain(self.source.keys())
                     .any(|binding| Self::known_type(module, binding).is_some()))
         {
             return Err(format!("conflicting native binding {name:?}"));
@@ -72,7 +83,49 @@ impl Names {
         Ok(())
     }
 
-    /// Check explicit module/class bindings before accepting a declaration name.
+    /// Register a source module alias without requiring its declaration to precede it.
+    /// Native bindings and duplicate aliases remain distinct diagnostics.
+    pub(crate) fn declare_source(
+        &mut self,
+        path: &str,
+        alias: Option<&str>,
+        import: bool,
+        owner: Option<&str>,
+    ) -> Result<(), String> {
+        let name = alias.unwrap_or_else(|| path.rsplit('.').next().unwrap());
+        if self.bound(name)
+            || self.source.contains_key(name)
+            || self.module(name).is_some()
+            || matches!(
+                name,
+                "self" | "Toybox" | "AppBase" | "View" | "BehaviorDelegate" | "Object"
+            )
+        {
+            return Err(format!("conflicting source namespace binding {name:?}"));
+        }
+        let (first, tail) = path
+            .split_once('.')
+            .map_or((path, None), |(first, tail)| (first, Some(tail)));
+        let binding = self.source.get(first).map_or_else(
+            || SourceBinding {
+                path: path.into(),
+                owner: owner.map(str::to_owned),
+                import,
+            },
+            |bound| SourceBinding {
+                path: tail.map_or_else(
+                    || bound.path.clone(),
+                    |tail| format!("{}.{tail}", bound.path),
+                ),
+                owner: bound.owner.clone(),
+                import,
+            },
+        );
+        self.source.insert(name.into(), binding);
+        Ok(())
+    }
+
+    /// Check native module/class bindings before accepting a declaration name.
     pub fn bound(&self, name: &str) -> bool {
         self.bindings.contains_key(name)
             || self

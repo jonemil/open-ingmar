@@ -349,6 +349,10 @@ pub(crate) enum ExpressionKind {
     Float(u32),
     String(String),
     Local(String),
+    Namespace {
+        path: String,
+        alias: String,
+    },
     UnqualifiedCall {
         member: String,
         arguments: Vec<Expression>,
@@ -487,6 +491,7 @@ impl Expression {
             | E::Float(_)
             | E::String(_)
             | E::Local(_)
+            | E::Namespace { .. }
             | E::SharedField { .. } => {}
         }
     }
@@ -937,14 +942,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn alias_key(&self, path: &str) -> Option<String> {
-        self.owner
-            .as_deref()
-            .into_iter()
-            .flat_map(crate::names::scopes)
-            .map(|owner| format!("{owner}.{path}"))
-            .chain(std::iter::once(path.to_owned()))
-            .find(|key| self.declarations.aliases.contains_key(key))
+    fn alias_key(&self, path: &str) -> Result<Option<String>, Diagnostic> {
+        let path = self.type_name(path, self.offset)?;
+        Ok(self
+            .declarations
+            .aliases
+            .contains_key(&path)
+            .then_some(path))
     }
 
     /// Resolve an alias in its declaration's native-name and owner environment.
@@ -954,7 +958,7 @@ impl<'a> Parser<'a> {
         path: &str,
         at: usize,
     ) -> Result<Option<crate::ParameterType>, Diagnostic> {
-        let Some(key) = self.alias_key(path) else {
+        let Some(key) = self.alias_key(path)? else {
             return Ok(None);
         };
         if let Some(ty) = self.declarations.resolved.borrow().get(&key) {
@@ -1078,7 +1082,7 @@ impl<'a> Parser<'a> {
         };
         // Collection already checked the full target, including nested member
         // semicolons. Advance past its declaration terminator, not the first ';'.
-        let key = self.alias_key(name).expect("collected typedef");
+        let key = self.alias_key(name)?.expect("collected typedef");
         self.offset = self.declarations.aliases[&key].end + 1;
         self.lookahead = None;
         Ok(())
@@ -1645,8 +1649,8 @@ impl<'a> Parser<'a> {
         Ok(path)
     }
 
-    /// Resolve a collected source class relative to its declaration environment.
-    fn source_class_name(&self, path: &str) -> String {
+    /// Find a lexical type path while respecting nearer declaration scopes.
+    fn lexical_type_name(&self, path: &str) -> String {
         let first = path.split('.').next().unwrap();
         for scope in self
             .owner
@@ -1659,6 +1663,8 @@ impl<'a> Parser<'a> {
             if self.declarations.owners.contains(&root)
                 || self.declarations.constants.contains_key(&root)
                 || self.declarations.value_names.contains(&root)
+                || self.declarations.aliases.contains_key(&root)
+                || self.declarations.enum_types.contains_key(&root)
             {
                 return candidate;
             }
@@ -1666,13 +1672,91 @@ impl<'a> Parser<'a> {
         path.to_owned()
     }
 
-    /// Resolve native bindings and lexical source class paths without allocating VM identities.
+    /// Resolve a source namespace in its declaration scope, independently of alias spelling.
+    fn source_namespace(
+        &self,
+        binding: &crate::names::SourceBinding,
+    ) -> Result<String, Diagnostic> {
+        let first = binding.path.split('.').next().unwrap();
+        let mut path = None;
+        for scope in binding
+            .owner
+            .as_deref()
+            .into_iter()
+            .flat_map(crate::names::scopes)
+        {
+            if self
+                .declarations
+                .owners
+                .contains(&format!("{scope}.{first}"))
+            {
+                path = Some(format!("{scope}.{}", binding.path));
+                break;
+            }
+        }
+        let path = path
+            .or_else(|| Some(binding.path.clone()))
+            .filter(|path| self.declarations.owners.contains(path));
+        match path {
+            Some(path) if !self.declarations.classes.contains(&path) => Ok(path),
+            _ => Err(self.error(
+                self.offset,
+                format!(
+                    "source import requires a declared module {:?}",
+                    binding.path
+                ),
+            )),
+        }
+    }
+
+    /// Validate every source import target, including bindings unused by any body.
+    fn validate_source_imports(&self) -> Result<(), Diagnostic> {
+        for binding in self.names.source.values() {
+            self.source_namespace(binding)?;
+        }
+        Ok(())
+    }
+
+    fn declared_type(&self, name: &str) -> bool {
+        self.declarations.classes.contains(name)
+            || self.declarations.aliases.contains_key(name)
+            || self.declarations.enum_types.contains_key(name)
+    }
+
+    /// Resolve lexical types, source aliases, and imported type names before IR construction.
+    /// Only use-site ambiguities fail; unused conflicting imports remain valid.
     fn type_name(&self, path: &str, at: usize) -> Result<String, Diagnostic> {
-        Ok(self
+        let lexical = self.lexical_type_name(path);
+        if self.declared_type(&lexical) {
+            return Ok(lexical);
+        }
+        let (first, tail) = path
+            .split_once('.')
+            .map_or((path, None), |(first, tail)| (first, Some(tail)));
+        if let Some(binding) = self.names.source.get(first) {
+            let module = self.source_namespace(binding)?;
+            return Ok(tail.map_or(module.clone(), |tail| format!("{module}.{tail}")));
+        }
+        let mut candidates = BTreeSet::new();
+        if let Some(native) = self
             .names
             .type_name(path)
             .map_err(|message| self.error(at, message))?
-            .unwrap_or_else(|| self.source_class_name(path)))
+        {
+            candidates.insert(native);
+        }
+        if !path.contains('.') {
+            for binding in self.names.source.values().filter(|binding| binding.import) {
+                let candidate = format!("{}.{}", self.source_namespace(binding)?, path);
+                if self.declared_type(&candidate) {
+                    candidates.insert(candidate);
+                }
+            }
+        }
+        if candidates.len() > 1 {
+            return Err(self.error(at, format!("ambiguous imported type {path:?}")));
+        }
+        Ok(candidates.into_iter().next().unwrap_or(lexical))
     }
 
     fn imports(&mut self) -> Result<(), Diagnostic> {
@@ -1694,9 +1778,13 @@ impl<'a> Parser<'a> {
                 None
             };
             self.expect(Kind::Punctuation(';'), "';'")?;
-            self.names
-                .declare(&path, alias, import)
-                .map_err(|message| self.error(token.span.start, message))?;
+            if path == "Toybox" || path.starts_with("Toybox.") {
+                self.names.declare(&path, alias, import)
+            } else {
+                self.names
+                    .declare_source(&path, alias, import, self.owner.as_deref())
+            }
+            .map_err(|message| self.error(token.span.start, message))?;
         }
         Ok(())
     }
@@ -2187,7 +2275,7 @@ impl<'a> Parser<'a> {
             casts += 1;
             let at = self.token()?.span.start;
             let qualifier = match self.peek()? {
-                Kind::Word(name) => Some(name.to_owned()),
+                Kind::Word(name) if !self.names.source.contains_key(name) => Some(name.to_owned()),
                 _ => None,
             };
             let parameter = self.type_annotation(at, true)?;
@@ -2840,6 +2928,7 @@ impl<'a> Parser<'a> {
         };
         if let ExpressionKind::ModuleCall { arguments, .. }
         | ExpressionKind::UnqualifiedCall { arguments, .. }
+        | ExpressionKind::OwnerCall { arguments, .. }
         | ExpressionKind::ValueCall { arguments, .. } = &mut expression.kind
         {
             let (parsed, end) = self.call_arguments(span.start, depth)?;
@@ -2847,6 +2936,48 @@ impl<'a> Parser<'a> {
             expression.span.end = end;
         }
         Ok(expression)
+    }
+
+    /// Preserve a resolved namespace and its source qualifier until local lookup is known.
+    /// Fields do not shadow an explicit alias, while locals and parameters may do so.
+    fn source_qualified(
+        &mut self,
+        path: &str,
+        start: usize,
+    ) -> Result<Option<Expression>, Diagnostic> {
+        let (first, rest) = path.split_once('.').unwrap();
+        let Some(binding) = self.names.source.get(first) else {
+            return Ok(None);
+        };
+        let owner = self.source_namespace(binding)?;
+        let span = Span {
+            start,
+            end: self.offset,
+        };
+        let mut expression = self.node(
+            ExpressionKind::Namespace {
+                path: owner,
+                alias: first.into(),
+            },
+            span,
+        )?;
+        let parts = rest.split('.').collect::<Vec<_>>();
+        for (index, member) in parts.iter().enumerate() {
+            let kind = if index + 1 == parts.len() && self.peek()? == Kind::Punctuation('(') {
+                ExpressionKind::ValueCall {
+                    receiver: Box::new(expression),
+                    member: (*member).into(),
+                    arguments: Vec::new(),
+                }
+            } else {
+                ExpressionKind::MemberRead {
+                    receiver: Box::new(expression),
+                    member: (*member).into(),
+                }
+            };
+            expression = self.node(kind, span)?;
+        }
+        Ok(Some(expression))
     }
 
     /// Parse a qualified member access/call, without parsing recursive arguments.
@@ -2875,6 +3006,9 @@ impl<'a> Parser<'a> {
             };
             path.push('.');
             path.push_str(part);
+        }
+        if let Some(expression) = self.source_qualified(&path, start)? {
+            return Ok(expression);
         }
         let (module, member) = path.rsplit_once('.').unwrap();
         if self.names.module(module).is_some_and(|native| {
@@ -3329,7 +3463,7 @@ impl<'a> Parser<'a> {
         let path = self.path()?;
         let qualifier = path.split('.').next().unwrap().to_owned();
         let class = self.type_name(&path, at)?;
-        if self.alias_key(&path).is_some() {
+        if self.alias_key(&path)?.is_some() {
             return Err(self.error(at, "typedef names are not runtime classes"));
         }
         if class.contains('.')
@@ -3778,7 +3912,8 @@ impl Parser<'_> {
             crate::callbacks::validate(&signature).map_err(|message| self.error(at, message))?;
             return Ok(crate::ParameterType::Callback(Box::new(signature)));
         }
-        let path = self.path()?;
+        let raw_path = self.path()?;
+        let path = self.type_name(&raw_path, at)?;
         let qualified = self
             .owner
             .as_deref()
@@ -4055,6 +4190,7 @@ pub(crate) fn declarations<'a>(
     let mut count = 0;
     let mut scopes = Vec::new();
     parser.imports()?;
+    parser.validate_source_imports()?;
     while parser.peek()? != Kind::End {
         if parser.peek()? == Kind::Punctuation('}') && !scopes.is_empty() {
             parser.token()?;
@@ -4082,6 +4218,7 @@ pub(crate) fn declarations<'a>(
             scopes.push((parser.owner.clone(), parser.names.clone()));
             parser.owner = Some(path);
             parser.imports()?;
+            parser.validate_source_imports()?;
             continue;
         }
         if matches!(parser.peek()?, Kind::Word("const" | "enum" | "var")) {
@@ -4136,6 +4273,7 @@ pub(crate) fn declarations<'a>(
             parser.owner = Some(name.clone());
             parser.native_base = class_base;
             parser.imports()?;
+            parser.validate_source_imports()?;
             let mut methods = Vec::new();
             let mut fields = Vec::new();
             let mut bindings = Vec::new();

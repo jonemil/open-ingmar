@@ -9,7 +9,7 @@ owning files for the definition to read or change.
 
 | Concern | Implementation entry points | Contract |
 |---|---|---|
-| Source syntax, nested module scopes, and names | [parser.rs], [names.rs] | [Source grammar] |
+| Source syntax, scoped imports, and owner names | [parser.rs], [names.rs] | [Source grammar] |
 | Shared storage and initialization | [constants.rs], [parser.rs], [unit.rs], [source_ir.rs], [control_flow.rs] | [Constants] |
 | Source enum identities | [enums.rs], [parser.rs], [unit.rs] | [Enums] |
 | Source receiver member candidates | [source_calls.rs] | [Source identities] |

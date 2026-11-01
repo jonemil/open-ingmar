@@ -801,7 +801,7 @@ reads of pending runtime fields and cycles. Readonly fields remain readonly,
 while a same-named local/parameter can be assigned independently.
 
 Declarations colliding with native bindings retain the existing
-[native-name restrictions](#native-name-declarations).
+[native-name restrictions](#namespace-declarations).
 See the [two-file example](../../../examples/compiler-bare-fields/README.md) and
 [SDK evidence](../../investigations/core-lang-completion.md#bare-instance-field-names).
 
@@ -1205,7 +1205,7 @@ hidden-context convention and u8 slot/arity bounds. The [argument
 specimen](../../investigations/compiler-arguments.md) verifies nested calls and
 observable argument order, not maximum device capacity.
 
-### Native name declarations
+### Namespace declarations
 
 Default and unit source modes accept these declarations before functions or
 owners at the start of a file, and before methods at the start of a
@@ -1242,12 +1242,42 @@ Reject duplicate bindings, shadowing by parameters/locals/functions/owners,
 aliases of reserved identities, import aliases, declarations after functions,
 and native modules outside this profile. Imported type names also conflict with
 module aliases in either declaration order. Bare imported module functions and
-constants, general source namespace aliases, and types outside the catalogue
-remain unsupported. Number conversion uses
+constants remain unsupported. Native types outside the catalogue remain
+unsupported. Number conversion uses
 [inherited lookup](../sdk/README.md#declaration-model) within executable profiles. Calls on ordinary user modules
 and `self` keep their existing rules. Supported native spellings resolve to the
 same semantic operation or superclass identity before IR construction; aliases
 are not serialized as VM symbols or executable import indexes.
+
+Source `using` and `import` accept declared module paths, including forward and
+cross-file declarations. `using Library.Models as M;` binds `M` to that module;
+`using M.Nested as N;` can extend an earlier alias. Without `as`, the suffix is
+the binding name. The target resolves in the import's declaration scope, which
+remains fixed in child scopes and typedef environments. A nearer namespace
+blocks a farther namespace with the same root. Direct class targets such as
+`using Library.Models.Token as T;` are rejected.
+
+`import Library.Models;` also exposes directly declared classes, typedefs, and
+enum types to type lookup. It does not expose functions or constant/enum values
+as bare names. Lexically declared types precede imported candidates; distinct
+imported type candidates are ambiguous only when used. Unused ambiguous type
+imports are valid. Duplicate alias names and collisions between source and
+native namespace bindings are rejected.
+
+For qualified source alias expressions, locals and parameters may replace the
+qualifier with a runtime value. Instance fields do not replace that explicit
+namespace binding: use `self.M` to select a field named `M`. Bare value reads
+retain ordinary field/local lookup. Constructors and runtime class tests reject
+shadowed value qualifiers; casts through source namespace aliases use the type
+namespace. The existing stricter native-binding shadow restrictions above remain
+in force.
+
+Aliases apply only within their file and containing owner; reopening a module
+in another file does not share its imports. Alias-qualified reads, stores,
+indexed mutations, calls, construction, casts, and class enum reads resolve to
+canonical declarations. No source alias or import directive is serialized into
+IR or added to the VM import table. See the
+[two-file example](../../../examples/compiler-source-imports/README.md).
 
 [IR printing](../ir/README.md#string-values-and-print-statements) and
 [literal lowering](../lowering/README.md#native-name-declarations) use resolved
@@ -1339,7 +1369,7 @@ contract](../sdk/README.md#source-initial-view-callback). Its return shape and
 zero parameters are validated for source, typed, and saved IR. It also cannot be
 invoked as an ordinary source callee.
 
-The [native name profile](#native-name-declarations) defines supported
+The [native name profile](#namespace-declarations) defines supported
 `using`/`import` declarations and lexical boundaries. Native bindings are
 resolved before unit call validation; user declarations still collect across
 files before calls are checked.
@@ -1347,8 +1377,8 @@ files before calls are checked.
 Forward and recursive calls are accepted; termination is not proven. Calls to
 undeclared external modules/members are rejected. `System.println` remains the
 separate intrinsic. Global functions can serve as entries and checked call
-targets under [owner lookup](#user-calls-and-owner-lookup). General source imports, optional/default parameters, overloading, and arbitrary SDK calls remain
-unsupported.
+targets under [owner lookup](#user-calls-and-owner-lookup). Optional/default
+parameters, overloading, and arbitrary SDK calls remain unsupported.
 
 The unit contains 1..=256 functions total across all files. Function operation,
 nesting, parameter/local, literal, and control-flow limits remain unchanged. No
@@ -1384,7 +1414,7 @@ evidence](../../investigations/compiler-class.md).
 
 Classes may be global or module declarations. The base is a recognized native
 identity,
-resolved through the [native name profile](#native-name-declarations). It
+resolved through the [native name profile](#namespace-declarations). It
 accepts canonical/qualified, aliased, and imported Object/AppBase/View/
 BehaviorDelegate spellings. An omitted base selects Lang.Object. Supported
 [field contracts](#instance-fields) are defined separately. Static methods,
@@ -2266,7 +2296,7 @@ Object, Number, Long, Float, Double, Boolean, Char, String, Array, Dictionary,
 Symbol, Method, WeakReference, and ByteArray. Canonical `Toybox.Lang.Class` and
 Lang module aliases also work. The class must satisfy the selected API
 requirements.
-[Imported type names](#native-name-declarations) and qualified aliases resolve to
+[Imported type names](#namespace-declarations) and qualified aliases resolve to
 the same targets. Interfaces, unions, and parameterized class operands remain
 outside this profile. Null is not an instance of these classes. This is a
 runtime identity/inheritance test, not a conversion or an exact source-class
@@ -2928,7 +2958,7 @@ follows the [operator contracts](#operator-contracts), including Char
 concatenation and supported scalar conversions. Arbitrary SDK calls, and using
 `System.println` as an expression remain unsupported. A local/parameter named
 `System` cannot be used as the print receiver. The function's scaffold must
-provide the SDK module. The [native name profile](#native-name-declarations)
+provide the SDK module. The [native name profile](#namespace-declarations)
 resolves its supported spellings; Jungle resolution remains unimplemented.
 
 ### Object equality and container observers

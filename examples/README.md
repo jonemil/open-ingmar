@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-source-imports](compiler-source-imports/README.md): source namespace
+  aliases, imported types, declaration scope, and qualifier shadowing.
 - [compiler-module-classes](compiler-module-classes/README.md): qualified class
   identities, construction, runtime tests, enums, and a module-owned app entry.
 - [compiler-nested-modules](compiler-nested-modules/README.md): reopened nested

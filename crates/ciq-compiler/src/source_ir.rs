@@ -140,6 +140,45 @@ fn resolve_implicit_call(
     ))
 }
 
+/// Restore runtime qualifier lookup when a local/parameter shadows a source alias.
+/// Instance fields deliberately do not replace explicit namespace aliases.
+fn namespace_values(
+    expression: &mut parser::Expression,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
+) {
+    use parser::ExpressionKind as E;
+    let mut current = expression;
+    loop {
+        if let E::Namespace { alias, .. } = &current.kind {
+            if locals.contains_key(alias) || parameters.contains_key(alias) {
+                current.kind = E::Local(alias.clone());
+            }
+            break;
+        }
+        current = match &mut current.kind {
+            E::MemberRead { receiver, .. } | E::ValueCall { receiver, .. } => receiver,
+            _ => break,
+        };
+    }
+}
+
+/// Normalize assignment locations without copying large statements into recursive frames.
+fn namespace_assignment(
+    statement: &mut parser::Statement,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
+) {
+    use parser::Statement as S;
+    let target = match statement {
+        S::MemberAssign { receiver, .. } => receiver,
+        S::Update { target, .. } | S::PlaceCompound { target, .. } => target,
+        S::ArrayAssign { array, .. } => array,
+        _ => return,
+    };
+    namespace_values(target, locals, parameters);
+}
+
 /// Emit a checked zero-argument native constructor operation. Keep constructor
 /// diagnostics outside recursive expression emission to preserve its depth budget.
 fn emit_native_constructor(
@@ -170,12 +209,13 @@ fn emit_native_constructor(
 /// calls and arithmetic separate from atom emission to preserve the depth budget.
 fn emit(
     source: &str,
-    expression: parser::Expression,
+    mut expression: parser::Expression,
     locals: &BTreeMap<String, LocalId>,
     parameters: &BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
     calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
+    namespace_values(&mut expression, locals, parameters);
     if let Some(kind) = calls.qualified_call(&expression, locals, parameters) {
         return emit(
             source,
@@ -536,6 +576,13 @@ fn emit_non_call(
             result: ValueId(operations.len() as u32),
             value,
         },
+        parser::ExpressionKind::Namespace { .. } => {
+            return Err(Diagnostic::at(
+                source,
+                expression.span.start,
+                "namespace values are unsupported",
+            ));
+        }
         parser::ExpressionKind::Local(name) => {
             let result = ValueId(operations.len() as u32);
             if let Some(local) = locals.get(&name) {
@@ -2155,9 +2202,10 @@ impl Builder<'_> {
     /// operands before emitting their parent in the final block.
     fn prepare(
         &mut self,
-        expression: parser::Expression,
+        mut expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<parser::Expression, Diagnostic> {
+        namespace_values(&mut expression, locals, &self.parameters);
         if let Some(kind) = self
             .calls
             .qualified_call(&expression, locals, &self.parameters)
@@ -3658,7 +3706,8 @@ impl Builder<'_> {
         locals: &mut BTreeMap<String, LocalId>,
     ) -> Result<bool, Diagnostic> {
         let mut terminated = false;
-        for statement in statements {
+        for mut statement in statements {
+            namespace_assignment(&mut statement, locals, &self.parameters);
             let span = statement.span();
             if terminated {
                 return Err(Diagnostic::at(
@@ -4213,7 +4262,15 @@ impl CallContext {
             } => (crate::constants::path(receiver)?, member, arguments),
             _ => return None,
         };
-        let module = self.module_name(&path, locals, parameters)?;
+        let fixed = match &expression.kind {
+            E::ValueCall { receiver, .. } => crate::constants::namespace_alias(receiver).is_some(),
+            _ => false,
+        };
+        let module = if fixed {
+            self.modules.contains(&path).then_some(path.clone())?
+        } else {
+            self.module_name(&path, locals, parameters)?
+        };
         if path == "self" {
             for scope in crate::names::scopes(&module) {
                 if self.get(&(scope.into(), member.clone())).is_some() {
@@ -4320,6 +4377,28 @@ impl CallContext {
         parameters: &BTreeMap<String, usize>,
     ) -> Option<parser::Expression> {
         use parser::ExpressionKind as E;
+        if crate::constants::namespace_alias(expression).is_some() {
+            let path = crate::constants::path(expression)?;
+            let (owner, field) = path.rsplit_once('.')?;
+            let kind = if self.class_enums.contains(&(owner.into(), field.into())) {
+                E::ClassField {
+                    class: owner.into(),
+                    field: field.into(),
+                }
+            } else if self.shared_contains(Some(owner), field) {
+                E::SharedField {
+                    lexical: false,
+                    module: Some(owner.into()),
+                    field: field.into(),
+                }
+            } else {
+                return None;
+            };
+            return Some(parser::Expression {
+                kind,
+                span: expression.span,
+            });
+        }
         if let Some(path) = crate::constants::path(expression) {
             if let Some((class, field)) = path.rsplit_once('.') {
                 let qualifier = class.split('.').next().unwrap();

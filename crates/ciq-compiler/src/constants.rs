@@ -47,7 +47,7 @@ pub(crate) fn path(expression: &Expression) -> Option<String> {
         expression = receiver;
     }
     let mut path = match &expression.kind {
-        E::Local(name) => name.clone(),
+        E::Local(name) | E::Namespace { path: name, .. } => name.clone(),
         E::SelfField(name) => format!("self.{name}"),
         _ => return None,
     };
@@ -105,4 +105,17 @@ pub(crate) fn literal_default(expression: &Expression, class_field: bool, source
         }
         _ => false,
     })
+}
+
+/// Find a fixed namespace qualifier through an unevaluated receiver path.
+/// Calls in the receiver end the path: their result is an ordinary runtime value.
+pub(crate) fn namespace_alias(expression: &Expression) -> Option<&str> {
+    let mut current = expression;
+    loop {
+        current = match &current.kind {
+            E::MemberRead { receiver, .. } => receiver,
+            E::Namespace { alias, .. } => return Some(alias),
+            _ => return None,
+        };
+    }
 }

@@ -674,3 +674,32 @@ Same-owner construction uses `getselfv`. This differs from scalar parent reads,
 which retain lexical search. Entry lookup also leaves the app module's marker
 90 absent. These distinctions are checked by the specimen rather than inferred
 from declaration nesting alone.
+
+## Source namespace imports
+
+Experimentally observed, 2026-11-01: SDK 9.2.0, `fr265`, `-O 0`, minimum API
+3.0.0. The [two-file import specimen](../../examples/compiler-source-imports/README.md)
+checks aliases/chains, imported classes/typedefs/enums, reopened-module scope,
+initializers, class enum access, and mutation through alias-qualified storage.
+SDK and generated PRGs match its [expected console](../../examples/compiler-source-imports/expected.txt).
+Use the shared console-specimen checker and the documented scaffold.
+
+Compile-only variants confirm that `using Lib.Inner as L` and `import Lib.Inner`
+accept forward declarations, while direct class imports/aliases are rejected.
+Imports expose type names but not bare functions. Distinct imported `Token`
+classes are ambiguous when used; unused conflicting type imports and a local
+class overriding an imported type are accepted. Owner-local bindings do not
+escape to another file reopening the same module.
+
+A local/parameter can shadow an alias in a qualified value call. A field cannot:
+with alias `M`, a field `M=12`, and `M.toString()`, the SDK looks for `toString` on
+the imported module. `self.M.toString()` selects the field. Constructors and
+`instanceof` with a local qualifier `L=1` reject `L.Token` on Number; casts to
+`L.Token` still use the imported type. Native alias shadowing is broader in the
+SDK than our current native profile; this change retains that documented limit.
+
+The SDK rejected a class-local alias `Own` in a field declaration/initializer
+with `Undefined symbol ':Own'`; a file-scoped alias for the same module compiled.
+The tracked specimen uses file-scoped bindings for that field, and owner-local
+bindings in methods. Our frontend preserves the declaration environment in both
+positions rather than reproducing that SDK resolution failure.

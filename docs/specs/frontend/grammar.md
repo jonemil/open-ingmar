@@ -31,7 +31,7 @@ is not a separate requirement on field targets.
 
 ```text
 source-input = source-file
-source-file = native-declaration* declaration*
+source-file = namespace-declaration* declaration*
 declaration = function | module | class | typedef | constant | enumeration
             | shared-variable
 typedef = "typedef" identifier "as" value-type ";"
@@ -40,12 +40,14 @@ constant-binding = identifier ("as" value-type)? ("=" expression)?
 shared-variable = "var" constant-binding ("," constant-binding)* ";"
 enumeration = "enum" identifier? "{" enum-member ("," enum-member)* ","? "}"
 enum-member = identifier ("=" expression)?
-module = "module" identifier "{" native-declaration*
+module = "module" identifier "{" namespace-declaration*
          (module | class | function | typedef | constant | enumeration | shared-variable)* "}"
 class = "class" identifier ("extends" native-base)?
-        "{" native-declaration* (field | function | typedef | constant | enumeration)* "}"
-native-declaration = "using" native-module ("as" identifier)? ";"
-                   | "import" native-module ";"
+        "{" namespace-declaration* (field | function | typedef | constant | enumeration)* "}"
+namespace-declaration = "using" namespace-path ("as" identifier)? ";"
+                      | "import" namespace-path ";"
+namespace-path = native-module | source-module
+source-module = path
 native-module = "Toybox" "." ("Application" | "System" | "WatchUi"
                              | "Graphics" | "Lang")
 function = "function" identifier "(" parameter-list? ")"
@@ -55,6 +57,11 @@ parameter = identifier ("as" value-type)?
 field = "var" field-binding ("," field-binding)* ";"
 field-binding = identifier ("as" field-type)? ("=" expression)?
 ```
+
+`source-module` must resolve to a module declared in the unit; direct class
+imports are rejected. Alias expansion and imported type visibility follow
+[namespace resolution](README.md#namespace-declarations), independently of
+value-receiver lookup. Native module targets use the supported catalogue list.
 
 Each `constant-binding` has its own annotation and initializer. A missing
 initializer produces Null. Nested commas in types, containers, and calls belong
