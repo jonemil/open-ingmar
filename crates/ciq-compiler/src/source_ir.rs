@@ -63,7 +63,18 @@ fn resolve_implicit_call(
         calls.current_module.as_deref().unwrap_or("")
     };
     let scopes = if owner == "self" {
-        vec![owner]
+        std::iter::once(owner)
+            .chain(
+                calls
+                    .current_module
+                    .as_deref()
+                    .into_iter()
+                    .flat_map(crate::names::scopes)
+                    .filter(|_| {
+                        member != "method" && !calls.inherited_object_member(owner, &member)
+                    }),
+            )
+            .collect()
     } else {
         crate::names::scopes(owner).collect::<Vec<_>>()
     };
@@ -573,12 +584,15 @@ fn emit_non_call(
         | parser::ExpressionKind::OwnerCall { .. }
         | parser::ExpressionKind::Binary { .. } => unreachable!("compound expression dispatched"),
         parser::ExpressionKind::Cast {
+            qualifier,
             operand,
             mut target,
         } => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
             if let Some((name, nullable)) = crate::source_objects::target_contract(&target) {
-                if locals.contains_key(name) || parameters.contains_key(name) {
+                if locals.contains_key(qualifier.as_deref().unwrap_or(name))
+                    || parameters.contains_key(qualifier.as_deref().unwrap_or(name))
+                {
                     return Err(Diagnostic::at(
                         source,
                         expression.span.start,
@@ -614,10 +628,14 @@ fn emit_non_call(
                 }
             }
         }
-        parser::ExpressionKind::InstanceOf { operand, class } => {
+        parser::ExpressionKind::InstanceOf {
+            operand,
+            class,
+            qualifier,
+        } => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
-            if !class.contains('.') {
-                if locals.contains_key(&class) || parameters.contains_key(&class) {
+            if calls.class_bases.contains_key(&class) || !class.contains('.') {
+                if locals.contains_key(&qualifier) || parameters.contains_key(&qualifier) {
                     return Err(Diagnostic::at(
                         source,
                         expression.span.start,
@@ -2082,6 +2100,7 @@ impl Builder<'_> {
     fn source_construction(
         &mut self,
         class: String,
+        qualifier: String,
         arguments: Vec<parser::Expression>,
         span: Span,
         locals: &BTreeMap<String, LocalId>,
@@ -2093,7 +2112,7 @@ impl Builder<'_> {
                 "source constructor requires a declared class",
             )
         })?;
-        if locals.contains_key(&class) || self.parameters.contains_key(&class) {
+        if locals.contains_key(&qualifier) || self.parameters.contains_key(&qualifier) {
             return Err(Diagnostic::at(
                 self.source,
                 span.start,
@@ -2103,11 +2122,6 @@ impl Builder<'_> {
         let builder = crate::BuilderId(self.local_id(span)?.0);
         self.push(
             Operation::SourceBegin {
-                lexical: self
-                    .calls
-                    .current_module
-                    .as_deref()
-                    .is_some_and(|module| module.contains('.')),
                 builder,
                 class: class.clone(),
                 base,
@@ -2232,11 +2246,21 @@ impl Builder<'_> {
                 left: Box::new(self.snapshot(*left, locals)?),
                 right: Box::new(self.snapshot(*right, locals)?),
             },
-            E::Cast { operand, target } => E::Cast {
+            E::Cast {
+                operand,
+                target,
+                qualifier,
+            } => E::Cast {
+                qualifier,
                 operand: Box::new(self.prepare(*operand, locals)?),
                 target,
             },
-            E::InstanceOf { operand, class } => E::InstanceOf {
+            E::InstanceOf {
+                operand,
+                class,
+                qualifier,
+            } => E::InstanceOf {
+                qualifier,
                 operand: Box::new(self.prepare(*operand, locals)?),
                 class,
             },
@@ -2249,8 +2273,12 @@ impl Builder<'_> {
                 left: Box::new(self.snapshot(*left, locals)?),
                 right: Box::new(self.snapshot(*right, locals)?),
             },
-            E::SourceNew { class, arguments } => {
-                return self.source_construction(class, arguments, span, locals);
+            E::SourceNew {
+                class,
+                qualifier,
+                arguments,
+            } => {
+                return self.source_construction(class, qualifier, arguments, span, locals);
             }
             E::ValueCall {
                 receiver,
@@ -3301,10 +3329,13 @@ impl Builder<'_> {
                         member: "equals".into(),
                         arguments: vec![value],
                     },
-                    parser::CasePattern::Class(class) => parser::ExpressionKind::InstanceOf {
-                        operand: Box::new(operand),
-                        class,
-                    },
+                    parser::CasePattern::Class((class, qualifier)) => {
+                        parser::ExpressionKind::InstanceOf {
+                            qualifier,
+                            operand: Box::new(operand),
+                            class,
+                        }
+                    }
                     parser::CasePattern::Default => unreachable!("default has no test"),
                 };
                 let next = if index + 1 == count {
@@ -4222,7 +4253,11 @@ impl CallContext {
     ) -> Option<String> {
         let explicit_self = path == "self" || path.starts_with("self.");
         if path == "self" {
-            return self.current_module.clone();
+            return if self.current_class.is_some() {
+                None
+            } else {
+                self.current_module.clone()
+            };
         }
         let path = path.strip_prefix("self.").unwrap_or(path);
         let (first, tail) = path
@@ -4243,6 +4278,7 @@ impl CallContext {
         {
             if self.shared_contains(Some(scope), first)
                 || self.get(&(scope.into(), first.into())).is_some()
+                || self.class_bases.contains_key(&format!("{scope}.{first}"))
             {
                 return None;
             }
@@ -4285,18 +4321,29 @@ impl CallContext {
     ) -> Option<parser::Expression> {
         use parser::ExpressionKind as E;
         if let Some(path) = crate::constants::path(expression) {
-            if let Some((class, field)) = path.split_once('.') {
-                if self.class_enums.contains(&(class.into(), field.into()))
-                    && !locals.contains_key(class)
-                    && !parameters.contains_key(class)
-                    && !self.field_names.contains(class)
-                    && !self.shared_name(class)
-                    && !self.constants.contains_key(class)
+            if let Some((class, field)) = path.rsplit_once('.') {
+                let qualifier = class.split('.').next().unwrap();
+                let resolved = self
+                    .current_class
+                    .as_ref()
+                    .map(|c| c.name.as_str())
+                    .or(self.current_module.as_deref())
+                    .into_iter()
+                    .flat_map(crate::names::scopes)
+                    .map(|scope| format!("{scope}.{class}"))
+                    .find(|name| self.class_bases.contains_key(name))
+                    .unwrap_or_else(|| class.into());
+                if self.class_enums.contains(&(resolved.clone(), field.into()))
+                    && !locals.contains_key(qualifier)
+                    && !parameters.contains_key(qualifier)
+                    && !self.field_names.contains(qualifier)
+                    && !self.shared_name(qualifier)
+                    && !self.constants.contains_key(qualifier)
                     && self.module_name(class, locals, parameters).is_none()
                 {
                     return Some(parser::Expression {
                         kind: E::ClassField {
-                            class: class.into(),
+                            class: resolved,
                             field: field.into(),
                         },
                         span: expression.span,
@@ -4334,7 +4381,12 @@ impl CallContext {
                 }
                 let module = self.lexical_shared(field)?;
                 let lexical = self.current_module.as_deref().is_some_and(|current| {
-                    current.contains('.') && module.as_deref() != Some(current)
+                    (self
+                        .current_class
+                        .as_ref()
+                        .is_some_and(|c| c.name.contains('.'))
+                        || current.contains('.'))
+                        && (self.current_class.is_some() || module.as_deref() != Some(current))
                 });
                 (module, field, lexical)
             } else {
@@ -4346,10 +4398,14 @@ impl CallContext {
             }
         } else {
             let module = self.lexical_shared(&path)?;
-            let lexical = self
-                .current_module
-                .as_deref()
-                .is_some_and(|current| current.contains('.') && module.as_deref() != Some(current));
+            let lexical = self.current_module.as_deref().is_some_and(|current| {
+                (self
+                    .current_class
+                    .as_ref()
+                    .is_some_and(|c| c.name.contains('.'))
+                    || current.contains('.'))
+                    && (self.current_class.is_some() || module.as_deref() != Some(current))
+            });
             (module, path.as_str(), lexical)
         };
         self.shared_contains(module.as_deref(), field)

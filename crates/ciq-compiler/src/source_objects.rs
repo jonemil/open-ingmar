@@ -3,7 +3,7 @@
 use crate::{LocalId, Operation, ValueId};
 use std::collections::BTreeMap;
 
-/// Read an unresolved bare source-class cast target and its optional Null arm.
+/// Read an unresolved source-class cast target and its optional Null arm.
 /// Native paths and other unions remain outside source declaration resolution.
 pub(crate) fn target_contract(ty: &crate::api::Type) -> Option<(&str, bool)> {
     let (ty, nullable) = match ty {
@@ -14,7 +14,7 @@ pub(crate) fn target_contract(ty: &crate::api::Type) -> Option<(&str, bool)> {
         ty => (ty, false),
     };
     match ty {
-        crate::api::Type::Named(name) if !name.contains('.') => Some((name, nullable)),
+        crate::api::Type::Named(name) if !name.starts_with("Toybox.") => Some((name, nullable)),
         _ => None,
     }
 }

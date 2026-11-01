@@ -766,7 +766,8 @@ Typedefs and enum types follow the same enclosing-scope search.
 Bare shared names and function calls search the current module, its parents,
 then globals. The selected declaration's contract applies; an incompatible
 nearer declaration does not select a farther overload. Calls through stored
-values remain unsupported. Classes inside modules remain unsupported.
+values remain unsupported. Classes may be declared inside modules; their exact
+identity includes the containing module path.
 
 Module initialization is lazy and independent: directly accessing a child does
 not activate its parents. Lexical lookup activates parent modules while searching
@@ -1136,8 +1137,8 @@ existing qualifier-shadowing rules.
 If no declared owner member exists, instance bodies can use the supported
 inherited Object methods, including reflective `method(...)`, under their native
 contracts. For this inherited fallback, lexical name conflicts remain rejected.
-Otherwise, unqualified lookup falls back to a collected global function. Global
-bodies use that same global lookup directly. A declared owner member keeps
+Otherwise, instance lookup searches enclosing modules before falling back to a
+collected global function. Global bodies use global lookup directly. A declared owner member keeps
 priority even when its signature rejects the arguments; an incompatible owner
 call does not select a global overload. A same-named instance field blocks
 fallback and is diagnosed as an unsupported callable value. Calls through
@@ -1381,17 +1382,34 @@ evidence](../../investigations/compiler-class.md).
 
 [Accepted declaration syntax](grammar.md#declarations) is defined in the grammar.
 
-Classes are top-level declarations. The base is a recognized native identity,
+Classes may be global or module declarations. The base is a recognized native
+identity,
 resolved through the [native name profile](#native-name-declarations). It
 accepts canonical/qualified, aliased, and imported Object/AppBase/View/
 BehaviorDelegate spellings. An omitted base selects Lang.Object. Supported
 [field contracts](#instance-fields) are defined separately. Static methods,
 annotations, source superclass lookup, and nested classes are unsupported.
 Object-rooted classes may be empty; other classes require at least one method.
-Class names must be unique; classes cannot be reopened. Reject
-class/module/global-function name collisions.
+Class identities must be unique within their containing namespace; classes
+cannot be reopened. Reject class/module/function/shared-binding collisions in
+the same owner. Different modules may declare classes with the same short name.
 
-Reserved class names include language keywords, `self`, `System`, `Application`,
+Source annotations, typedefs, constructor names, casts, and runtime class targets
+resolve through the class/module declaration environment, then globals. A nearer
+namespace blocks a farther one. Saved contracts retain canonical paths such as
+`A.B.Token`; container and callable contracts preserve that exact identity.
+Constructors and runtime tests check the source qualifier against local/parameter
+shadowing. Instance members retain priority over enclosing module members during
+bare field/call lookup; inherited Object methods precede enclosing module calls.
+
+Class selection is statically bound to its declaring module. Access from another
+owner initializes that module directly, leaving intermediate parents cold, even
+for a bare class spelling. Same-module lookup uses the current receiver. Class
+enum access follows the same owner selection. Instance field/function lookup
+through parents retains the ordinary lexical activation rules. See the
+[module-class example](../../../examples/compiler-module-classes/README.md).
+
+Reserved top-level class names include language keywords, `self`, `System`, `Application`,
 `AppBase`, `globals`, `statics`, `Toybox`, and the bootstrap's pinned native
 names: `initialize`, `println`, `View`, `Object`, `onStart`, `getInitialView`.
 These restrictions belong to this constrained profile, not the general Monkey C
@@ -1530,7 +1548,7 @@ binding; no native Object allocation/initialization hook is invoked. See the
 ### Source-class signatures
 
 Ordinary functions and instance methods may annotate parameters and results with
-unqualified declared source class names joined with `or`, optionally
+relative or qualified declared source class names joined with `or`, optionally
 including Null:
 
 ```text

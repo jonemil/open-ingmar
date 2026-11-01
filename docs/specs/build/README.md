@@ -270,7 +270,7 @@ string/constant-array literals in assembly order. Positions are calculated from
 record lengths; no SDK DATA prefix or opaque spans are transplanted.
 
 Statics maps module lookup IDs, including globals, to numeric DATA offsets.
-Globals binds the synthesized app class, global methods, root module fields, and
+Globals binds the top-level app class, global methods, root module fields, and
 a `Toybox` field with type `0x00` and value zero. User modules have their immediate
 containing module as parent (`globals` for
 roots), their own global statics lookup ID, child-module fields, member methods,
@@ -279,6 +279,13 @@ ID. Direct child lookup therefore activates that child independently of parents.
 Method values resolve their declaration's unit CODE label with the supported
 ordinary-CODE prefix. Parent/module headers retain symbol identities; they are
 not converted to DATA addresses.
+
+Each source class is a type-`0x07` field of its declaring module, keyed by its
+short member name. Its DATA parent is that module's statics ID; class CODE/DATA
+aliases encode the full owner path. Equal short names share a member symbol but
+refer to separate class records through their owners. Namespaced application
+entries select their module and class in ENTRYPOINTS; entry lookup alone does not
+run the containing module's initializer.
 
 Generated fields are sorted by full numeric key. This is a generator invariant
 supported by the lookup experiment, not a rule that changes lossless handling of
@@ -299,7 +306,8 @@ Unsigned sections, in order:
 1. HEADER_VERSIONED (`0xd000d00d`): 33 bytes, big-endian stamp `0x00060002`
    followed by 29 zero bytes. Additional header fields are not authored.
 2. ENTRY_POINTS (`0x6060c0de`): big-endian u16 count `1`, sixteen ID bytes,
-   then five u32 words: globals symbol ID, app-class symbol ID `1`, `0x82`,
+   then five u32 words: entry module symbol ID (globals for a top-level app),
+   app-class symbol ID `1`, `0x82`,
    `0x26`, `1`. The last three words remain fixed opaque profile values;
    their complete semantics are unresolved.
 3. DATA: generated records and literals described above.
@@ -342,7 +350,7 @@ cargo run -p ciq-asm -- sign scratch/hello-unsigned.prg scratch/hello.prg -y \
 
 `--emit prg` requires `--unit` and source or unit-IR input. `--app-id` requires
 exactly 32 hexadecimal digits. `--entry <global-function>` overrides `main`;
-class units require `--entry Class.method` under the profile below. Application
+class units require `--entry Class.method` (including a qualified class path) under the profile below. Application
 options are rejected for other outputs; external `--symbols`/`--data` inputs are
 rejected for PRG output because the generator owns their layout. Outputs must be
 new files.
@@ -376,7 +384,8 @@ replaces the generated callback with its validated View or View/delegate result.
 Source onStop binds the shutdown callback; methods named AppBase remain
 unsupported.
 
-Source Views receive distinct symbols and DATA records with parent globals,
+Source Views receive distinct symbols and DATA records with their declaring
+module as parent,
 native extends word `0x40000001` (WatchUi.View import index one), and a View
 base field with that same reference. Their native constructor wrappers invoke
 View's constructor; `initialize`, onShow, onUpdate, and onHide fields point to

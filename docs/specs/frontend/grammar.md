@@ -41,7 +41,7 @@ shared-variable = "var" constant-binding ("," constant-binding)* ";"
 enumeration = "enum" identifier? "{" enum-member ("," enum-member)* ","? "}"
 enum-member = identifier ("=" expression)?
 module = "module" identifier "{" native-declaration*
-         (module | function | typedef | constant | enumeration | shared-variable)* "}"
+         (module | class | function | typedef | constant | enumeration | shared-variable)* "}"
 class = "class" identifier ("extends" native-base)?
         "{" native-declaration* (field | function | typedef | constant | enumeration)* "}"
 native-declaration = "using" native-module ("as" identifier)? ";"
@@ -301,7 +301,7 @@ object-type = path
 view-type = path
 delegate-type = path
 appbase-type = path
-source-class-type = identifier
+source-class-type = path
 symbol-type = path
 method-type = path
 weakref-type = path

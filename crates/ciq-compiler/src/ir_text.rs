@@ -174,7 +174,6 @@ pub(crate) fn parse_function_ir_context(
             fields[0].as_str(),
             ".read-shared"
                 | ".begin-shared"
-                | ".begin-source"
                 | ".call"
                 | ".call-discard"
                 | ".call-global"
@@ -659,7 +658,6 @@ pub(crate) fn parse_function_ir_context(
                     value: parse_value(&fields[2])?,
                 },
                 Directive::BeginSource => Operation::SourceBegin {
-                    lexical: false,
                     builder: parse_builder(&fields[1])?,
                     class: fields[2].clone(),
                     base: match fields[3].as_str() {
@@ -1449,7 +1447,6 @@ pub(crate) fn parse_function_ir_context(
             match &mut operation {
                 Operation::SharedRead { lexical, .. }
                 | Operation::SharedBegin { lexical, .. }
-                | Operation::SourceBegin { lexical, .. }
                 | Operation::GlobalCall { lexical, .. }
                 | Operation::GlobalCallStatement { lexical, .. }
                 | Operation::ModuleCall { lexical, .. }

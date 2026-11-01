@@ -36,8 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Support classes declared inside modules and owner-qualified class names
-  in annotations, construction, and runtime type targets.
 - [ ] Resolve `using` aliases and `import` visibility for source namespaces and
   their classes/types, including conflicting aliases, instance-field/native-binding
   name collisions, and cross-file lookup.

@@ -118,7 +118,7 @@ fn typed_and_saved_singleton_sets_use_the_same_canonical_contract() {
     assert!(
         SourceUnion::new(
             vec![SourceClass {
-                name: "bad.name".into(),
+                name: "bad..name".into(),
                 base: ClassBase::LangObject
             }],
             false

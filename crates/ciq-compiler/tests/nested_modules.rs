@@ -27,7 +27,7 @@ fn nested_lookup_rejects_collisions_cycles_and_forged_ir() {
     for source in [
         "module A{module B{}const B=1;}",
         "module A{module B{}function B(){}}",
-        "module A{module B{class C{}}}",
+        "module A{module B{class C{class D{}}}}",
         "module A{const X=B.Y;module B{const Y=X;}}function f(){return A.X;}",
         "module A{const X=1;module B{const X=2;module C{function f(){return X;}}}}",
     ] {

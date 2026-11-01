@@ -652,3 +652,25 @@ with the full target's ID. A child reading a parent/global constant uses
 uses `getself` before the RHS and `putv` afterward, so its RHS marker precedes
 parent-initialization markers. A qualified store activates its declared target
 before the RHS. These observations concern authored programs, not SDK internals.
+
+## Module-owned classes
+
+Experimentally observed, 2026-11-01: SDK 9.2.0, `fr265`, `-O 0`, minimum API
+3.0.0. The two-file [module-class specimen](../../examples/compiler-module-classes/README.md)
+checks qualified/relative class types, construction, casts, runtime tests, class
+enums, and an application entry inside a module. SDK and generated PRGs match the
+[expected output](../../examples/compiler-module-classes/expected.txt). Reproduce
+with the documented scaffold and shared console-specimen checker.
+
+The authored SDK PRG uses the short class member symbol in its declaring
+module's DATA record (type `0x07`); the class record's parent is that module's
+statics ID. `A.B.Token` and `Other.Token` share the short member name but select
+distinct records. ENTRYPOINTS selects the containing module for a namespaced app.
+
+Bare class targets in a deeper module are statically bound: both
+`Outer.Inner.Deep.make()` and `Tests.Inner.Deep.test(...)` select their resolved
+class with `getmv`, leaving intermediate module markers 40 and 70 absent.
+Same-owner construction uses `getselfv`. This differs from scalar parent reads,
+which retain lexical search. Entry lookup also leaves the app module's marker
+90 absent. These distinctions are checked by the specimen rather than inferred
+from declaration nesting alone.

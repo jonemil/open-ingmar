@@ -189,7 +189,7 @@ fn class_syntax_names_and_container_framing_reject_unsupported_inputs() {
         "class System extends Application.AppBase { function f() as Void {} }",
         "class AppBase extends Application.AppBase { function f() as Void {} }",
         "class println extends Application.AppBase { function f() as Void {} }",
-        "module M { class C extends Application.AppBase { function f() as Void {} } }",
+        "class Outer { class C extends Application.AppBase { function f() as Void {} } }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }

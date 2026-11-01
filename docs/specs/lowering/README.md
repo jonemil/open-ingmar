@@ -54,7 +54,8 @@ emits only its operand; enum type declarations add no VM class, wrapper,
 instruction, or PRG section. Operators and method calls use the ordinary
 lowering selected for the backing contract; Float values remain Floats.
 Class enum member storage uses the class's statics record. `ClassFieldRead`
-loads the source class from globals and selects the member with `getsv`.
+loads the source class from its declaring module and selects the member with
+`getsv`.
 Self/instance reads and allocation-time writes use ordinary field instructions;
 the metadata's statics association selects their shared storage.
 Non-Number class defaults use ordinary typed value construction and field writes
@@ -191,7 +192,7 @@ destruction of named locals based on last use.
 ### Nested module lookup
 
 Direct access uses the resolved module statics ID, independently of namespace
-depth. Lexical shared reads and function/class lookup use `getselfv` from the
+depth. Lexical shared reads and function lookup use `getselfv` from the
 current module receiver, preserving parent-search initialization. Lexical shared
 stores capture `getself` before their RHS and complete with `putv`; direct stores
 retain target activation before the RHS.
@@ -220,8 +221,15 @@ source-class provenance does not pass through an opaque native assertion.
 
 ### Source-class tests and casts
 
-Lowering a source test evaluates its operand, uses `getmv` with the unit's
-global class binding, and emits `isa`. The target is the emitted source class
+Construction and class enum reads use the same statically resolved class lookup
+as runtime tests. Their symbols encode the canonical class path using the
+[nested owner key](#nested-module-lookup), while the bound member ID names the
+class's short name. Intermediate containing modules are not activated by class
+selection. Class method CODE labels use that same path key after their `c` owner
+prefix, keeping identical short names in different modules disjoint.
+
+Lowering a source test evaluates its operand, selects the class from its
+declaring module with `getmv` (or `getselfv` in that same module), and emits `isa`. The target is the emitted source class
 object, not its native base or a symbol ID alone. Source casts emit only their
 operand, like native lexical casts, including nullable source assertions. Null
 and falsely asserted runtime identities remain unchanged. No new VM instruction

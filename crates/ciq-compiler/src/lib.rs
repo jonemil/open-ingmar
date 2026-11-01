@@ -609,14 +609,14 @@ pub use tuples::TupleType;
 /// base alone cannot establish source-class assignability.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SourceClass {
-    /// Unqualified source identity, resolved against unit declarations.
+    /// Canonical source identity, including its containing module path.
     pub name: String,
     /// Native base used for API checking, independently of exact identity.
     pub base: ClassBase,
 }
 
 impl SourceClass {
-    /// Return the unqualified source identity without its native projection.
+    /// Return the canonical source identity without its native projection.
     pub fn as_str(&self) -> &str {
         &self.name
     }
@@ -625,7 +625,7 @@ impl SourceClass {
     /// Reject malformed names and unsupported source-reference bases.
     pub(crate) fn parse(text: &str) -> Option<Self> {
         let (name, base) = text.split_once('@')?;
-        validate_call_names(None, name).ok()?;
+        validate_call_names(Some(name), "class").ok()?;
         let base = match base {
             "Application.AppBase" => ClassBase::ApplicationAppBase,
             "Lang.Object" => ClassBase::LangObject,
@@ -1542,10 +1542,9 @@ pub enum Operation {
         member: String,
     },
     /// Allocate a source instance into private storage before evaluating user
-    /// initializer arguments. The instance cannot escape until SourceNew.
+    /// initializer arguments, selecting its declaring module directly.
+    /// The instance cannot escape until SourceNew.
     SourceBegin {
-        /// Search from the current module through lexical parents instead of direct lookup.
-        lexical: bool,
         builder: BuilderId,
         class: String,
         base: ClassBase,
@@ -1932,7 +1931,6 @@ impl Operation {
         match self {
             Self::SharedRead { lexical, .. }
             | Self::SharedBegin { lexical, .. }
-            | Self::SourceBegin { lexical, .. }
             | Self::GlobalCall { lexical, .. }
             | Self::GlobalCallStatement { lexical, .. }
             | Self::ModuleCall { lexical, .. }
@@ -2489,7 +2487,7 @@ impl Function {
             );
         for contract in source_contracts {
             for class in contract.classes() {
-                validate_call_names(None, class.as_str()).map_err(|message| IrError {
+                validate_call_names(Some(class.as_str()), "class").map_err(|message| IrError {
                     operation: None,
                     message: message.into(),
                 })?;
@@ -3143,7 +3141,7 @@ impl Function {
                         return Err(fail("self values require an instance receiver"));
                     }
                     let ty = if let Some(class) = class {
-                        validate_call_names(None, &class.name).map_err(fail)?;
+                        validate_call_names(Some(&class.name), "class").map_err(fail)?;
                         let ty = class.base.reference_type();
                         ValueType::from_api_type(&ty).expect("supported source base")
                     } else {
@@ -3459,7 +3457,7 @@ impl Function {
                 Operation::SourceBegin {
                     ref class, base, ..
                 } => {
-                    validate_call_names(None, class).map_err(fail)?;
+                    validate_call_names(Some(class), "class").map_err(fail)?;
                     let ty = base
                         .constructed_type()
                         .ok_or_else(|| fail("unsupported source allocation base"))?;
@@ -3477,7 +3475,7 @@ impl Function {
                     ref arguments,
                     ..
                 } => {
-                    validate_call_names(None, class).map_err(fail)?;
+                    validate_call_names(Some(class), "class").map_err(fail)?;
                     let ty = base.constructed_type().ok_or_else(|| {
                         fail("native base has no supported source construction profile")
                     })?;
@@ -5843,12 +5841,12 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::SourceUnion(contract) => ValueType::from_api_type(&contract.api_type())
             .ok_or("unsupported source union projection"),
         ReturnType::SourceObject(class) => {
-            validate_call_names(None, class.as_str())?;
+            validate_call_names(Some(class.as_str()), "class")?;
             ValueType::from_api_type(&api::Type::named(class.base.api_name()))
                 .ok_or("unsupported source reference projection")
         }
         ReturnType::NullableSourceObject(class) => {
-            validate_call_names(None, class.as_str())?;
+            validate_call_names(Some(class.as_str()), "class")?;
             ValueType::from_api_type(&api::Type::named(class.base.api_name()).with_null())
                 .ok_or("unsupported nullable source projection")
         }

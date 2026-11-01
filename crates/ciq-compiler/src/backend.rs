@@ -312,25 +312,9 @@ pub(crate) fn lower_owned<'a>(
                 continue;
             }
             Operation::SourceBegin {
-                builder,
-                ref class,
-                lexical,
-                ..
+                builder, ref class, ..
             } => {
-                items.push(if lexical || owner == Some(None) {
-                    instruction(
-                        Opcode::Getselfv,
-                        vec![Operand::Symbol(format!("__ciq_class_{class}"))],
-                    )
-                } else {
-                    instruction(
-                        Opcode::Getmv,
-                        vec![
-                            Operand::Symbol("__ciq_source_globals".into()),
-                            Operand::Symbol(format!("__ciq_class_{class}")),
-                        ],
-                    )
-                });
+                items.push(class_lookup(class, owner));
                 items.extend([
                     instruction(Opcode::Newc, vec![]),
                     instruction(Opcode::Lputv, vec![Operand::Bits(builders[&builder])]),
@@ -1078,20 +1062,7 @@ fn expression(
                     }
                 }
                 Operation::ClassFieldRead { class, field, .. } => {
-                    items.push(if definitions.owner == Some(None) {
-                        instruction(
-                            Opcode::Getselfv,
-                            vec![Operand::Symbol(format!("__ciq_class_{class}"))],
-                        )
-                    } else {
-                        instruction(
-                            Opcode::Getmv,
-                            vec![
-                                Operand::Symbol("__ciq_source_globals".into()),
-                                Operand::Symbol(format!("__ciq_class_{class}")),
-                            ],
-                        )
-                    });
+                    items.push(class_lookup(class, definitions.owner));
                     (
                         Opcode::Getsv,
                         vec![Operand::Symbol(format!("__ciq_field_{field}"))],
@@ -1377,20 +1348,7 @@ fn expression(
             }
             Task::TupleStore => (Opcode::Aputv, vec![]),
             Task::SourceInstanceOf(class) => {
-                items.push(if definitions.owner == Some(None) {
-                    instruction(
-                        Opcode::Getselfv,
-                        vec![Operand::Symbol(format!("__ciq_class_{class}"))],
-                    )
-                } else {
-                    instruction(
-                        Opcode::Getmv,
-                        vec![
-                            Operand::Symbol("__ciq_source_globals".into()),
-                            Operand::Symbol(format!("__ciq_class_{class}")),
-                        ],
-                    )
-                });
+                items.push(class_lookup(&class, definitions.owner));
                 (Opcode::Isa, vec![])
             }
             Task::InstanceOf(class) => {
@@ -1510,4 +1468,22 @@ fn integer(value: i32) -> (Opcode, Vec<Operand>) {
         (Opcode::Ipush4, 0xffffffff)
     };
     (opcode, vec![Operand::Bits(u64::from(value as u32) & mask)])
+}
+
+/// Select a statically resolved class from its declaring module or current owner.
+fn class_lookup(class: &str, owner: Option<Option<&str>>) -> ciq_assembly::Item {
+    let member =
+        ciq_assembly::Operand::Symbol(format!("__ciq_class_{}", crate::names::module_key(class)));
+    if owner == Some(class.rsplit_once('.').map(|(module, _)| module)) {
+        instruction(ciq_mc::Opcode::Getselfv, vec![member])
+    } else {
+        let module = class.rsplit_once('.').map_or_else(
+            || "__ciq_source_globals".into(),
+            |(module, _)| format!("__ciq_module_{}", crate::names::module_key(module)),
+        );
+        instruction(
+            ciq_mc::Opcode::Getmv,
+            vec![ciq_assembly::Operand::Symbol(module), member],
+        )
+    }
 }

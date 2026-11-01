@@ -43,7 +43,7 @@ shared-variable-record = ".shared-variable" shared-owner identifier
                          call-result-tag newline
 shared-owner = "$" | module-name
 owner = ".owner" "global" | ".owner" "module" module-name
-class-record = ".class" identifier native-base newline
+class-record = ".class" class-path native-base newline
                field-record* function-document+ ".end-class" newline
 native-base = "Lang.Object" | "Application.AppBase" | "WatchUi.View"
             | "WatchUi.BehaviorDelegate"
@@ -174,7 +174,7 @@ operation-body = value-operation | storage-operation | unary-operation
 ```
 
 `lexical-lookup` is permitted only on `.read-shared`, `.begin-shared`,
-`.begin-source`, `.call`, `.call-discard`, `.call-global`, and
+`.call`, `.call-discard`, `.call-global`, and
 `.call-global-discard`. It must follow all operands and precede the optional span.
 The [lexical lookup contract](README.md#lexical-module-lookup) constrains its owner
 and target; other directives reject the modifier.
@@ -204,7 +204,7 @@ storage-operation = ".read-shared" value-id shared-owner identifier
                   | ".assign-shared" shared-owner identifier value-id
                   | ".begin-shared" builder-id shared-owner identifier
                   | ".write-shared" builder-id value-id
-                  | ".read-class" value-id identifier identifier
+                  | ".read-class" value-id class-path identifier
                     "result=" call-result-tag
                   | ".parameter" value-id decimal-usize
                   | ".assign-parameter" decimal-usize value-id
@@ -259,14 +259,14 @@ call-operation = ".call" value-id module-name identifier
                | ".call-native-discard" value-id identifier value-id*
                | ".call-native-module" value-id module-name identifier value-id*
                | ".call-native-module-discard" module-name identifier value-id*
-class-set = identifier ("|" identifier)*
+class-set = class-path ("|" class-path)*
 call-result-metadata = "result=" call-result-tag
 field-entry-metadata = "declared=" call-result-tag
 source-field-metadata = "field=" call-result-tag
 member-read-metadata = source-field-metadata | "view=" call-result-tag
 object-operation = ".new-native" value-id class-path
-                 | ".begin-source" builder-id identifier native-base
-                 | ".new-source" value-id identifier native-base builder-id value-id*
+                 | ".begin-source" builder-id class-path native-base
+                 | ".new-source" value-id class-path native-base builder-id value-id*
                  | ".base-initialize" native-base
                  | ".tuple-new" value-id value-id*
                  | ".tuple-write" value-id value-id value-id value-id
@@ -403,7 +403,7 @@ source-union-tag = "source-union(" source-union-atom ("|" source-union-atom)+ ")
 source-union-atom = source-tag | native-parameter-tag
 source-tag = "source(" source-identity ")"
 nullable-source-tag = "nullable-source(" source-identity ")"
-source-identity = identifier "@" source-base
+source-identity = class-path "@" source-base
 source-base = "Lang.Object" | "Application.AppBase" | "WatchUi.View"
             | "WatchUi.BehaviorDelegate"
 element-tag = "any" | "null" | "number" | "nullable-number" | other-scalar-tag

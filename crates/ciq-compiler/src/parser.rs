@@ -259,7 +259,7 @@ pub(crate) struct SwitchCase {
 
 pub(crate) enum CasePattern {
     Value(Expression),
-    Class(String),
+    Class((String, String)),
     Default,
 }
 
@@ -308,6 +308,7 @@ pub(crate) enum ExpressionKind {
         field: String,
     },
     SourceNew {
+        qualifier: String,
         class: String,
         arguments: Vec<Expression>,
     },
@@ -380,11 +381,13 @@ pub(crate) enum ExpressionKind {
         right: Box<Expression>,
     },
     Cast {
+        qualifier: Option<String>,
         operand: Box<Expression>,
         target: crate::api::Type,
     },
     InstanceOf {
         operand: Box<Expression>,
+        qualifier: String,
         class: String,
     },
     Has {
@@ -1346,11 +1349,10 @@ pub(crate) fn collect_declarations<'a>(
                     }
                     Kind::Word("module" | "class")
                         if parser.owner.is_none()
-                            || (parser.peek()? == Kind::Word("module")
-                                && !parser
-                                    .owner
-                                    .as_ref()
-                                    .is_some_and(|owner| aliases.classes.contains(owner))) =>
+                            || (!parser
+                                .owner
+                                .as_ref()
+                                .is_some_and(|owner| aliases.classes.contains(owner))) =>
                     {
                         let class = parser.token()?.kind == Kind::Word("class");
                         let name = parser.identifier()?;
@@ -1643,16 +1645,34 @@ impl<'a> Parser<'a> {
         Ok(path)
     }
 
-    /// Parse a type path and canonicalize its imported or aliased native name.
-    /// Unresolved bare names remain available for unit source-class resolution.
-    fn type_path(&mut self) -> Result<String, Diagnostic> {
-        let at = self.offset;
-        let path = self.path()?;
+    /// Resolve a collected source class relative to its declaration environment.
+    fn source_class_name(&self, path: &str) -> String {
+        let first = path.split('.').next().unwrap();
+        for scope in self
+            .owner
+            .as_deref()
+            .into_iter()
+            .flat_map(crate::names::scopes)
+        {
+            let candidate = format!("{scope}.{path}");
+            let root = format!("{scope}.{first}");
+            if self.declarations.owners.contains(&root)
+                || self.declarations.constants.contains_key(&root)
+                || self.declarations.value_names.contains(&root)
+            {
+                return candidate;
+            }
+        }
+        path.to_owned()
+    }
+
+    /// Resolve native bindings and lexical source class paths without allocating VM identities.
+    fn type_name(&self, path: &str, at: usize) -> Result<String, Diagnostic> {
         Ok(self
             .names
-            .type_name(&path)
+            .type_name(path)
             .map_err(|message| self.error(at, message))?
-            .unwrap_or(path))
+            .unwrap_or_else(|| self.source_class_name(path)))
     }
 
     fn imports(&mut self) -> Result<(), Diagnostic> {
@@ -2056,7 +2076,7 @@ impl<'a> Parser<'a> {
         let left = self.arithmetic(depth)?;
         if self.peek()? == Kind::Word("instanceof") {
             self.token()?;
-            let class = self.runtime_class()?;
+            let (class, qualifier) = self.runtime_class()?;
             let span = Span {
                 start: left.span.start,
                 end: self.offset,
@@ -2064,6 +2084,7 @@ impl<'a> Parser<'a> {
             return self.node(
                 ExpressionKind::InstanceOf {
                     operand: Box::new(left),
+                    qualifier,
                     class,
                 },
                 span,
@@ -2165,6 +2186,10 @@ impl<'a> Parser<'a> {
             }
             casts += 1;
             let at = self.token()?.span.start;
+            let qualifier = match self.peek()? {
+                Kind::Word(name) => Some(name.to_owned()),
+                _ => None,
+            };
             let parameter = self.type_annotation(at, true)?;
             let target = if let Some(contract) = parameter.source_contract() {
                 if contract.classes().len() == 1 && contract.native().is_empty() {
@@ -2192,6 +2217,7 @@ impl<'a> Parser<'a> {
             };
             expression = self.node(
                 ExpressionKind::Cast {
+                    qualifier,
                     operand: Box::new(expression),
                     target,
                 },
@@ -2434,7 +2460,8 @@ impl<'a> Parser<'a> {
                 },
             );
         }
-        let path = self.path()?;
+        let raw_path = self.path()?;
+        let path = self.type_name(&raw_path, open.span.start)?;
         let weak = self.names.type_name(&path).ok().flatten().as_deref()
             == Some("Toybox.Lang.WeakReference");
         let native = self
@@ -2446,7 +2473,11 @@ impl<'a> Parser<'a> {
                     .behavior_delegate(&path)
                     .then_some(crate::NativeClass::BehaviorDelegate)
             });
-        if native.is_none() && !weak && path.contains('.') {
+        if native.is_none()
+            && !weak
+            && path.contains('.')
+            && !self.declarations.classes.contains(&path)
+        {
             return Err(self.error(open.span.start, "unsupported qualified construction class"));
         }
         let (arguments, end) = self.call_arguments(open.span.start, depth)?;
@@ -2464,10 +2495,11 @@ impl<'a> Parser<'a> {
                     } else {
                         NativeConstructor::Object(native.unwrap())
                     },
-                    qualifier: path.split('.').next().unwrap().into(),
+                    qualifier: raw_path.split('.').next().unwrap().into(),
                 }
             } else {
                 ExpressionKind::SourceNew {
+                    qualifier: raw_path.split('.').next().unwrap().into(),
                     class: path,
                     arguments,
                 }
@@ -3292,16 +3324,21 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a runtime class target shared by expressions and switch type cases.
-    fn runtime_class(&mut self) -> Result<String, Diagnostic> {
+    fn runtime_class(&mut self) -> Result<(String, String), Diagnostic> {
         let at = self.offset;
-        let class = self.type_path()?;
-        if self.alias_key(&class).is_some() {
+        let path = self.path()?;
+        let qualifier = path.split('.').next().unwrap().to_owned();
+        let class = self.type_name(&path, at)?;
+        if self.alias_key(&path).is_some() {
             return Err(self.error(at, "typedef names are not runtime classes"));
         }
-        if class.contains('.') && crate::native_bindings::lang_class(&class).is_none() {
+        if class.contains('.')
+            && !self.declarations.classes.contains(&class)
+            && crate::native_bindings::lang_class(&class).is_none()
+        {
             return Err(self.error(at, "instanceof requires a supported runtime class"));
         }
-        Ok(class)
+        Ok((class, qualifier))
     }
 
     /// Parse ordered case groups with shared switch scope. Labels end the
@@ -3758,11 +3795,7 @@ impl Parser<'_> {
         if let Some(ty) = self.alias_parameter(&path, at)? {
             return Ok(ty);
         }
-        let path = self
-            .names
-            .type_name(&path)
-            .map_err(|message| self.error(at, message))?
-            .unwrap_or(path);
+        let path = self.type_name(&path, at)?;
         let ty = match path.as_str() {
             "Null" => crate::ParameterType::Null,
             "Toybox.Lang.Number" => crate::ParameterType::Integer,
@@ -3801,7 +3834,7 @@ impl Parser<'_> {
             }
             "Toybox.Graphics.Dc" => crate::ParameterType::Object(crate::NativeClass::Dc),
             "Toybox.Lang.Array" => crate::ParameterType::Array(self.array_annotation()?),
-            name if !name.contains('.')
+            name if (self.declarations.classes.contains(name) || !name.contains('.'))
                 && !matches!(
                     name,
                     "Number"
@@ -4065,72 +4098,57 @@ pub(crate) fn declarations<'a>(
             continue;
         }
         if parser.peek()? == Kind::Word("class") {
-            if parser.owner.is_some() {
-                return Err(parser.error(parser.offset, "classes inside modules are unsupported"));
-            }
-            let is_class = parser.token()?.kind == Kind::Word("class");
+            parser.token()?;
             let token = parser.identifier()?;
             parser.reject_binding(&token)?;
             let Kind::Word(name) = token.kind else {
                 unreachable!()
             };
-            let mut class_base = None;
-            if is_class {
-                let base = if parser.peek()? == Kind::Word("extends") {
-                    parser.token()?;
-                    parser.path()?
-                } else {
-                    "Toybox.Lang.Object".into()
-                };
-                class_base = if parser.names.object(&base) {
-                    Some(crate::ClassBase::LangObject)
-                } else if parser.names.app_base(&base) {
-                    Some(crate::ClassBase::ApplicationAppBase)
-                } else if parser.names.view(&base) {
-                    Some(crate::ClassBase::WatchUiView)
-                } else if parser.names.behavior_delegate(&base) {
-                    Some(crate::ClassBase::WatchUiBehaviorDelegate)
-                } else {
-                    None
-                };
-                if class_base.is_none() {
-                    return Err(parser.error(
-                        token.span.start,
-                        format!("unsupported or unresolved native superclass {base:?}"),
-                    ));
-                }
-            } else if name == "System" {
-                return Err(parser.error(token.span.start, "System is reserved for SDK intrinsics"));
+            let outer_owner = parser.owner.clone();
+            let name = outer_owner
+                .as_ref()
+                .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
+            let base = if parser.peek()? == Kind::Word("extends") {
+                parser.token()?;
+                parser.path()?
+            } else {
+                "Toybox.Lang.Object".into()
+            };
+            let class_base = if parser.names.object(&base) {
+                Some(crate::ClassBase::LangObject)
+            } else if parser.names.app_base(&base) {
+                Some(crate::ClassBase::ApplicationAppBase)
+            } else if parser.names.view(&base) {
+                Some(crate::ClassBase::WatchUiView)
+            } else if parser.names.behavior_delegate(&base) {
+                Some(crate::ClassBase::WatchUiBehaviorDelegate)
+            } else {
+                None
+            };
+            if class_base.is_none() {
+                return Err(parser.error(
+                    token.span.start,
+                    format!("unsupported or unresolved native superclass {base:?}"),
+                ));
             }
             parser.expect(Kind::Punctuation('{'), "'{'")?;
             let outer_names = parser.names.clone();
-            parser.owner = Some(name.into());
+            parser.owner = Some(name.clone());
             parser.native_base = class_base;
             parser.imports()?;
             let mut methods = Vec::new();
             let mut fields = Vec::new();
             let mut bindings = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
-                if matches!(parser.peek()?, Kind::Word("const" | "enum"))
-                    || (!is_class && parser.peek()? == Kind::Word("var"))
-                {
-                    let declarations = parser.constant_declarations()?;
-                    if is_class {
-                        bindings.extend(declarations);
-                    } else {
-                        unit.shared.extend(
-                            declarations
-                                .into_iter()
-                                .map(|value| (Some(name.into()), value)),
-                        );
-                    }
+                if matches!(parser.peek()?, Kind::Word("const" | "enum")) {
+                    bindings.extend(parser.constant_declarations()?);
                     continue;
                 }
                 if parser.peek()? == Kind::Word("typedef") {
                     parser.skip_typedef()?;
                     continue;
                 }
-                if is_class && parser.peek()? == Kind::Word("var") {
+                if parser.peek()? == Kind::Word("var") {
                     for mut binding in parser.constant_declarations()? {
                         let kind = if !binding.has_initializer {
                             Some(
@@ -4219,7 +4237,7 @@ pub(crate) fn declarations<'a>(
             }
             parser.token()?;
             parser.names = outer_names;
-            parser.owner = None;
+            parser.owner = outer_owner;
             parser.native_base = None;
             let has_constants = parser
                 .declarations
@@ -4238,19 +4256,14 @@ pub(crate) fn declarations<'a>(
             {
                 return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
             }
-            if is_class {
-                unit.classes.push(ParsedClass {
-                    bindings,
-                    name: name.into(),
-                    name_span: token.span,
-                    base: class_base.unwrap(),
-                    fields,
-                    methods,
-                });
-            } else {
-                unit.functions
-                    .extend(methods.into_iter().map(|f| (Some(name.into()), f)));
-            }
+            unit.classes.push(ParsedClass {
+                bindings,
+                name,
+                name_span: token.span,
+                base: class_base.unwrap(),
+                fields,
+                methods,
+            });
         } else {
             unit.functions
                 .push((parser.owner.clone(), parser.function()?));

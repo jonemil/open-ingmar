@@ -386,12 +386,12 @@ merely because a native projection matches.
 
 ### Lexical module lookup
 
-Shared reads/captures, source allocation, and global/module calls carry a
+Shared reads/captures and global/module calls carry a
 `lexical` flag, serialized as trailing `lookup=lexical` before any span. Its
 absence means direct lookup. The named owner remains the resolved declaration,
 so saved IR retains full type and ownership checking.
 
-Lexical mode requires a module-owned body and a strict enclosing module or
+Lexical mode requires a module or class body and a strict enclosing module or
 global target. A nearer shared binding, function, or child module must not
 shadow the selected member. Unit effects include lazy initialization of each
 searched parent. A lexical shared capture does not activate parents; its matching
@@ -399,6 +399,12 @@ write does so after RHS effects. Direct captures activate the target immediately
 This distinction also applies to shutdown and initialization-readiness proofs.
 
 ### Unit IR text
+
+Source-class identities are canonical dotted paths throughout signatures,
+fields, enum owners, casts, runtime tests, construction, and receiver contracts.
+A class implies its containing module scopes. Source allocation, class enum
+reads, and runtime tests select the declaring module directly; they do not carry
+a lexical lookup flag. Unit effects include activation of that module.
 
 Each owner record wraps exactly one complete function. Class containers wrap
 fields followed by complete receiver-bearing method documents. Inner function
@@ -409,8 +415,8 @@ ordinary calls to native lifecycle callbacks.
 
 The unit contains 1..=256 bodies including methods and at most 256 module
 scopes. Dotted paths have at most 64 components. Explicit `.module` records
-preserve empty namespaces; function/shared owners imply their ancestors. Error body indexes follow
-all global/module bodies, then class methods. [Unit
+preserve empty namespaces; function/shared/class owners imply their containing
+modules. Error body indexes follow all global/module bodies, then class methods. [Unit
 layout](../lowering/README.md#unit-layout) owns this grouped order and generated
 CODE labels. Multiple supported helper classes may accompany the application
 class; unit validity alone does not select an application entry or establish the

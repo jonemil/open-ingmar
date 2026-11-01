@@ -266,7 +266,7 @@ pub fn build_console_application(
         (&entry.function, false)
     } else {
         let class = app_class.unwrap();
-        let Some((owner, member)) = app.entry.split_once('.') else {
+        let Some((owner, member)) = app.entry.rsplit_once('.') else {
             return Err(error("class application entry must use Class.method"));
         };
         if owner != class.name {
@@ -343,7 +343,7 @@ pub fn build_console_application(
             ));
         }
         if class.base == crate::ClassBase::ApplicationAppBase {
-            ids.insert(class.name.clone(), 1);
+            ids.insert(class.name.rsplit('.').next().unwrap().to_owned(), 1);
         }
     }
     let names: BTreeSet<_> = unit
@@ -361,7 +361,11 @@ pub fn build_console_application(
                 .iter()
                 .map(|path| path.rsplit('.').next().unwrap().to_owned()),
         )
-        .chain(unit.classes().iter().map(|class| class.name.clone()))
+        .chain(
+            unit.classes()
+                .iter()
+                .map(|class| class.name.rsplit('.').next().unwrap().to_owned()),
+        )
         .chain(
             unit.declarations()
                 .iter()
@@ -451,7 +455,10 @@ pub fn build_console_application(
         bindings.insert(format!("__ciq_symbol_{name}"), ids[name]);
     }
     for class in unit.classes() {
-        bindings.insert(format!("__ciq_class_{}", class.name), ids[&class.name]);
+        bindings.insert(
+            format!("__ciq_class_{}", crate::names::module_key(&class.name)),
+            ids[class.name.rsplit('.').next().unwrap()],
+        );
         for field in &class.fields {
             bindings.insert(format!("__ciq_field_{}", field.name), ids[&field.name]);
         }
@@ -482,13 +489,19 @@ pub fn build_console_application(
     {
         if source_class.base == crate::ClassBase::LangObject {
             items.extend([
-                Item::Label(format!("__ciq_ctor_{}", source_class.name)),
+                Item::Label(format!(
+                    "__ciq_ctor_{}",
+                    crate::names::module_key(&source_class.name)
+                )),
                 instruction(Opcode::Return, vec![]),
             ]);
             continue;
         }
         items.extend([
-            Item::Label(format!("__ciq_ctor_{}", source_class.name)),
+            Item::Label(format!(
+                "__ciq_ctor_{}",
+                crate::names::module_key(&source_class.name)
+            )),
             instruction(
                 Opcode::Getselfv,
                 vec![sym(&format!(
@@ -512,7 +525,10 @@ pub fn build_console_application(
         let ctor = if source_class.base == crate::ClassBase::ApplicationAppBase {
             "__ciq_constructor".to_owned()
         } else {
-            format!("__ciq_ctor_{}", source_class.name)
+            format!(
+                "__ciq_ctor_{}",
+                crate::names::module_key(&source_class.name)
+            )
         };
         let start = items
             .iter()
@@ -634,14 +650,20 @@ pub fn build_console_application(
     for source_class in unit
         .classes()
         .iter()
-        .filter(|class| class.base.constructed_type().is_some())
+        .filter(|class| class.base.constructed_type().is_some() && !class.name.contains('.'))
     {
         global_fields.push(field(
-            ids[&source_class.name],
+            ids[source_class.name.rsplit('.').next().unwrap()],
             0x50,
             7,
-            Reference::Class(format!("__ciq_data_class_{}", source_class.name)),
+            Reference::Class(format!(
+                "__ciq_data_class_{}",
+                crate::names::module_key(&source_class.name)
+            )),
         ));
+    }
+    if app_class.is_some_and(|c| c.name.contains('.')) {
+        global_fields.retain(|field| field.key != Key::Raw((1 << 8) | 0x50));
     }
     let globals = class(
         "__ciq_data_globals",
@@ -665,6 +687,12 @@ pub fn build_console_application(
         ],
     );
     if let Some(source_class) = app_class {
+        application.references[2] = Some(Reference::Raw(
+            source_class
+                .name
+                .rsplit_once('.')
+                .map_or(GLOBALS, |(owner, _)| module_ids[owner]),
+        ));
         application.fields.extend(
             source_class
                 .fields
@@ -724,7 +752,10 @@ pub fn build_console_application(
         .iter()
         .filter(|class| class.base.constructed_type().is_some())
     {
-        let ctor_label = format!("__ciq_ctor_{}", source_class.name);
+        let ctor_label = format!(
+            "__ciq_ctor_{}",
+            crate::names::module_key(&source_class.name)
+        );
         let (base_symbol, import_word) = match source_class.base {
             crate::ClassBase::LangObject => (OBJECT, 0x40000000 | object_import),
             crate::ClassBase::WatchUiView => (VIEW, 0x40000001),
@@ -753,13 +784,21 @@ pub fn build_console_application(
             _ => unreachable!(),
         });
         classes.push(class(
-            &format!("__ciq_data_class_{}", source_class.name),
+            &format!(
+                "__ciq_data_class_{}",
+                crate::names::module_key(&source_class.name)
+            ),
             [
                 Some(Reference::Raw(import_word)),
                 class_statics
                     .get(&source_class.name)
                     .map(|id| Reference::Raw(*id)),
-                Some(Reference::Raw(GLOBALS)),
+                Some(Reference::Raw(
+                    source_class
+                        .name
+                        .rsplit_once('.')
+                        .map_or(GLOBALS, |(owner, _)| module_ids[owner]),
+                )),
                 None,
             ],
             fields,
@@ -771,7 +810,10 @@ pub fn build_console_application(
         .filter(|c| class_statics.contains_key(&c.name))
     {
         classes.push(class(
-            &format!("__ciq_data_statics_{}", source_class.name),
+            &format!(
+                "__ciq_data_statics_{}",
+                crate::names::module_key(&source_class.name)
+            ),
             [None, None, Some(Reference::Raw(GLOBALS)), None],
             source_class
                 .fields
@@ -812,6 +854,27 @@ pub fn build_console_application(
                 0x50,
                 10,
                 Reference::Raw(module_ids[child]),
+            ));
+        }
+        for source_class in unit.classes().iter().filter(|c| {
+            c.name
+                .rsplit_once('.')
+                .is_some_and(|(owner, _)| owner == module)
+        }) {
+            fields.push(field(
+                ids[source_class.name.rsplit('.').next().unwrap()],
+                0x50,
+                7,
+                Reference::Class(
+                    if source_class.base == crate::ClassBase::ApplicationAppBase {
+                        "__ciq_data_app".into()
+                    } else {
+                        format!(
+                            "__ciq_data_class_{}",
+                            crate::names::module_key(&source_class.name)
+                        )
+                    },
+                ),
             ));
         }
         for constant in unit
@@ -859,7 +922,7 @@ pub fn build_console_application(
         let alias = if id == GLOBALS {
             "__ciq_data_globals".to_owned()
         } else if let Some((name, _)) = class_statics.iter().find(|(_, v)| **v == id) {
-            format!("__ciq_data_statics_{name}")
+            format!("__ciq_data_statics_{}", crate::names::module_key(name))
         } else {
             module_alias(module_ids.iter().find(|(_, v)| **v == id).unwrap().0)
         };
@@ -889,7 +952,10 @@ pub fn build_console_application(
     header.resize(33, 0);
     let mut entry_points = 1u16.to_be_bytes().to_vec();
     entry_points.extend(app.id);
-    for word in [GLOBALS, 1, 0x82, 0x26, 1] {
+    let entry_module = app_class
+        .and_then(|c| c.name.rsplit_once('.'))
+        .map_or(GLOBALS, |(owner, _)| module_ids[owner]);
+    for word in [entry_module, 1, 0x82, 0x26, 1] {
         entry_points.extend(word.to_be_bytes());
     }
     let mut imports = ((if has_delegate { 3u16 } else { 2u16 }) + u16::from(has_object))
