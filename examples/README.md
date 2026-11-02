@@ -113,6 +113,8 @@ and future Rust toolchain experiments.
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural
   contracts, dynamic methods, mutable fields, snapshots, and evaluation order.
+- [compiler-method-construction](compiler-method-construction/README.md): explicit
+  receiver/selector construction, argument order, and retained receiver lifetime.
 - [compiler-callbacks](compiler-callbacks/README.md): fixed Method signatures,
   typed binding, invocation, nullable storage, containers, and nested callbacks.
 - [compiler-byte-arrays](compiler-byte-arrays/README.md): constant/computed

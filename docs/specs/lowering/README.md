@@ -451,6 +451,14 @@ respectively; the class alias is `__ciq_native_BehaviorDelegate` for delegate
 construction. See [constructor
 evidence](../../investigations/compiler-native-views.md).
 
+Method construction begins with `getmv @__ciq_sdk_Lang @__ciq_type_Method;
+newc; lputv <builder-slot>`, before argument effects. Finish loads the private
+object, clears its slot with `npush; lputv`, and emits `dup 0; getsv
+@__ciq_native_initialize; dup 1; <receiver>; <selector>; invokem 3; popv`.
+The initialized Method remains on the stack. Staged argument temporaries follow
+ordinary last-read release rules. This uses existing VM instructions and
+native bindings, without a new opcode or PRG record.
+
 Declaration-initialized mutable fields use the same allocation hook and ordinary
 `putv` writes as class constants. Their contracts affect validation, not DATA
 field flags. Conditional/short-circuit RHS values are staged before receiver

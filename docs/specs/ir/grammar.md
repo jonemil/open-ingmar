@@ -234,6 +234,8 @@ storage-operation = ".read-shared" value-id shared-owner identifier
                   | ".member-read" value-id value-id identifier member-read-metadata?
                   | ".member-write" value-id identifier value-id source-field-metadata?
                   | ".bind-method" value-id value-id value-id callback-tag
+                  | ".method-begin" builder-id
+                  | ".method-finish" value-id builder-id value-id value-id
 unary-operation = unary-directive value-id value-id
 unary-directive = ".positive" | ".negate" | ".not" | ".complement"
                 | ".increment" | ".decrement"

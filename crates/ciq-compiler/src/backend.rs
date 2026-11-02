@@ -189,6 +189,7 @@ pub(crate) fn lower_owned<'a>(
             | Operation::DictionaryFinish { result, .. }
             | Operation::ArrayFinish { result, .. }
             | Operation::NativeNew { result, .. }
+            | Operation::MethodFinish { result, .. }
             | Operation::WeakReferenceNew { result }
             | Operation::SourceNew { result, .. }
             | Operation::Symbol { result, .. }
@@ -225,7 +226,8 @@ pub(crate) fn lower_owned<'a>(
                 );
                 builder_slots += 2;
             }
-            Operation::SharedBegin { builder, .. }
+            Operation::MethodBegin { builder }
+            | Operation::SharedBegin { builder, .. }
             | Operation::SourceBegin { builder, .. }
             | Operation::DictionaryBegin { builder, .. }
             | Operation::RecordBegin { builder, .. }
@@ -272,6 +274,20 @@ pub(crate) fn lower_owned<'a>(
     }
     for located in function.operations() {
         match located.operation {
+            Operation::MethodBegin { builder } => {
+                items.extend([
+                    instruction(
+                        Opcode::Getmv,
+                        vec![
+                            Operand::Symbol("__ciq_sdk_Lang".into()),
+                            Operand::Symbol("__ciq_type_Method".into()),
+                        ],
+                    ),
+                    instruction(Opcode::Newc, vec![]),
+                    instruction(Opcode::Lputv, vec![Operand::Bits(builders[&builder])]),
+                ]);
+                continue;
+            }
             Operation::CallBegin { builder } => {
                 let call = &function
                     .operations()
@@ -917,6 +933,30 @@ fn expression(
                     let (_, value) =
                         crate::native::constant(module, member, None).expect("validated constant");
                     (Opcode::Ipush1, vec![Operand::Bits(value as u64)])
+                }
+                Operation::MethodFinish {
+                    builder,
+                    receiver,
+                    selector,
+                    ..
+                } => {
+                    items.extend([
+                        instruction(Opcode::Lgetv, vec![Operand::Bits(builders[builder])]),
+                        instruction(Opcode::Npush, vec![]),
+                        instruction(Opcode::Lputv, vec![Operand::Bits(builders[builder])]),
+                        instruction(Opcode::Dup, vec![Operand::Bits(0)]),
+                        instruction(
+                            Opcode::Getsv,
+                            vec![Operand::Symbol("__ciq_native_initialize".into())],
+                        ),
+                        instruction(Opcode::Dup, vec![Operand::Bits(1)]),
+                    ]);
+                    tasks.extend([
+                        Task::FinishConstructor(2),
+                        Task::Value(*selector),
+                        Task::Value(*receiver),
+                    ]);
+                    continue;
                 }
                 Operation::SourceNew {
                     builder, arguments, ..

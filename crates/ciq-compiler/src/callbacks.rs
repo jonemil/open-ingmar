@@ -76,6 +76,9 @@ pub(crate) fn native_signature(
     member: &str,
     context: Option<crate::api::ApiContext>,
 ) -> Result<StructuralMethod, String> {
+    if member == "initialize" && *receiver == crate::api::Type::named("Toybox.Lang.Method") {
+        return Err("live Method rebinding has no supported fixed binding signature".into());
+    }
     // Binding uses Array's erased declared signature; it does not run direct
     // call specialization using the captured tuple's slot types or bounds.
     let projected;

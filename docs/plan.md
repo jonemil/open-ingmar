@@ -36,11 +36,8 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Implement Method construction (`initialize(receiver, symbol)` /
-  `new Lang.Method(receiver, symbol)`) for instance, module, and global receivers,
-  retaining the receiver and constructor/binding effects.
 - [ ] Support static fields/methods, their initialization, and class-qualified
-  access, including Method construction with class-definition receivers;
+  access, including invocation of Methods bound to static targets;
   distinguish static owners from instance receivers.
 - [ ] Enforce `public`, `private`, `protected`, and `hidden` on declarations and
   inherited/member access, including access across source files.
@@ -121,6 +118,8 @@ executable profiles.
 
 ### Method
 
+- [ ] Support explicit `initialize(receiver, symbol)` rebinding and invalidate
+  fixed callback-signature proofs held by aliases of the changed Method.
 - [ ] Diagnose missing literal method targets; preserve distinct signatures when
   a source-class union binds a selector with different target contracts.
 - [ ] Represent variadic bound-method signatures and infer native lifecycle

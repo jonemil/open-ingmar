@@ -859,6 +859,12 @@ fn build_core() -> Catalogue {
         Type::Union(vec![Type::named(object), Type::Null]),
     );
     classes.get_mut("Toybox.Lang.Method").unwrap().methods = vec![
+        method(
+            "initialize",
+            vec![Type::Any, Type::named("Toybox.Lang.Symbol")],
+            Type::Void,
+            initial,
+        ),
         invoke,
         method("hashCode", vec![], Type::named(number), initial),
     ];

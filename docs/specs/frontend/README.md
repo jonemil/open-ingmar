@@ -1239,9 +1239,10 @@ instance. Reading a namespace does not copy it.
 Known declaration-qualified calls and field access retain their existing static
 resolution. Reading a namespace value through `self.Child` is not yet supported;
 receiver traversal must not be replaced with direct declaration lookup.
-Arbitrary member dispatch through namespace-valued variables,
-namespace Method construction, and class/static member dispatch are not enabled
-by this representation. Modules have no inherited Object.method implementation;
+Arbitrary member dispatch through namespace-valued variables and class/static
+member dispatch are not enabled by this representation. Namespace receivers can
+be bound through [Method construction](#method-values-and-invocation).
+Modules have no inherited Object.method implementation;
 these values must not acquire Object operations merely because their runtime
 reference can be stored. See the [specimen](../../../examples/compiler-namespace-values/README.md),
 [IR contract](../ir/README.md#namespace-references), and
@@ -3269,6 +3270,28 @@ Symbol element/value contract can still use the existing Null constant encoding.
 Pooled Symbol encodings require separate evidence/contracts.
 
 ### Method values and invocation
+
+`new Lang.Method(receiver, selector)` constructs an erased Method from API
+1.0.0. It requires exactly two arguments: any receiver value and a Symbol
+selector. Any selectors follow the ordinary gradual-checking policy; known
+non-Symbol selectors are rejected. Canonical, imported, aliased, and root-qualified
+constructor names follow ordinary native-name resolution and shadowing rules.
+
+Allocation precedes argument evaluation. Receiver and selector run once, left
+to right, including conditional arguments. The initialized Method retains the
+receiver even after its source variable changes; private construction storage
+is cleared before the result escapes. Construction does not invoke the target
+or infer its signature. Source-instance capture still requires initialized
+required fields. Module/global, class-definition, container, scalar, and Null
+receivers can be stored; valid target lookup and invocation remain runtime
+obligations. Binding a class definition does not turn an instance method into
+a static method. Missing literal targets are not yet diagnosed statically.
+
+Explicit calls to an existing Method's `initialize` are unsupported: rebinding
+needs alias-aware invalidation of fixed callback signatures. An erased reflective
+binding does not establish such a signature. See the
+[construction specimen](../../../examples/compiler-method-construction/README.md)
+and [SDK evidence](../../investigations/compiler-methods.md#explicit-construction).
 
 Supported scalar, Array, Dictionary, opaque Object, WeakReference, and Method
 values and supported native/source-class receivers support `method(Symbol)` →

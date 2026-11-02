@@ -610,6 +610,14 @@ fn inspect(
                     }
                 }
             }
+            Operation::MethodFinish {
+                receiver, selector, ..
+            } => {
+                boundaries.extend([
+                    (Type::Any, *receiver),
+                    (Type::named("Toybox.Lang.Symbol"), *selector),
+                ]);
+            }
             Operation::SourceNew {
                 class, arguments, ..
             } => {

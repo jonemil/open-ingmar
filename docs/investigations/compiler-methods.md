@@ -139,6 +139,38 @@ under `scratch/sdk-cache/sdk-index.json`; per-change builds/logs are disposable.
 Current contracts belong in the [frontend](../specs/frontend/README.md#typed-callbacks)
 and [IR](../specs/ir/README.md#typed-callback-contracts).
 
+## Explicit construction
+
+**Observed, 2026-11-02:** SDK/simulator 9.2.0, `fr265`, `-O 0`, minimum
+API 3.0.0, target 5.2.0. The
+[construction specimen](../../examples/compiler-method-construction/README.md)
+built through the minimal-console scaffold and our compiler produces the same
+[expected output](../../examples/compiler-method-construction/expected.txt).
+Use the shared specimen checker for preparation, reconstruction, signing, and
+SDK/generated console comparison.
+
+`new Lang.Method(Cold.Child, :number)` initializes the selected module before
+binding, but does not run `number`: the trace is `102` after construction and
+`102103` after invocation. Global, source-instance, scalar, and container
+bindings invoke successfully. Argument prints establish receiver-before-selector
+evaluation, including branching arguments. Weak liveness becomes false only
+after both Method aliases are replaced, establishing receiver retention and
+release without hidden temporary ownership. Class-definition binding constructs
+successfully; this does not establish non-static invocation on a class value.
+
+Isolated variants of the same scaffold establish additional boundaries:
+
+- An identity function `chooseSymbol(s as Lang.Symbol) as Lang.Symbol`
+  prevents literal-target checking. Constructing a Method with its missing
+  selector succeeds, including with a Null receiver; `instanceof Lang.Method`
+  prints true. These variants do not invoke the missing target.
+- Passing the same missing selector literally with a known module receiver is
+  rejected by the SDK compiler: it reports that the method cannot be found.
+- Calling an existing instance-bound Method's `initialize(token, :plain)`
+  succeeds and subsequent invocation returns the instance value. This confirms
+  that explicit rebinding is an SDK feature, without proving safe preservation
+  of any static callback-signature claim across aliases.
+
 [types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

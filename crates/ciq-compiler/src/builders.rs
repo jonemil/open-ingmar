@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, VecDeque};
 #[derive(Clone)]
 pub(crate) enum Contract {
     Shared,
+    Method,
     Call,
     Array(ArrayElement),
     ByteArray,
@@ -26,7 +27,8 @@ impl Contract {
                 crate::api::Type::named("Toybox.Lang.Number"),
                 crate::api::Type::named("Toybox.Lang.Char"),
             ])),
-            Self::Call
+            Self::Method
+            | Self::Call
             | Self::Shared
             | Self::Dictionary(_)
             | Self::Record(_)
@@ -53,6 +55,16 @@ pub(crate) fn validate(
         message: message.into(),
     };
     let mut declarations = BTreeMap::new();
+    for (index, op) in operations.iter().enumerate() {
+        if let Operation::MethodBegin { builder } = op.operation {
+            if declarations
+                .insert(builder, (Contract::Method, 0))
+                .is_some()
+            {
+                return Err(fail(index, "duplicate Method builder declaration"));
+            }
+        }
+    }
     for (index, op) in operations.iter().enumerate() {
         if let Operation::CallBegin { builder } = op.operation {
             if declarations.insert(builder, (Contract::Call, 0)).is_some() {
@@ -205,7 +217,8 @@ pub(crate) fn validate(
         && !operations.iter().any(|o| {
             matches!(
                 o.operation,
-                Operation::SourceNew { .. }
+                Operation::MethodFinish { .. }
+                    | Operation::SourceNew { .. }
                     | Operation::SharedWrite { .. }
                     | Operation::DictionaryFill { .. }
                     | Operation::DictionaryFinish { .. }
@@ -239,7 +252,8 @@ pub(crate) fn validate(
                 }
             }
             match operations[index].operation {
-                Operation::CallBegin { builder }
+                Operation::MethodBegin { builder }
+                | Operation::CallBegin { builder }
                 | Operation::SourceBegin { builder, .. }
                 | Operation::SharedBegin { builder, .. }
                 | Operation::DictionaryBegin { builder, .. }
@@ -257,6 +271,16 @@ pub(crate) fn validate(
                         return Err(fail(
                             index,
                             "shared write requires its active owner builder",
+                        ));
+                    }
+                }
+                Operation::MethodFinish { builder, .. } => {
+                    if !matches!(declarations.get(&builder), Some((Contract::Method, _)))
+                        || active.remove(&builder).is_none()
+                    {
+                        return Err(fail(
+                            index,
+                            "Method completion requires its active allocation builder",
                         ));
                     }
                 }

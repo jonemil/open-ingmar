@@ -543,7 +543,7 @@ fn emit_non_call(
                 declared_type: tracked.then_some(declared),
             }
         }
-        parser::ExpressionKind::SourceNew { .. } => {
+        parser::ExpressionKind::MethodNew { .. } | parser::ExpressionKind::SourceNew { .. } => {
             unreachable!("source construction must be materialized")
         }
         parser::ExpressionKind::NativeConstant {
@@ -2238,6 +2238,45 @@ impl Builder<'_> {
         })
     }
 
+    /// Allocate a Method before evaluating receiver and selector once, left to right.
+    /// Publish it after initialization so argument branches never expose a partial object.
+    fn method_construction(
+        &mut self,
+        qualifier: String,
+        arguments: Vec<parser::Expression>,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<ValueId, Diagnostic> {
+        if locals.contains_key(&qualifier) || self.parameters.contains_key(&qualifier) {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "Method constructor qualifier is shadowed",
+            ));
+        }
+        let builder = crate::BuilderId(self.local_id(span)?.0);
+        self.push(Operation::MethodBegin { builder }, Some(span));
+        let arguments = self.arguments(arguments, locals, &[])?;
+        let [receiver, selector]: [ValueId; 2] = arguments.try_into().map_err(|_| {
+            Diagnostic::at(
+                self.source,
+                span.start,
+                "Method construction requires two arguments",
+            )
+        })?;
+        let result = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::MethodFinish {
+                result,
+                builder,
+                receiver,
+                selector,
+            },
+            Some(span),
+        );
+        Ok(result)
+    }
+
     /// Allocate a private instance before staging its initializer arguments,
     /// then publish the initialized value. Keep construction temporaries outside
     /// recursive expression dispatch so the source nesting budget stays usable.
@@ -2342,6 +2381,15 @@ impl Builder<'_> {
             span,
         )?;
         let kind = match kind {
+            E::MethodNew {
+                qualifier,
+                arguments,
+            } => {
+                return Ok(parser::Expression {
+                    kind: E::Joined(self.method_construction(qualifier, arguments, span, locals)?),
+                    span,
+                });
+            }
             E::MemberRead { receiver, member } => E::MemberRead {
                 receiver: Box::new(self.prepare(*receiver, locals)?),
                 member,
@@ -3035,6 +3083,26 @@ impl Builder<'_> {
     /// conditional arms. Existing Array references retain their invariant type;
     /// nullable Array context may type a fresh literal's scalar/Null elements.
     fn value_with_context(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        expected: Option<ConstructionType>,
+    ) -> Result<ValueId, Diagnostic> {
+        // Constructor nesting must not retain the large general-value frame
+        // while its next receiver is being evaluated.
+        if let parser::ExpressionKind::MethodNew {
+            qualifier,
+            arguments,
+        } = expression.kind
+        {
+            return self.method_construction(qualifier, arguments, expression.span, locals);
+        }
+        self.general_value_with_context(expression, locals, expected)
+    }
+
+    /// Build ordinary values with container context; Method construction uses
+    /// the smaller dispatcher above to retain the expression-depth budget.
+    fn general_value_with_context(
         &mut self,
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,

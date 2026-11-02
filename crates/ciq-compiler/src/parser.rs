@@ -304,6 +304,10 @@ pub(crate) enum NativeConstructor {
 
 #[derive(Clone)]
 pub(crate) enum ExpressionKind {
+    MethodNew {
+        qualifier: String,
+        arguments: Vec<Expression>,
+    },
     // Explicit global-root qualifier; meaningful only as a member receiver.
     Root,
     ModuleValue(Option<String>),
@@ -490,7 +494,8 @@ impl Expression {
                     argument.visit(visitor);
                 }
             }
-            E::SourceNew { arguments, .. }
+            E::MethodNew { arguments, .. }
+            | E::SourceNew { arguments, .. }
             | E::UnqualifiedCall { arguments, .. }
             | E::GlobalCall { arguments, .. }
             | E::OwnerCall { arguments, .. }
@@ -537,7 +542,8 @@ impl Expression {
     pub(crate) fn needs_materialization(&self) -> bool {
         match &self.kind {
             ExpressionKind::MemberRead { receiver, .. } => receiver.needs_materialization(),
-            ExpressionKind::SourceNew { .. }
+            ExpressionKind::MethodNew { .. }
+            | ExpressionKind::SourceNew { .. }
             | ExpressionKind::Conditional { .. }
             | ExpressionKind::Logical { .. }
             | ExpressionKind::ArrayLiteral(_)
@@ -2600,6 +2606,7 @@ impl<'a> Parser<'a> {
         }
         let raw_path = self.type_path()?;
         let path = self.type_name(&raw_path, open.span.start)?;
+        let method = path == "Toybox.Lang.Method";
         let weak = self.names.type_name(&path).ok().flatten().as_deref()
             == Some("Toybox.Lang.WeakReference");
         let native = self
@@ -2613,12 +2620,36 @@ impl<'a> Parser<'a> {
             });
         if native.is_none()
             && !weak
+            && !method
             && path.contains('.')
             && !self.declarations.classes.contains(&path)
         {
             return Err(self.error(open.span.start, "unsupported qualified construction class"));
         }
         let (arguments, end) = self.call_arguments(open.span.start, depth)?;
+        if method {
+            if arguments.len() != 2 {
+                return Err(self.error(
+                    open.span.start,
+                    "Method construction requires a receiver and Symbol selector",
+                ));
+            }
+            return self.node(
+                ExpressionKind::MethodNew {
+                    qualifier: raw_path
+                        .trim_start_matches("$.")
+                        .split('.')
+                        .next()
+                        .unwrap()
+                        .into(),
+                    arguments,
+                },
+                Span {
+                    start: open.span.start,
+                    end,
+                },
+            );
+        }
         if (native.is_some() || weak) && !arguments.is_empty() {
             return Err(self.error(
                 open.span.start,

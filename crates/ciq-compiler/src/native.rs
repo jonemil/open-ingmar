@@ -26,6 +26,24 @@ pub(crate) fn constructor(
     Ok(())
 }
 
+/// Validate Method construction without invoking or proving the selected target.
+/// The receiver is an erased value; the selector must satisfy the Symbol contract.
+pub(crate) fn method_constructor(
+    arguments: &[api::Type],
+    context: Option<api::ApiContext>,
+) -> Result<(), String> {
+    let signature = api::core()
+        .method_for_type(&api::Type::named("Toybox.Lang.Method"), "initialize")
+        .expect("Method initializer declaration");
+    if let Some(context) = context {
+        context.require(
+            "Toybox.Lang.Method.initialize",
+            signature.declaration.required_api,
+        )?;
+    }
+    check_arguments(&signature, arguments, context)
+}
+
 pub(crate) struct CallbackSignature {
     pub parameters: Vec<ParameterType>,
     pub result: ReturnType,

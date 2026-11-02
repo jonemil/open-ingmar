@@ -1637,6 +1637,18 @@ pub enum Operation {
         result: ValueId,
         class: NativeClass,
     },
+    /// Allocate an unpublished Method before evaluating receiver/selector arguments.
+    MethodBegin {
+        builder: BuilderId,
+    },
+    /// Initialize the private Method and publish its erased callable reference.
+    /// The selector is a Symbol; binding does not prove or invoke a target signature.
+    MethodFinish {
+        result: ValueId,
+        builder: BuilderId,
+        receiver: ValueId,
+        selector: ValueId,
+    },
     /// Construct the zero-argument native WeakReference class instance. This is
     /// distinct from binding another target through Object.weak().
     WeakReferenceNew {
@@ -2053,6 +2065,7 @@ impl Operation {
             | Self::TupleWrite { result, .. }
             | Self::TupleAppend { result, .. }
             | Self::NativeNew { result, .. }
+            | Self::MethodFinish { result, .. }
             | Self::WeakReferenceNew { result, .. }
             | Self::ArrayNew { result, .. }
             | Self::ArrayAllocate { result, .. }
@@ -2123,6 +2136,7 @@ impl Operation {
             | Self::CallBegin { .. }
             | Self::SharedBegin { .. }
             | Self::SharedWrite { .. }
+            | Self::MethodBegin { .. }
             | Self::SourceBegin { .. } => None,
         }
     }
@@ -3742,6 +3756,28 @@ impl Function {
                     );
                     (Some(result), vec![array, index, value])
                 }
+                Operation::MethodBegin { .. } => {
+                    if let Some(context) = context {
+                        context
+                            .check_class(api::core(), "Toybox.Lang.Method")
+                            .map_err(|message| fail(&message))?;
+                    }
+                    (None, vec![])
+                }
+                Operation::MethodFinish {
+                    result,
+                    receiver,
+                    selector,
+                    ..
+                } => {
+                    native::method_constructor(
+                        &[type_of(receiver).api_type(), type_of(selector).api_type()],
+                        context,
+                    )
+                    .map_err(|message| fail(&message))?;
+                    types.insert(result, ValueType::Method);
+                    (Some(result), vec![receiver, selector])
+                }
                 Operation::WeakReferenceNew { result } => {
                     if let Some(context) = context {
                         context
@@ -4771,6 +4807,8 @@ impl Function {
                     | Operation::TupleNew { .. }
                     | Operation::TupleWrite { .. }
                     | Operation::TupleAppend { .. }
+                    | Operation::MethodBegin { .. }
+                    | Operation::MethodFinish { .. }
                     | Operation::SourceBegin { .. }
                     | Operation::CallBegin { .. }
                     | Operation::SharedBegin { .. }
@@ -4828,6 +4866,7 @@ impl Function {
                     } => vec![*array, *index, *value],
                     Operation::LocalVariable { value: None, .. }
                     | Operation::LocalDeclare { .. }
+                    | Operation::MethodBegin { .. }
                     | Operation::SourceBegin { .. }
                     | Operation::CallBegin { .. }
                     | Operation::SharedBegin { .. }
@@ -4888,6 +4927,9 @@ impl Function {
                             let at = definitions[&value];
                             tasks.push(Task::Emit(at));
                             match &operations[at].operation {
+                                Operation::MethodFinish {
+                                    receiver, selector, ..
+                                } => tasks.extend([Task::Value(*selector), Task::Value(*receiver)]),
                                 Operation::MemberRead { receiver, .. } => {
                                     tasks.push(Task::Value(*receiver))
                                 }
@@ -5436,6 +5478,16 @@ impl Function {
                 Operation::NativeNew { result, class } => {
                     format!(".new-native %{} {}", result.0, class.name())
                 }
+                Operation::MethodBegin { builder } => format!(".method-begin &{}", builder.0),
+                Operation::MethodFinish {
+                    result,
+                    builder,
+                    receiver,
+                    selector,
+                } => format!(
+                    ".method-finish %{} &{} %{} %{}",
+                    result.0, builder.0, receiver.0, selector.0
+                ),
                 Operation::WeakReferenceNew { result } => {
                     format!(".new-native %{} Toybox.Lang.WeakReference", result.0)
                 }

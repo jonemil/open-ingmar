@@ -2453,7 +2453,8 @@ Method parameters, call results, and matching conditional-edge values use the
 `method` or `nullable-method` tag, retained by explicit function result
 contracts. `nullable-method` means Method or Null; reads after a proven null
 test use the existing storage refinement rules. No new runtime representation is
-introduced. Creation uses ordinary `.call-native`; invocation uses
+introduced. Binding with `Object.method` uses ordinary `.call-native`;
+explicit construction uses the private operations below. Invocation uses
 `.call-native`. No separate callback instruction or target-signature annotation
 is inferred. Result validation recomputes Object-or-Null for invocation,
 including when all observed results were non-null. Native API declarations carry
@@ -2462,6 +2463,20 @@ fixed. The existing 254-argument VM limit applies. See [source Method
 contracts](../frontend/README.md#method-values-and-invocation). Class storage
 uses [`.field-method`](../frontend/README.md#method-fields), retaining the
 declared Method/nullability contract through field reads and writes.
+
+Explicit construction uses `MethodBegin { builder }` / `.method-begin &b`
+and `MethodFinish { result, builder, receiver, selector }` /
+`.method-finish %result &b %receiver %selector`. Begin allocates one private
+frame slot before the argument effects. Finish consumes an active Method
+builder, checks the Method initializer's API 1.0.0 and Any/Symbol argument
+contracts, clears the slot, and publishes a non-null erased `method` value.
+It proves neither target existence nor a fixed callback signature.
+
+Both operations retain effect order. Every continuing path must finish its
+active allocation exactly once; restart, mismatched builder kinds, incomplete
+returns, and inconsistent joins are rejected. The partial object is never an
+SSA value. Branching arguments use ordinary CFG staging and snapshot ownership;
+no temporary may retain the receiver after construction completes.
 
 `.symbol` defines a non-null Symbol by ASCII identifier, without a numeric ID.
 Parameter, call-result, and matching conditional-edge contracts use `symbol` or

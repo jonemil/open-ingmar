@@ -2,6 +2,8 @@
 /// Several spellings may share a form, such as `.read` and `.take`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Directive {
+    MethodBegin,
+    MethodFinish,
     ModuleValue,
     ClassValue,
     ModuleSelf,
@@ -342,6 +344,8 @@ pub(crate) fn parse_function_ir_context(
             Some(".call-object") => (Directive::CallObject, call_width()),
             Some(".call-object-discard") => (Directive::CallObjectDiscard, call_width()),
             Some(".integer") => (Directive::Integer, 3),
+            Some(".method-begin") => (Directive::MethodBegin, 2),
+            Some(".method-finish") => (Directive::MethodFinish, 5),
             Some(".begin-call") => (Directive::CallBegin, 2),
             Some(".begin-shared") => (Directive::SharedBegin, 4),
             Some(".write-shared") => (Directive::SharedWrite, 3),
@@ -690,6 +694,15 @@ pub(crate) fn parse_function_ir_context(
                     class: fields[2].clone(),
                     field: fields[3].clone(),
                     result_type: call_contract(fields, 4, *at, source)?.0,
+                },
+                Directive::MethodBegin => Operation::MethodBegin {
+                    builder: parse_builder(&fields[1])?,
+                },
+                Directive::MethodFinish => Operation::MethodFinish {
+                    result: parse_value(&fields[1])?,
+                    builder: parse_builder(&fields[2])?,
+                    receiver: parse_value(&fields[3])?,
+                    selector: parse_value(&fields[4])?,
                 },
                 Directive::CallBegin => Operation::CallBegin {
                     builder: parse_builder(&fields[1])?,
