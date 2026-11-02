@@ -1158,8 +1158,8 @@ argument is evaluated. Calls requiring separate argument staging (conditional or
 short-circuit branches and private construction) capture the callable and its VM
 context first, then evaluate arguments once in source order and invoke the saved
 target. This also applies to direct and lexical global/module calls. Bare
-`self`/`me` values outside instances remain unsupported; this qualification support does not make
-modules or classes first-class values.
+`self`/`me` preserve the current receiver under the
+[namespace-value rules](#namespace-reference-values) below.
 
 `$.name` starts at the global root, bypassing local/parameter names, imports,
 instance fields, and enclosing declarations. It selects global or nested-module
@@ -1182,9 +1182,9 @@ type paths such as `$.Token` or `$.Tree.Token`. These resolve canonical type
 identities without imports or enclosing type lookup. Constructor and runtime-test
 qualifier checks still reject runtime locals/parameters shadowing the path's
 first named component; lexical type assertions use the type namespace. Native
-superclass declarations retain their existing spelling. Bare `$`, first-class
-module/class values, unbound function values, and class/static member access
-other than enum constants remain unsupported.
+superclass declarations retain their existing spelling. Namespace values follow
+the rules below. Unbound function values and class/static member access other
+than enum constants remain unsupported.
 
 Root qualifiers disappear during source resolution. Shared storage, class-enum
 reads, source construction, native operations, and global/module calls retain
@@ -1211,6 +1211,41 @@ existing ordering flexibility. This conservative restriction can change when a
 more general scheduling policy is implemented.
 
 [VM lowering](../lowering/README.md#user-module-calls).
+
+### Namespace reference values
+
+Source module and class names can produce runtime references without reading a
+field, calling a function, or constructing an instance. Supported native modules
+and runtime classes use their canonical API identities; imported aliases retain
+the existing value-shadowing rules. Root-qualified paths bypass lexical names.
+Bare `$` denotes globals. Bare `self`/`me` in global/module bodies produce that
+body's module receiver; instance bodies retain their exact source instance.
+
+Module references and class-definition references have distinct value kinds.
+Neither is a Lang.Object instance, and a class value cannot satisfy an instance
+annotation for that class. Identity survives locals, inferred shared/instance
+fields, returns, and tuple slots. Existing Any boundaries erase static knowledge;
+namespace values do not establish source-instance, structural, or callable
+signature proofs. Source syntax has no new `Module`/`Class` annotation names.
+Saved IR can retain the separate value kinds explicitly.
+
+Namespace `==`/`!=` compares runtime identity with other namespace values, Null,
+or Any. `has` tests runtime member existence. Namespace lookup can activate
+module initialization and is an observable effect; instance-field snapshots and
+required-initialization checks retain their ordinary rules. Class references use
+the same selection as construction, without allocating or initializing an
+instance. Reading a namespace does not copy it.
+
+Known declaration-qualified calls and field access retain their existing static
+resolution. Reading a namespace value through `self.Child` is not yet supported;
+receiver traversal must not be replaced with direct declaration lookup.
+Arbitrary member dispatch through namespace-valued variables,
+namespace Method construction, and class/static member dispatch are not enabled
+by this representation. Modules have no inherited Object.method implementation;
+these values must not acquire Object operations merely because their runtime
+reference can be stored. See the [specimen](../../../examples/compiler-namespace-values/README.md),
+[IR contract](../ir/README.md#namespace-references), and
+[SDK/runtime evidence](../../investigations/core-lang-completion.md#namespace-values-and-method-receivers).
 
 ### Parameters and positional arguments
 

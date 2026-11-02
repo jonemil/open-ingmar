@@ -191,6 +191,14 @@ destruction of named locals based on last use.
 
 ### Nested module lookup
 
+Namespace values select existing references: `.module-value` pushes the module's
+statics identity and emits `getm`; `.module-self` emits `getself` in the already
+bound global/module frame. `.class-value` uses the ordinary source-class lookup
+or pinned native module/member aliases. It emits no `newc` or initializer call.
+Stored values use ordinary frame/field/tuple operations; equality uses `eq`/`ne`
+and member existence uses `hasv`. No new VM opcode or PRG record is required.
+
+
 Root-qualified source paths use the resolved declaration's ordinary direct
 lookup. Nested module paths select their statics owner without walking
 intermediate parents. Reads of a stored object/container then use ordinary

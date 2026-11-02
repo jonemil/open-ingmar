@@ -66,7 +66,6 @@ fn receiver_checks_reject_early_exposure_missing_members_and_namespace_forgery()
         "function f(){return me.missing();}",
         "module M{function f(){return self.missing();}}",
         "function f(){var me=1;return me;}",
-        "function f(){return me;}",
         "var Object=1;class C{function f(){return me.Object;}}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");

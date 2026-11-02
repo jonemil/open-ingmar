@@ -306,6 +306,8 @@ pub(crate) enum NativeConstructor {
 pub(crate) enum ExpressionKind {
     // Explicit global-root qualifier; meaningful only as a member receiver.
     Root,
+    ModuleValue(Option<String>),
+    ClassValue(String),
     CapturedCall {
         builder: crate::BuilderId,
         call: Box<Expression>,
@@ -524,6 +526,8 @@ impl Expression {
             | E::String(_)
             | E::Local(_)
             | E::Root
+            | E::ModuleValue(_)
+            | E::ClassValue(_)
             | E::Namespace { .. }
             | E::SharedField { .. } => {}
         }
@@ -2873,6 +2877,15 @@ impl<'a> Parser<'a> {
 
     /// Parse root member paths/calls without charging namespace components as argument nesting.
     fn global_atom(&mut self, start: usize, depth: usize) -> Result<Expression, Diagnostic> {
+        if self.peek()? != Kind::Punctuation('.') {
+            return self.node(
+                ExpressionKind::Root,
+                Span {
+                    start,
+                    end: start + 1,
+                },
+            );
+        }
         self.expect(Kind::Punctuation('.'), "'.' after global root")?;
         let mut expression = self.node(
             ExpressionKind::Root,
@@ -2985,6 +2998,24 @@ impl<'a> Parser<'a> {
         } else if name == "self" {
             return self.node(ExpressionKind::SelfValue, span);
         } else {
+            if let Some(binding) = self.names.source.get(name) {
+                return self.node(
+                    ExpressionKind::Namespace {
+                        path: self.source_namespace(binding)?,
+                        alias: name.into(),
+                    },
+                    span,
+                );
+            }
+            if let Some(module) = self.names.module(name) {
+                return self.node(
+                    ExpressionKind::Namespace {
+                        path: format!("Toybox.{}", module.name()),
+                        alias: name.into(),
+                    },
+                    span,
+                );
+            }
             return self.node(ExpressionKind::Local(name.into()), span);
         };
         if let ExpressionKind::ModuleCall { arguments, .. }
@@ -3041,6 +3072,56 @@ impl<'a> Parser<'a> {
         Ok(Some(expression))
     }
 
+    /// Keep canonical native namespace paths while preserving runtime qualifier shadowing.
+    fn native_value_path(
+        &mut self,
+        name: &str,
+        module: &str,
+        member: Option<&str>,
+        start: usize,
+    ) -> Result<Expression, Diagnostic> {
+        let canonical = format!("Toybox.{module}");
+        let mut expression = self.node(
+            ExpressionKind::Namespace {
+                path: if name == "Toybox" {
+                    "Toybox".into()
+                } else {
+                    canonical
+                },
+                alias: name.into(),
+            },
+            Span {
+                start,
+                end: self.offset,
+            },
+        )?;
+        if name == "Toybox" {
+            expression = self.node(
+                ExpressionKind::MemberRead {
+                    receiver: Box::new(expression),
+                    member: module.into(),
+                },
+                Span {
+                    start,
+                    end: self.offset,
+                },
+            )?;
+        }
+        if let Some(member) = member {
+            expression = self.node(
+                ExpressionKind::MemberRead {
+                    receiver: Box::new(expression),
+                    member: member.into(),
+                },
+                Span {
+                    start,
+                    end: self.offset,
+                },
+            )?;
+        }
+        Ok(expression)
+    }
+
     /// Parse a qualified member access/call, without parsing recursive arguments.
     fn qualified_atom(&mut self, name: &str, start: usize) -> Result<Expression, Diagnostic> {
         self.token()?;
@@ -3089,6 +3170,19 @@ impl<'a> Parser<'a> {
                     end: self.offset,
                 },
             );
+        }
+        if self.peek()? != Kind::Punctuation('(') {
+            if let Some(native) = self.names.module(&path) {
+                return self.native_value_path(name, native.name(), None, start);
+            }
+            if let Some(native) = self.names.module(module) {
+                if crate::api::core()
+                    .class(&format!("Toybox.{}.{}", native.name(), member))
+                    .is_some()
+                {
+                    return self.native_value_path(name, native.name(), Some(member), start);
+                }
+            }
         }
         if name != "Toybox"
             && !self.names.bound(name)

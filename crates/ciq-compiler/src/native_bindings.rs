@@ -156,6 +156,27 @@ pub(super) fn lang_class(path: &str) -> Option<u32> {
         .map(|(_, id)| *id)
 }
 
+/// Return module/member assembly aliases for a supported runtime class definition.
+pub(crate) fn class_alias(path: &str) -> Option<(String, String)> {
+    if lang_class(path).is_some() {
+        return Some((
+            "__ciq_sdk_Lang".into(),
+            format!("__ciq_type_{}", path.rsplit('.').next()?),
+        ));
+    }
+    if matches!(
+        path,
+        "Toybox.Application.AppBase" | "Toybox.WatchUi.View" | "Toybox.WatchUi.BehaviorDelegate"
+    ) {
+        let (module, name) = path.strip_prefix("Toybox.")?.rsplit_once('.')?;
+        return Some((
+            format!("__ciq_sdk_{module}"),
+            format!("__ciq_native_{name}"),
+        ));
+    }
+    None
+}
+
 /// Return pinned native identities without allocating IDs for user declarations.
 pub(super) fn member_ids() -> BTreeMap<String, u32> {
     MEMBERS

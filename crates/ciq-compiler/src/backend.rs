@@ -159,6 +159,9 @@ pub(crate) fn lower_owned<'a>(
             | Operation::Long { result, .. }
             | Operation::Double { result, .. }
             | Operation::Float { result, .. }
+            | Operation::ModuleValue { result, .. }
+            | Operation::ClassValue { result, .. }
+            | Operation::ModuleSelf { result }
             | Operation::SelfValue { result, .. }
             | Operation::MemberRead { result, .. }
             | Operation::SelfFieldRead { result, .. }
@@ -1063,6 +1066,37 @@ fn expression(
                         literal_aliases[&LiteralKey::String(value.clone())].clone(),
                     )],
                 ),
+                Operation::ModuleSelf { .. } => (Opcode::Getself, vec![]),
+                Operation::ModuleValue { module, .. } => {
+                    let alias = module.as_ref().map_or_else(
+                        || "__ciq_source_globals".into(),
+                        |path| {
+                            if let Some(native) = path.strip_prefix("Toybox.") {
+                                format!("__ciq_sdk_{native}")
+                            } else {
+                                format!("__ciq_module_{}", crate::names::module_key(path))
+                            }
+                        },
+                    );
+                    items.push(instruction(Opcode::Spush, vec![Operand::Symbol(alias)]));
+                    (Opcode::Getm, vec![])
+                }
+                Operation::ClassValue { class, .. } => {
+                    let item = if let Some((module, symbol)) =
+                        crate::native_bindings::class_alias(class)
+                    {
+                        instruction(
+                            Opcode::Getmv,
+                            vec![Operand::Symbol(module), Operand::Symbol(symbol)],
+                        )
+                    } else {
+                        class_lookup(class, definitions.owner)
+                    };
+                    let Item::Instruction { opcode, operands } = item else {
+                        unreachable!()
+                    };
+                    (opcode, operands)
+                }
                 Operation::SelfValue { .. } => (Opcode::Getself, vec![]),
                 Operation::MemberRead {
                     receiver, member, ..

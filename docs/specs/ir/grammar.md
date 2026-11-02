@@ -208,6 +208,9 @@ value-operation = ".integer" value-id signed-decimal-i32
                 | ".boolean" value-id boolean
                 | ".null" value-id
                 | ".self" value-id ("class=" source-identity)?
+                | ".module-value" value-id shared-owner
+                | ".class-value" value-id class-path
+                | ".module-self" value-id
                 | ".string" value-id quoted-string
                 | ".symbol" value-id identifier
                 | ".constant" value-id module-name identifier
@@ -375,10 +378,11 @@ union-tag = "union(" native-parameter-tag ("|" native-parameter-tag)+ ")"
 call-result-tag = native-parameter-tag | union-tag | source-tag | nullable-source-tag
                 | source-union-tag
 declared-result-tag = call-result-tag
-common-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
+common-tag = namespace-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
            | numeric-alias-tag | interface-tag | enum-tag | "dictionary"
            | dictionary-tag | "app-base" | "view" | "dc" | "behavior-delegate" | structural-tag
            | callback-tag | tuple-tag | record-tag
+namespace-tag = "module-value" | "class-value"
 record-tag = "options(" record-fields? ")"
 record-fields = record-field-tag (";" record-field-tag)*
 record-field-tag = identifier "=" call-result-tag

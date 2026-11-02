@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-namespace-values](compiler-namespace-values/README.md): module/class
+  references, scope receivers, storage, identity, and member existence.
 - [compiler-root-values](compiler-root-values/README.md): absolute root lookup,
   shared/object/indexed storage, native names, and type identities.
 - [compiler-call-captures](compiler-call-captures/README.md): call-target/context

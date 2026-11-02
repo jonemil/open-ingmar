@@ -2067,6 +2067,31 @@ nullable callback Dictionary local may be assigned null. Inferred storage follow
 the [local flow rules](#local-operations). Lowering uses `npush` for null and the
 existing local-slot and equality instructions.
 
+### Namespace references
+
+`ModuleValue` / `.module-value %result OWNER` loads a module reference by
+canonical path; OWNER `$` denotes globals. `ClassValue` /
+`.class-value %result CLASS` loads a class definition without allocating an
+instance. Units reject unknown declarations and native identities outside the
+supported binding profile. Native class references retain API availability checks.
+Standalone functions leave external source declaration/binding obligations to
+their enclosing unit.
+
+`ModuleSelf` / `.module-self %result` reads the current global/module receiver.
+It is forbidden in instance methods; `.self` remains the separate instance
+operation. Module and class-definition references have semantic/API types and
+saved tags `module-value` and `class-value`. These tags work in signature,
+local, field, tuple, and union contracts; they do not introduce source annotation
+names. A class value never proves an instance's source-class identity. Any
+boundaries retain their existing gradual behavior.
+
+Namespace selection participates in lookup initialization/shutdown effects and
+mutable-field barriers. It must not be moved after later argument/storage
+effects. Namespace identity equality and `has` use existing operations. No
+native Object inheritance, method signature, or static dispatch can be inferred
+from either value kind. [Source semantics](../frontend/README.md#namespace-reference-values)
+define supported storage and use.
+
 ### Instance receivers
 
 The optional declaration field `receiver=instance` marks an instance method;

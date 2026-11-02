@@ -693,6 +693,10 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    /// A module namespace value, distinct from ordinary instances.
+    ModuleValue,
+    /// A runtime class definition, distinct from source instances.
+    ClassValue,
     /// A nominal source enum retaining its resolved backing contract.
     Enum(Box<crate::EnumType>),
     /// A finite recursive contract, unfolded only for the current value operation.
@@ -782,6 +786,10 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// A module namespace value, distinct from ordinary instances.
+    ModuleValue,
+    /// A runtime class definition, distinct from source instances.
+    ClassValue,
     /// A nominal source enum retaining its resolved backing contract.
     Enum(Box<crate::EnumType>),
     /// A finite recursive contract, unfolded only for the current value operation.
@@ -883,6 +891,8 @@ impl ParameterType {
     /// source assignability is checked separately against unit declarations.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::ModuleValue => api::Type::ModuleValue,
+            Self::ClassValue => api::Type::ClassValue,
             Self::Enum(name) => api::Type::Enum(name.clone()),
             Self::Recursive(ty) => ty.clone(),
             Self::Tuple(tuple) => tuple.api_type(),
@@ -946,6 +956,8 @@ impl ReturnType {
     /// separate source-class return requirement.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::ModuleValue => api::Type::ModuleValue,
+            Self::ClassValue => api::Type::ClassValue,
             Self::Enum(name) => api::Type::Enum(name.clone()),
             Self::Recursive(ty) => ty.clone(),
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
@@ -1005,6 +1017,10 @@ impl ReturnType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ValueType {
+    /// A module namespace value, distinct from ordinary instances.
+    ModuleValue,
+    /// A runtime class definition, distinct from source instances.
+    ClassValue,
     /// A nominal source enum retaining its resolved backing contract.
     Enum(Box<crate::EnumType>),
     /// A finite recursive contract, unfolded only for the current value operation.
@@ -1117,6 +1133,8 @@ impl ValueType {
     /// Map a supported value category to its core API type without changing storage.
     fn api_type(&self) -> api::Type {
         match self {
+            Self::ModuleValue => api::Type::ModuleValue,
+            Self::ClassValue => api::Type::ClassValue,
             Self::Enum(name) => api::Type::Enum(name.clone()),
             Self::Recursive(ty) => ty.clone(),
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
@@ -1206,6 +1224,11 @@ impl ValueType {
     /// Adapt an API type to the fixed executable value subset; other types
     /// remain unsupported even if the catalogue contains their declarations.
     fn from_api_type(ty: &api::Type) -> Option<Self> {
+        match ty {
+            api::Type::ModuleValue => return Some(Self::ModuleValue),
+            api::Type::ClassValue => return Some(Self::ClassValue),
+            _ => {}
+        }
         if let api::Type::Enum(name) = ty {
             return name.validate().ok().map(|()| Self::Enum(name.clone()));
         }
@@ -1463,6 +1486,20 @@ pub enum Operation {
         classes: Vec<String>,
         member: String,
         arguments: Vec<ValueId>,
+    },
+    /// Select a declared module by canonical path; None denotes globals.
+    ModuleValue {
+        result: ValueId,
+        module: Option<String>,
+    },
+    /// Select a declared source/native class definition without constructing it.
+    ClassValue {
+        result: ValueId,
+        class: String,
+    },
+    /// Read the current global/module receiver; unit validation checks its owner.
+    ModuleSelf {
+        result: ValueId,
     },
     /// Read the current instance, optionally retaining its exact source class.
     /// Unit validation must anchor the claimed class to the enclosing owner.
@@ -2002,6 +2039,9 @@ impl Operation {
             | Self::ArrayConstant { result, .. }
             | Self::ArrayFinish { result, .. }
             | Self::ObjectCall { result, .. }
+            | Self::ModuleValue { result, .. }
+            | Self::ClassValue { result, .. }
+            | Self::ModuleSelf { result }
             | Self::SelfValue { result, .. }
             | Self::SelfFieldRead { result, .. }
             | Self::ClassFieldRead { result, .. }
@@ -3197,6 +3237,40 @@ impl Function {
                     types.insert(result, ValueType::Boolean);
                     (Some(result), vec![])
                 }
+                Operation::ModuleValue { result, ref module } => {
+                    if let Some(module) = module {
+                        validate_call_names(Some(module), "module").map_err(fail)?;
+                    }
+                    if let Some(module) = module.as_ref().filter(|m| m.starts_with("Toybox.")) {
+                        if crate::api::core().module(module).is_none() {
+                            return Err(fail("unsupported native module value"));
+                        }
+                    }
+                    types.insert(result, ValueType::ModuleValue);
+                    (Some(result), vec![])
+                }
+                Operation::ModuleSelf { result } => {
+                    if instance_method {
+                        return Err(fail("module-self cannot replace an instance receiver"));
+                    }
+                    types.insert(result, ValueType::ModuleValue);
+                    (Some(result), vec![])
+                }
+                Operation::ClassValue { result, ref class } => {
+                    validate_call_names(Some(class), "class").map_err(fail)?;
+                    if class.starts_with("Toybox.") {
+                        if crate::native_bindings::class_alias(class).is_none() {
+                            return Err(fail("unsupported native class value"));
+                        }
+                        if let Some(context) = context {
+                            context
+                                .check_class(api::core(), class)
+                                .map_err(|message| fail(&message))?;
+                        }
+                    }
+                    types.insert(result, ValueType::ClassValue);
+                    (Some(result), vec![])
+                }
                 Operation::SelfValue { result, ref class } => {
                     if !instance_method {
                         return Err(fail("self values require an instance receiver"));
@@ -3367,10 +3441,16 @@ impl Function {
                         return Err(fail("self field assignments require an instance receiver"));
                     }
                     validate_call_names(None, field).map_err(fail)?;
-                    if !native::accepts(
-                        &api::Type::named("Toybox.Lang.Object").with_null(),
-                        &type_of(value).api_type(),
-                    ) {
+                    if !crate::unions::alternatives(&type_of(value).api_type())
+                        .iter()
+                        .all(|ty| {
+                            matches!(ty, api::Type::ModuleValue | api::Type::ClassValue)
+                                || native::accepts(
+                                    &api::Type::named("Toybox.Lang.Object").with_null(),
+                                    ty,
+                                )
+                        })
+                    {
                         return Err(fail(
                             "instance field assignment requires a supported reference or scalar value",
                         ));
@@ -4505,6 +4585,8 @@ impl Function {
                         contract.clone()
                     } else {
                         match type_of(value) {
+                            ValueType::ModuleValue => ReturnType::ModuleValue,
+                            ValueType::ClassValue => ReturnType::ClassValue,
                             ValueType::NumberFormat => ReturnType::NumberFormat,
                             ValueType::Endian => ReturnType::Endian,
                             ValueType::Numeric => ReturnType::Numeric,
@@ -4712,6 +4794,9 @@ impl Function {
                     | Operation::MemberWrite { .. }
                     | Operation::SelfFieldRead { .. }
                     | Operation::ClassFieldRead { .. }
+                    | Operation::ModuleValue { .. }
+                    | Operation::ClassValue { .. }
+                    | Operation::ModuleSelf { .. }
                     | Operation::SharedRead { .. }
                     | Operation::SharedAssign { .. }
                     | Operation::SharedWrite { .. }
@@ -5204,6 +5289,15 @@ impl Function {
                 Operation::SelfFieldAssign { ref field, value } => {
                     format!(".assign-self {field} %{}", value.0)
                 }
+                Operation::ModuleValue { result, ref module } => format!(
+                    ".module-value %{} {}",
+                    result.0,
+                    module.as_deref().unwrap_or("$")
+                ),
+                Operation::ClassValue { result, ref class } => {
+                    format!(".class-value %{} {class}", result.0)
+                }
+                Operation::ModuleSelf { result } => format!(".module-self %{}", result.0),
                 Operation::SelfValue { result, ref class } => format!(
                     ".self %{}{}",
                     result.0,
@@ -5807,6 +5901,8 @@ fn validate_call_arguments(
                     | ValueType::Recursive(_)
                     | ValueType::Union(_)
                     | ValueType::Options(_)
+                    | ValueType::ModuleValue
+                    | ValueType::ClassValue
                     | ValueType::Any
                     | ValueType::Enum(_)
                     | ValueType::Integer
@@ -5862,6 +5958,8 @@ fn validate_call_arguments(
 
 fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
+        ReturnType::ModuleValue => Ok(ValueType::ModuleValue),
+        ReturnType::ClassValue => Ok(ValueType::ClassValue),
         ReturnType::Recursive(ty) => {
             if !matches!(ty, api::Type::Recursive(_)) {
                 return Err("invalid recursive result wrapper");

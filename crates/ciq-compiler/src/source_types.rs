@@ -256,6 +256,10 @@ impl Types {
                 (*result, Some(Type::named("Toybox.Lang.Boolean")))
             }
             Operation::String { result, .. } => (*result, Some(Type::named("Toybox.Lang.String"))),
+            Operation::ModuleValue { result, .. } | Operation::ModuleSelf { result } => {
+                (*result, Some(Type::ModuleValue))
+            }
+            Operation::ClassValue { result, .. } => (*result, Some(Type::ClassValue)),
             Operation::SelfValue { result, class } => (
                 *result,
                 Some(Type::named(

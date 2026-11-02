@@ -36,10 +36,12 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Represent class and module values, including bare `self`/`me` outside
-  instances, so they can be stored, passed, returned, and used as Method receivers.
+- [ ] Implement Method construction (`initialize(receiver, symbol)` /
+  `new Lang.Method(receiver, symbol)`) for instance, module, and global receivers,
+  retaining the receiver and constructor/binding effects.
 - [ ] Support static fields/methods, their initialization, and class-qualified
-  access; distinguish static owners from instance receivers.
+  access, including Method construction with class-definition receivers;
+  distinguish static owners from instance receivers.
 - [ ] Enforce `public`, `private`, `protected`, and `hidden` on declarations and
   inherited/member access, including access across source files.
 
@@ -88,7 +90,10 @@ implemented contracts; investigations retain evidence, not another backlog.
 - [ ] Extend switch case equality and `case instanceof` to the new union,
   source-inheritance, and receiver types; preserve fall-through facts.
 - [ ] Support calls through lexical callback values and source/module/class
-  callable members, rather than resolving every bare call to a declaration.
+  callable members, including module/class-valued receiver expressions and
+  receiver-relative namespace selection (`self.Child`). Preserve member lookup
+  and initialization order rather than replacing receiver traversal with a
+  direct declaration lookup.
 - [ ] Probe call argument/frame limits, including the hidden receiver and
   Method.invoke; reconcile the current 254-argument profile with SDK/runtime
   limits and emit diagnostics at the applicable boundary.
@@ -109,15 +114,13 @@ executable profiles.
 - [ ] Dispatch `toString`, `equals`, and `hashCode` on source-subclass,
   Exception, and ResourceId values using their
   resolved runtime contracts; preserve overrides and appropriate Null checks.
-- [ ] Extend `method(Symbol)` to inherited/static and module/global members;
+- [ ] Extend `method(Symbol)` to supported inherited/static source members;
   resolve lexical conflicts using ordinary owner/member lookup.
 - [ ] Support `weak()` on source instances and opaque Object values, including
   the possible immutable-scalar result instead of always claiming WeakReference.
 
 ### Method
 
-- [ ] Implement `initialize(aClass, aMethod)` / `new Lang.Method(receiver, symbol)`
-  for supported instance, class, and module values, retaining the receiver.
 - [ ] Diagnose missing literal method targets; preserve distinct signatures when
   a source-class union binds a selector with different target contracts.
 - [ ] Represent variadic bound-method signatures and infer native lifecycle

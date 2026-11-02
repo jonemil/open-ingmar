@@ -268,6 +268,7 @@ fn emit(
             calls,
         );
     }
+    resolve_namespace_value(&mut expression, locals, parameters, calls);
     let kind = resolve_implicit_call(
         source,
         expression.kind,
@@ -328,6 +329,19 @@ fn emit(
             operations,
             calls,
         ),
+    }
+}
+
+/// Resolve namespace literals outside recursive emission frames to retain the
+/// supported expression-depth budget on the default stack.
+fn resolve_namespace_value(
+    expression: &mut parser::Expression,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
+    calls: &CallContext,
+) {
+    if let Some(kind) = calls.namespace_value(expression, locals, parameters) {
+        expression.kind = kind;
     }
 }
 
@@ -590,9 +604,25 @@ fn emit_non_call(
         | parser::ExpressionKind::Negate(_)) => {
             emit_unary(source, kind, locals, parameters, operations, calls)?
         }
-        parser::ExpressionKind::SelfValue => Operation::SelfValue {
+        parser::ExpressionKind::SelfValue => {
+            if calls.current_class.is_some() {
+                Operation::SelfValue {
+                    result: ValueId(operations.len() as u32),
+                    class: calls.current_class.clone(),
+                }
+            } else {
+                Operation::ModuleSelf {
+                    result: ValueId(operations.len() as u32),
+                }
+            }
+        }
+        parser::ExpressionKind::ModuleValue(module) => Operation::ModuleValue {
             result: ValueId(operations.len() as u32),
-            class: calls.current_class.clone(),
+            module,
+        },
+        parser::ExpressionKind::ClassValue(class) => Operation::ClassValue {
+            result: ValueId(operations.len() as u32),
+            class,
         },
         parser::ExpressionKind::Symbol(name) => Operation::Symbol {
             result: ValueId(operations.len() as u32),
@@ -4376,6 +4406,61 @@ pub(crate) struct CallContext {
     pub(crate) current_class: Option<crate::SourceClass>,
 }
 impl CallContext {
+    /// Resolve literal namespace references after lexical values/constants have had priority.
+    fn namespace_value(
+        &self,
+        expression: &parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        parameters: &BTreeMap<String, usize>,
+    ) -> Option<parser::ExpressionKind> {
+        use parser::ExpressionKind as E;
+        let path = crate::constants::path(expression)?;
+        if path == "$" {
+            return Some(E::ModuleValue(None));
+        }
+        // Explicit receiver fields and namespace traversal must retain receiver
+        // lookup; they cannot be replaced with a direct declaration lookup.
+        if path.starts_with("self.") {
+            return None;
+        }
+        let rooted = path.strip_prefix("$.");
+        let fixed = rooted.is_some() || crate::constants::namespace_alias(expression).is_some();
+        let path = rooted.unwrap_or(&path);
+        let first = path.split('.').next()?;
+        if !fixed
+            && (locals.contains_key(first)
+                || parameters.contains_key(first)
+                || self.field_names.contains(first)
+                || self.lexical_shared(first).is_some()
+                || self.constant_named(first, locals, parameters).is_some())
+        {
+            return None;
+        }
+        let module = if fixed {
+            (self.modules.contains(path) || crate::api::core().module(path).is_some())
+                .then(|| path.to_owned())
+        } else {
+            self.module_name(path, locals, parameters)
+        };
+        if let Some(module) = module {
+            return Some(E::ModuleValue(Some(module)));
+        }
+        let class = if fixed {
+            (self.class_bases.contains_key(path) || crate::api::core().class(path).is_some())
+                .then(|| path.to_owned())
+        } else {
+            self.current_class
+                .as_ref()
+                .map(|c| c.name.as_str())
+                .or(self.current_module.as_deref())
+                .into_iter()
+                .flat_map(crate::names::scopes)
+                .map(|scope| format!("{scope}.{path}"))
+                .chain(std::iter::once(path.into()))
+                .find(|name| self.class_bases.contains_key(name) && name != "self")
+        }?;
+        Some(E::ClassValue(class))
+    }
     fn shared_target(
         &self,
         expression: &parser::Expression,

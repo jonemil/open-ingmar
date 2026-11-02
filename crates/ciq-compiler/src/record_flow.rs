@@ -595,7 +595,9 @@ impl State {
                     roots.insert(root);
                 }
             }
-            Operation::CallBegin { .. }
+            Operation::ModuleValue { .. }
+            | Operation::ClassValue { .. }
+            | Operation::CallBegin { .. }
             | Operation::GlobalCallStatement { .. }
             | Operation::ModuleCallStatement { .. }
             | Operation::SelfCallStatement { .. }

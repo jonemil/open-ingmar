@@ -8,6 +8,16 @@ use std::borrow::Cow;
 // Canonical spellings common to ordinary parameter and call-result contracts.
 const NAMED: &[(&str, ParameterType, ReturnType)] = &[
     (
+        "module-value",
+        ParameterType::ModuleValue,
+        ReturnType::ModuleValue,
+    ),
+    (
+        "class-value",
+        ParameterType::ClassValue,
+        ReturnType::ClassValue,
+    ),
+    (
         "app-base",
         ParameterType::Object(NativeClass::AppBase),
         ReturnType::Object(NativeClass::AppBase),

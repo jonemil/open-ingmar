@@ -758,3 +758,32 @@ Shadow.create is rejected by the SDK with `Cannot instantiate object of type
 '$.Toybox.Lang.Number'`. Constructor qualifier checks therefore remain distinct
 from ordinary root value lookup; our frontend rejects that runtime-name conflict.
 This rejection was compiler-tested, not simulator-tested.
+
+## Namespace values and Method receivers
+
+Experimentally observed, 2026-11-02: SDK 9.2.0, `fr265`, `-O 0`, minimum API
+3.0.0. The [namespace-value specimen](../../examples/compiler-namespace-values/README.md)
+checks source/native module and class-definition references, `$`, module/global
+self, shared/instance/tuple storage, Any argument/results, identity, and `has`.
+SDK and generated PRGs match its
+[expected console](../../examples/compiler-namespace-values/expected.txt);
+supported sections export and reconstruct without CODE/DATA fallback. Use the
+shared specimen checker with the documented scaffold.
+
+The authored SDK CODE uses `spush <module>; getm` for module/root values,
+`getself` for module/global self, and ordinary class-member lookup for class
+definitions. Identity comparisons use `eq`/`ne`. The specimen records initializer
+order in Trace.LOG: 102 before onStart's reads, 102101 after selecting Cold.
+Startup console prints are not a reliable record of all initializer activity;
+retained state permits comparison after both programs reach user code.
+
+A typed variant using Lang.Object parameters/results rejects module and class
+values; a Token definition also does not satisfy a Token instance contract.
+An untyped variant calling `moduleValue.method(:number)` compiles but crashes in
+the simulator with `Symbol Not Found Error` for method. By contrast,
+`new Lang.Method(moduleValue,:number)` invokes successfully and returns 17.
+That same run constructs a Method for Token's non-static plain method but fails
+at invoke with `Unexpected Type Error`. These observations establish the module
+constructor path and separate class-definition/static requirements; they do not
+establish that namespace values inherit Object methods or make instance methods
+static.

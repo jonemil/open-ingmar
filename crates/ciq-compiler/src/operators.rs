@@ -224,6 +224,21 @@ fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Typ
 /// String equality uses object identity with supported String/numeric/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 fn comparison_proven_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
+    if matches!(kind, ComparisonOp::Equal | ComparisonOp::NotEqual)
+        && (matches!(left, Type::ModuleValue | Type::ClassValue)
+            || matches!(right, Type::ModuleValue | Type::ClassValue))
+        && matches!(
+            left,
+            Type::ModuleValue | Type::ClassValue | Type::Null | Type::Any
+        )
+        && matches!(
+            right,
+            Type::ModuleValue | Type::ClassValue | Type::Null | Type::Any
+        )
+    {
+        return Some(Type::named("Toybox.Lang.Boolean"));
+    }
+
     if matches!(left, Type::Enum(_)) || matches!(right, Type::Enum(_)) {
         return comparison_proven_result(
             kind,
@@ -295,7 +310,9 @@ fn string_operand(ty: &Type, boolean: bool) -> bool {
             ) || (boolean && name == "Toybox.Lang.Boolean")
         }
         Type::Union(types) => types.iter().all(|ty| string_operand(ty, boolean)),
-        Type::Void
+        Type::ModuleValue
+        | Type::ClassValue
+        | Type::Void
         | Type::SourceValue(_)
         | Type::Array(_)
         | Type::Dictionary { .. }

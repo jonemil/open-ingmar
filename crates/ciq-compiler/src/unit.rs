@@ -99,7 +99,11 @@ fn activation_callees<'a>(
     };
 
     let module = match operation {
-        Operation::SharedRead {
+        Operation::ModuleValue {
+            module: Some(module),
+            ..
+        }
+        | Operation::SharedRead {
             module: Some(module),
             ..
         }
@@ -110,9 +114,9 @@ fn activation_callees<'a>(
         }
         | Operation::ModuleCall { module, .. }
         | Operation::ModuleCallStatement { module, .. } => Some(module.as_str()),
-        Operation::SourceBegin { class, .. } | Operation::ClassFieldRead { class, .. } => {
-            class.rsplit_once('.').map(|(owner, _)| owner)
-        }
+        Operation::ClassValue { class, .. }
+        | Operation::SourceBegin { class, .. }
+        | Operation::ClassFieldRead { class, .. } => class.rsplit_once('.').map(|(owner, _)| owner),
         Operation::SourceInstanceOf { class, .. } => {
             class.name.rsplit_once('.').map(|(owner, _)| owner)
         }
@@ -2090,6 +2094,38 @@ impl CompilationUnit {
                             "allocation initializer is not a callable member".into(),
                         ));
                     }
+                }
+                match &located.operation {
+                    Operation::ModuleSelf { .. } if matches!(owner, Owner::Class(_)) => {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "module-self requires a global/module body".into(),
+                        ));
+                    }
+                    Operation::ModuleValue {
+                        module: Some(module),
+                        ..
+                    } if !self.modules.contains(module)
+                        && crate::api::core().module(module).is_none() =>
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            format!("unknown module value {module}"),
+                        ));
+                    }
+                    Operation::ClassValue { class, .. } => {
+                        let supported_native = crate::native_bindings::class_alias(class).is_some();
+                        if !self.classes.iter().any(|c| c.name == *class) && !supported_native {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                format!("unknown class value {class}"),
+                            ));
+                        }
+                    }
+                    _ => {}
                 }
                 if let Operation::SelfValue {
                     class: Some(claimed),

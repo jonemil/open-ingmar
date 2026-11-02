@@ -2,6 +2,9 @@
 /// Several spellings may share a form, such as `.read` and `.take`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Directive {
+    ModuleValue,
+    ClassValue,
+    ModuleSelf,
     SharedBegin,
     CallBegin,
     SharedWrite,
@@ -413,6 +416,9 @@ pub(crate) fn parse_function_ir_context(
             Some(".read-variable") => (Directive::ReadVariable, 4),
             Some(".read" | ".take") => (Directive::Read, 3),
             Some(".symbol") => (Directive::Symbol, 3),
+            Some(".module-value") => (Directive::ModuleValue, 3),
+            Some(".class-value") => (Directive::ClassValue, 3),
+            Some(".module-self") => (Directive::ModuleSelf, 2),
             Some(".self") => {
                 let width = call_width();
                 if !(2..=3).contains(&width) {
@@ -1381,6 +1387,17 @@ pub(crate) fn parse_function_ir_context(
                         value: digits.parse().map_err(|_| fail(*at, "long exceeds i64"))?,
                     }
                 }
+                Directive::ModuleValue => Operation::ModuleValue {
+                    result: parse_value(&fields[1])?,
+                    module: (fields[2] != "$").then(|| fields[2].clone()),
+                },
+                Directive::ClassValue => Operation::ClassValue {
+                    result: parse_value(&fields[1])?,
+                    class: fields[2].clone(),
+                },
+                Directive::ModuleSelf => Operation::ModuleSelf {
+                    result: parse_value(&fields[1])?,
+                },
                 Directive::SelfValue => Operation::SelfValue {
                     result: parse_value(&fields[1])?,
                     class: match fields.get(2).filter(|field| !field.starts_with("span=")) {

@@ -48,15 +48,12 @@ fn roots_bypass_value_namespace_alias_and_type_shadowing() {
 #[test]
 fn root_access_keeps_existing_mutability_signature_and_namespace_limits() {
     for source in [
-        "function f(){return $;}",
         "class C{}function f(){var C=1;return new $.C();}",
         "var X=1;function f(){return $.missing;}",
         "const X=1;function f(){$.X=2;}",
         "const X=1;function f(){$.X++;}",
         "module M{const X=1;}function f(){$.M.X+=2;}",
-        "module M{}function f(){return $.M;}",
         "function g(){return 1;}function f(){return $.g;}",
-        "class C{}function f(){return $.C;}",
         "var X as Toybox.Lang.Number=1;function f(){$.X=true;}",
         "module M{function g(n as Toybox.Lang.Number){return n;}}function f(){return $.M.g();}",
         "using Toybox.Lang;function f(){return $.Lang.NUMBER_FORMAT_UINT8;}",

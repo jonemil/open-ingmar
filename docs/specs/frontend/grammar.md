@@ -208,7 +208,7 @@ postfix = member-call | member-access | index-access
 member-call = "." identifier "(" argument-list? ")"
 member-access = "." identifier
 index-access = "[" expression "]"
-atom = literal | identifier | owner-receiver | self-field
+atom = literal | identifier | owner-receiver | self-field | "$"
      | named-call | native-constant | root-member
      | "(" expression ")" | array-literal | dictionary-literal | construction
 owner-receiver = "self" | "me"
@@ -231,9 +231,10 @@ literal = number-literal | long-literal | float-literal | double-literal
 
 `root-member` selects an absolute global path. It can be a shared value,
 constant, enum member, or call target; later postfixes can index or access a
-stored runtime value. Bare `$`, namespace/class values, and unbound function
-values remain unsupported. [Root lookup semantics](README.md#user-calls-and-owner-lookup)
-define resolution, mutation, and qualifier checks.
+stored runtime value. Bare `$` denotes globals; supported module/class names
+also denote namespace values. Unbound function values remain unsupported.
+[Root lookup semantics](README.md#user-calls-and-owner-lookup) define resolution,
+mutation, and qualifier checks.
 
 `call-expression` selects a call as the final expression, including parenthesized
 calls. An indexed result alone is not a call statement. `native-constant` is a
