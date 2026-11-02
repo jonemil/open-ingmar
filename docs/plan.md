@@ -36,8 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Support root-object `$.name` field/value access and nested qualified paths
-  beyond the existing root-qualified call forms.
 - [ ] Represent class and module values, including bare `self`/`me` outside
   instances, so they can be stored, passed, returned, and used as Method receivers.
 - [ ] Support static fields/methods, their initialization, and class-qualified

@@ -47,6 +47,7 @@ pub(crate) fn path(expression: &Expression) -> Option<String> {
         expression = receiver;
     }
     let mut path = match &expression.kind {
+        E::Root => "$".into(),
         E::Local(name) | E::Namespace { path: name, .. } => name.clone(),
         E::SelfField(name) => format!("self.{name}"),
         _ => return None,

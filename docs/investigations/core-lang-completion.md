@@ -734,3 +734,27 @@ then restoring both for `invokem`, preserves receiver identity and initializatio
 order across argument branches and nested calls in this specimen. This confirms
 that capture sequence for the tested user-call profile; it does not establish a
 general first-class callable representation or every VM context-binding rule.
+
+## Root-qualified values and types
+
+Experimentally observed, 2026-11-02: SDK 9.2.0, `fr265`, `-O 0`, minimum API
+3.1.0. The [root-value specimen](../../examples/compiler-root-values/README.md)
+checks absolute shared reads/writes, constants, array updates, object paths,
+class enums, rooted native names, and source construction/cast/runtime-test
+identities. SDK and generated PRGs match its
+[expected console](../../examples/compiler-root-values/expected.txt). Reproduce
+with the documented scaffold and shared specimen checker; authored SDK and
+generated supported sections also export/reconstruct without CODE/DATA fallback.
+
+The first `$.Names.Child.VALUE` activates Child (marker 102), leaving the parent
+Names marker 101 absent. Root lookup bypasses the `Names` parameter and the
+Shadow.Names namespace. Store/index markers 103, 104, 105 preserve RHS and target
+order. Root-qualified typedef/class annotations in Shadow resolve global types,
+not Shadow.GlobalToken or Shadow.Token. The native NumberFormat constant retains
+its API 3.1.0 gate; an explicit Number assertion permits printing its backing value.
+
+A compile-only variant adding `var Token=1;` before `new $.Token(37)` in
+Shadow.create is rejected by the SDK with `Cannot instantiate object of type
+'$.Toybox.Lang.Number'`. Constructor qualifier checks therefore remain distinct
+from ordinary root value lookup; our frontend rejects that runtime-name conflict.
+This rejection was compiler-tested, not simulator-tested.

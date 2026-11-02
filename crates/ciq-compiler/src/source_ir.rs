@@ -12,6 +12,16 @@ enum ConstructionType {
     Dictionary(crate::DictionaryType),
 }
 
+/// Resolve a supported short/canonical native module without source alias lookup.
+fn native_module_path(module: &str) -> Option<String> {
+    let path = if module.starts_with("Toybox.") {
+        module.into()
+    } else {
+        format!("Toybox.{module}")
+    };
+    crate::api::core().module(&path).map(|_| path)
+}
+
 /// Extract a supported container contract for contextual literal construction.
 fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
     if let Some(unfolded) = crate::recursive::unfold(ty) {
@@ -338,27 +348,54 @@ fn emit_member_chain(
         members.push((member, base.span));
         base = *receiver;
     }
-    let prefix = if matches!(base.kind, parser::ExpressionKind::Local(_))
+    let prefix = if matches!(base.kind, parser::ExpressionKind::Root) {
+        let mut prefix = base.clone();
+        let mut resolved = None;
+        for (index, (member, span)) in members.iter().rev().enumerate() {
+            prefix = parser::Expression {
+                kind: parser::ExpressionKind::MemberRead {
+                    receiver: Box::new(prefix),
+                    member: member.clone(),
+                },
+                span: *span,
+            };
+            let value = calls
+                .field_expression(&prefix, locals, parameters)
+                .or_else(|| {
+                    calls
+                        .constant(&prefix, locals, parameters)
+                        .map(|value| value.expression(*span))
+                });
+            if let Some(value) = value {
+                resolved = Some((value, index + 1));
+                break;
+            }
+        }
+        resolved
+    } else if matches!(base.kind, parser::ExpressionKind::Local(_))
         && !calls.shared_fields.is_empty()
     {
-        members.last().and_then(|(member, span)| {
-            calls.field_expression(
-                &parser::Expression {
-                    kind: parser::ExpressionKind::MemberRead {
-                        receiver: Box::new(base.clone()),
-                        member: member.clone(),
+        members
+            .last()
+            .and_then(|(member, span)| {
+                calls.field_expression(
+                    &parser::Expression {
+                        kind: parser::ExpressionKind::MemberRead {
+                            receiver: Box::new(base.clone()),
+                            member: member.clone(),
+                        },
+                        span: *span,
                     },
-                    span: *span,
-                },
-                locals,
-                parameters,
-            )
-        })
+                    locals,
+                    parameters,
+                )
+            })
+            .map(|value| (value, 1))
     } else {
         None
     };
-    let mut receiver = if let Some(prefix) = prefix {
-        members.pop();
+    let mut receiver = if let Some((prefix, consumed)) = prefix {
+        members.truncate(members.len() - consumed);
         emit(source, prefix, locals, parameters, operations, calls)?
     } else {
         emit(source, base, locals, parameters, operations, calls)?
@@ -592,7 +629,7 @@ fn emit_non_call(
             result: ValueId(operations.len() as u32),
             value,
         },
-        parser::ExpressionKind::Namespace { .. } => {
+        parser::ExpressionKind::Root | parser::ExpressionKind::Namespace { .. } => {
             return Err(Diagnostic::at(
                 source,
                 expression.span.start,
@@ -1105,15 +1142,10 @@ fn emit_call(
                 arguments,
             }
         }
-    } else if module.as_deref().is_some_and(|module| {
-        matches!(
-            module,
-            "Lang" | "System" | "WatchUi" | "Graphics" | "Application"
-        )
-    }) {
+    } else if let Some(module) = module.as_deref().and_then(native_module_path) {
         Operation::NativeModuleCall {
             result,
-            module: format!("Toybox.{}", module.unwrap()),
+            module,
             member,
             arguments,
         }
@@ -2516,11 +2548,12 @@ impl Builder<'_> {
                 )
             }
             E::OwnerCall { target, arguments } => {
-                let capture = if target.module != "self" {
-                    self.capture_before_arguments(&arguments, locals, span)?
-                } else {
-                    None
-                };
+                let capture =
+                    if target.module != "self" && native_module_path(&target.module).is_none() {
+                        self.capture_before_arguments(&arguments, locals, span)?
+                    } else {
+                        None
+                    };
                 let expected = self.call_argument_context(&target.module, &target.member);
                 let arguments = self.snapshot_arguments(arguments, locals, &expected)?;
                 captured_expression(capture, E::OwnerCall { target, arguments }, span)
@@ -2587,11 +2620,8 @@ impl Builder<'_> {
 
     /// Read literal-construction expectations from source or native call signatures.
     fn call_argument_context(&self, module: &str, member: &str) -> Vec<Option<ConstructionType>> {
-        if matches!(
-            module,
-            "Lang" | "System" | "WatchUi" | "Graphics" | "Application"
-        ) {
-            return crate::native::module_parameters(&format!("Toybox.{module}"), member)
+        if let Some(module) = native_module_path(module) {
+            return crate::native::module_parameters(&module, member)
                 .map(|parameters| parameters.iter().map(construction_type).collect())
                 .unwrap_or_default();
         }
@@ -2774,6 +2804,45 @@ impl Builder<'_> {
         locals: &BTreeMap<String, LocalId>,
         span: Span,
     ) -> Result<(), Diagnostic> {
+        if let parser::ExpressionKind::ValueCall { receiver, .. } = &expression.kind {
+            if let Some(module) = crate::constants::path(receiver).and_then(|path| {
+                path.strip_prefix("$.")
+                    .filter(|path| crate::api::core().module(path).is_some())
+                    .map(str::to_owned)
+            }) {
+                let parser::ExpressionKind::ValueCall {
+                    member,
+                    mut arguments,
+                    ..
+                } = expression.kind
+                else {
+                    unreachable!()
+                };
+                if module == "Toybox.System" && member == "println" {
+                    if arguments.len() != 1 {
+                        return Err(Diagnostic::at(
+                            self.source,
+                            span.start,
+                            "expected System.println with one argument",
+                        ));
+                    }
+                    let value = self.value_for_setup(arguments.pop().unwrap(), locals)?;
+                    self.push(Operation::Println { value }, Some(span));
+                } else {
+                    let expected = self.call_argument_context(&module, &member);
+                    let arguments = self.arguments(arguments, locals, &expected)?;
+                    self.push(
+                        Operation::NativeModuleCallStatement {
+                            module,
+                            member,
+                            arguments,
+                        },
+                        Some(span),
+                    );
+                }
+                return Ok(());
+            }
+        }
         let value = self.value(expression, locals)?;
         if self.types.value_type(value) == Some(&crate::api::Type::Void) {
             let last = self
@@ -4352,6 +4421,33 @@ impl CallContext {
             } => (crate::constants::path(receiver)?, member, arguments),
             _ => return None,
         };
+        if path == "$" {
+            return Some(E::GlobalCall {
+                lexical: false,
+                member: member.clone(),
+                arguments: arguments.clone(),
+            });
+        }
+        if let Some(module) = path.strip_prefix("$.") {
+            if crate::api::core().module(module).is_some() {
+                return Some(parser::owner_call(
+                    module.into(),
+                    member.clone(),
+                    arguments.clone(),
+                    false,
+                    Vec::new(),
+                ));
+            }
+            return self.modules.contains(module).then(|| {
+                parser::owner_call(
+                    module.into(),
+                    member.clone(),
+                    arguments.clone(),
+                    false,
+                    Vec::new(),
+                )
+            });
+        }
         if path == "self" {
             if self.current_class.is_some()
                 && (self.get(&("self".into(), member.clone())).is_some()
@@ -4505,6 +4601,40 @@ impl CallContext {
         parameters: &BTreeMap<String, usize>,
     ) -> Option<parser::Expression> {
         use parser::ExpressionKind as E;
+        if let Some(path) = crate::constants::path(expression)
+            .and_then(|path| path.strip_prefix("$.").map(str::to_owned))
+        {
+            let (owner, field) = path
+                .rsplit_once('.')
+                .map_or((None, path.as_str()), |(owner, field)| (Some(owner), field));
+            let kind =
+                if owner.is_some_and(|owner| crate::api::core().constant(owner, field).is_some()) {
+                    E::NativeConstant {
+                        module: owner.unwrap().into(),
+                        member: field.into(),
+                        qualifier: "$".into(),
+                    }
+                } else if owner
+                    .is_some_and(|owner| self.class_enums.contains(&(owner.into(), field.into())))
+                {
+                    E::ClassField {
+                        class: owner.unwrap().into(),
+                        field: field.into(),
+                    }
+                } else if self.shared_contains(owner, field) {
+                    E::SharedField {
+                        lexical: false,
+                        module: owner.map(str::to_owned),
+                        field: field.into(),
+                    }
+                } else {
+                    return None;
+                };
+            return Some(parser::Expression {
+                kind,
+                span: expression.span,
+            });
+        }
         if crate::constants::namespace_alias(expression).is_some() {
             let path = crate::constants::path(expression)?;
             let (owner, field) = path.rsplit_once('.')?;
@@ -4662,6 +4792,9 @@ impl CallContext {
             return None;
         }
         let path = crate::constants::path(expression)?;
+        if let Some(path) = path.strip_prefix("$.") {
+            return self.constants.get(path);
+        }
         let first = path.split('.').next()?;
         if first != "self" && (locals.contains_key(first) || parameters.contains_key(first)) {
             return None;

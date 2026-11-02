@@ -152,7 +152,8 @@ case-label = "case" expression ":" | "case" "instanceof" class-target ":"
            | "default" ":"
 break-statement = "break" ";"
 continue-statement = "continue" ";"
-assign-target = identifier | owner-receiver "." identifier | primary "[" expression "]"
+assign-target = identifier | root-member | owner-receiver "." identifier
+              | primary "[" expression "]"
               | primary "." identifier
               | "(" assign-target ")"
 update-target = assign-target
@@ -208,25 +209,31 @@ member-call = "." identifier "(" argument-list? ")"
 member-access = "." identifier
 index-access = "[" expression "]"
 atom = literal | identifier | owner-receiver | self-field
-     | named-call | native-constant
+     | named-call | native-constant | root-member
      | "(" expression ")" | array-literal | dictionary-literal | construction
 owner-receiver = "self" | "me"
 self-field = owner-receiver "." identifier
 named-call = call-name "(" argument-list? ")"
-call-name = path | owner-receiver "." path | root-call-name
-root-call-name = "$" "." identifier ("." identifier)*
+call-name = path | owner-receiver "." path | root-member
+root-member = "$" "." path
 call-expression = named-call | primary member-call | "(" call-expression ")"
 native-constant = path
 array-literal = "[" (argument-list ","?)? "]" "b"?
 dictionary-literal = "{" (expression "=>" expression
                            ("," expression "=>" expression)* ","?)? "}"
-construction = "new" path "(" argument-list? ")"
+construction = "new" type-path "(" argument-list? ")"
              | "new" "[" expression "]" "b"?
 argument-list = expression ("," expression)*
 literal = number-literal | long-literal | float-literal | double-literal
         | string-literal | char-literal | symbol-literal
         | "true" | "false" | "null"
 ```
+
+`root-member` selects an absolute global path. It can be a shared value,
+constant, enum member, or call target; later postfixes can index or access a
+stored runtime value. Bare `$`, namespace/class values, and unbound function
+values remain unsupported. [Root lookup semantics](README.md#user-calls-and-owner-lookup)
+define resolution, mutation, and qualifier checks.
 
 `call-expression` selects a call as the final expression, including parenthesized
 calls. An indexed result alone is not a call statement. `native-constant` is a
@@ -297,31 +304,36 @@ dictionary-value = value-type
 named-value-type = scalar-or-alias | core-reference | interface-type | enum-type
                  | dictionary-type | appbase-type | view-type | delegate-type | source-class-type
                  | type-alias
-type-alias = path
+type-path = ("$" ".")? path
+type-alias = type-path
 scalar-or-alias = scalar-type | numeric-alias-type
-scalar-type = path
-numeric-alias-type = path
+scalar-type = type-path
+numeric-alias-type = type-path
 core-reference = object-type | symbol-type | method-type | weakref-type
                | bytearray-type
-interface-type = path
-enum-type = path
-object-type = path
-view-type = path
-delegate-type = path
-appbase-type = path
-source-class-type = path
-symbol-type = path
-method-type = path
-weakref-type = path
-bytearray-type = path
-array-type = path
-dictionary-type = path
-native-base = object-type | appbase-type | view-type | delegate-type
+interface-type = type-path
+enum-type = type-path
+object-type = type-path
+view-type = type-path
+delegate-type = type-path
+appbase-type = type-path
+source-class-type = type-path
+symbol-type = type-path
+method-type = type-path
+weakref-type = type-path
+bytearray-type = type-path
+array-type = type-path
+dictionary-type = type-path
+native-base = path
 field-type = value-type
 class-target = runtime-class-type | source-class-type
-runtime-class-type = path
+runtime-class-type = type-path
 cast-target = value-type
 ```
+
+`type-path` permits explicit root qualification in annotations, casts,
+construction, and runtime tests. `extends` retains its ordinary `path` spelling
+and supported native-base domain.
 
 Paths resolve through the native-name environment; canonical `Toybox` paths need
 no imports. These semantic type domains mean:

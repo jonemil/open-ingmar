@@ -304,6 +304,8 @@ pub(crate) enum NativeConstructor {
 
 #[derive(Clone)]
 pub(crate) enum ExpressionKind {
+    // Explicit global-root qualifier; meaningful only as a member receiver.
+    Root,
     CapturedCall {
         builder: crate::BuilderId,
         call: Box<Expression>,
@@ -521,6 +523,7 @@ impl Expression {
             | E::Float(_)
             | E::String(_)
             | E::Local(_)
+            | E::Root
             | E::Namespace { .. }
             | E::SharedField { .. } => {}
         }
@@ -1679,6 +1682,16 @@ impl<'a> Parser<'a> {
         Ok(path)
     }
 
+    /// Parse a type/constructor path, retaining an explicit root until resolution.
+    fn type_path(&mut self) -> Result<String, Diagnostic> {
+        if self.peek()? == Kind::Punctuation('$') {
+            self.token()?;
+            self.expect(Kind::Punctuation('.'), "'.' after global root")?;
+            return Ok(format!("$.{}", self.path()?));
+        }
+        self.path()
+    }
+
     /// Find a lexical type path while respecting nearer declaration scopes.
     fn lexical_type_name(&self, path: &str) -> String {
         let first = path.split('.').next().unwrap();
@@ -1756,6 +1769,9 @@ impl<'a> Parser<'a> {
     /// Resolve lexical types, source aliases, and imported type names before IR construction.
     /// Only use-site ambiguities fail; unused conflicting imports remain valid.
     fn type_name(&self, path: &str, at: usize) -> Result<String, Diagnostic> {
+        if let Some(path) = path.strip_prefix("$.") {
+            return Ok(path.into());
+        }
         let lexical = self.lexical_type_name(path);
         if self.declared_type(&lexical) {
             return Ok(lexical);
@@ -2578,7 +2594,7 @@ impl<'a> Parser<'a> {
                 },
             );
         }
-        let raw_path = self.path()?;
+        let raw_path = self.type_path()?;
         let path = self.type_name(&raw_path, open.span.start)?;
         let weak = self.names.type_name(&path).ok().flatten().as_deref()
             == Some("Toybox.Lang.WeakReference");
@@ -2613,11 +2629,21 @@ impl<'a> Parser<'a> {
                     } else {
                         NativeConstructor::Object(native.unwrap())
                     },
-                    qualifier: raw_path.split('.').next().unwrap().into(),
+                    qualifier: raw_path
+                        .trim_start_matches("$.")
+                        .split('.')
+                        .next()
+                        .unwrap()
+                        .into(),
                 }
             } else {
                 ExpressionKind::SourceNew {
-                    qualifier: raw_path.split('.').next().unwrap().into(),
+                    qualifier: raw_path
+                        .trim_start_matches("$.")
+                        .split('.')
+                        .next()
+                        .unwrap()
+                        .into(),
                     class: path,
                     arguments,
                 }
@@ -2845,37 +2871,47 @@ impl<'a> Parser<'a> {
         self.node(kind, span)
     }
 
-    /// Parse a root-qualified function call outside recursive atom frames.
+    /// Parse root member paths/calls without charging namespace components as argument nesting.
     fn global_atom(&mut self, start: usize, depth: usize) -> Result<Expression, Diagnostic> {
         self.expect(Kind::Punctuation('.'), "'.' after global root")?;
-        let first = self.identifier()?;
-        let Kind::Word(first) = first.kind else {
-            unreachable!()
-        };
-        let mut path = vec![first.to_owned()];
-        while self.peek()? == Kind::Punctuation('.') {
-            self.token()?;
-            let member = self.identifier()?;
-            let Kind::Word(member) = member.kind else {
+        let mut expression = self.node(
+            ExpressionKind::Root,
+            Span {
+                start,
+                end: start + 1,
+            },
+        )?;
+        loop {
+            let token = self.identifier()?;
+            let Kind::Word(member) = token.kind else {
                 unreachable!()
             };
-            path.push(member.to_owned());
+            if self.peek()? == Kind::Punctuation('(') {
+                let (arguments, end) = self.call_arguments(start, depth)?;
+                return self.node(
+                    ExpressionKind::ValueCall {
+                        receiver: Box::new(expression),
+                        member: member.into(),
+                        arguments,
+                    },
+                    Span { start, end },
+                );
+            }
+            expression = self.node(
+                ExpressionKind::MemberRead {
+                    receiver: Box::new(expression),
+                    member: member.into(),
+                },
+                Span {
+                    start,
+                    end: token.span.end,
+                },
+            )?;
+            if self.peek()? != Kind::Punctuation('.') {
+                return Ok(expression);
+            }
+            self.token()?;
         }
-        let member = path.pop().unwrap();
-        let module = (!path.is_empty()).then(|| path.join("."));
-        let (arguments, end) = self.call_arguments(start, depth)?;
-        self.node(
-            if let Some(module) = module {
-                owner_call(module, member, arguments, false, Vec::new())
-            } else {
-                ExpressionKind::GlobalCall {
-                    lexical: false,
-                    member,
-                    arguments,
-                }
-            },
-            Span { start, end },
-        )
     }
 
     fn atom(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
@@ -3485,8 +3521,13 @@ impl<'a> Parser<'a> {
     /// Parse a runtime class target shared by expressions and switch type cases.
     fn runtime_class(&mut self) -> Result<(String, String), Diagnostic> {
         let at = self.offset;
-        let path = self.path()?;
-        let qualifier = path.split('.').next().unwrap().to_owned();
+        let path = self.type_path()?;
+        let qualifier = path
+            .trim_start_matches("$.")
+            .split('.')
+            .next()
+            .unwrap()
+            .to_owned();
         let class = self.type_name(&path, at)?;
         if self.alias_key(&path)?.is_some() {
             return Err(self.error(at, "typedef names are not runtime classes"));
@@ -3937,12 +3978,13 @@ impl Parser<'_> {
             crate::callbacks::validate(&signature).map_err(|message| self.error(at, message))?;
             return Ok(crate::ParameterType::Callback(Box::new(signature)));
         }
-        let raw_path = self.path()?;
+        let raw_path = self.type_path()?;
         let path = self.type_name(&raw_path, at)?;
         let qualified = self
             .owner
             .as_deref()
             .into_iter()
+            .filter(|_| !raw_path.starts_with("$."))
             .flat_map(crate::names::scopes)
             .map(|owner| format!("{owner}.{path}"))
             .chain(std::iter::once(path.clone()))
@@ -3952,10 +3994,21 @@ impl Parser<'_> {
                 self.declarations.enum_type(&name),
             ));
         }
-        if let Some(ty) = self.alias_parameter(&path, at)? {
+        if let Some(ty) = self.alias_parameter(
+            if raw_path.starts_with("$.") {
+                &raw_path
+            } else {
+                &path
+            },
+            at,
+        )? {
             return Ok(ty);
         }
-        let path = self.type_name(&path, at)?;
+        let path = if raw_path.starts_with("$.") {
+            path
+        } else {
+            self.type_name(&path, at)?
+        };
         let ty = match path.as_str() {
             "Null" => crate::ParameterType::Null,
             "Toybox.Lang.Number" => crate::ParameterType::Integer,

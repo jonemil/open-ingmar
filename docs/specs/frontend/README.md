@@ -1157,19 +1157,40 @@ Parent search and child traversal can activate module initializers before the
 argument is evaluated. Calls requiring separate argument staging (conditional or
 short-circuit branches and private construction) capture the callable and its VM
 context first, then evaluate arguments once in source order and invoke the saved
-target. This also applies to direct and lexical global/module calls. Bare `self`/`me` values
-outside instances remain unsupported; this qualification support does not make
+target. This also applies to direct and lexical global/module calls. Bare
+`self`/`me` values outside instances remain unsupported; this qualification support does not make
 modules or classes first-class values.
 
-`$.member(arguments)` selects the global function explicitly, bypassing owner
-lookup and local/parameter names. `$.Module.member(arguments)` selects a function
-in a user module with the same protection from qualifier shadowing; paths such
-as `$.Tree.Branch.member()` are supported.
-Both forms retain ordinary call signatures, argument contexts, and effect order.
-The module form resolves to existing module-call IR; a root prefix is not needed
-after source names have been resolved. Instance methods cannot be selected as
-module functions through the root. Global value reads, native paths, root-object values, and class/static paths
-remain outside this profile.
+`$.name` starts at the global root, bypassing local/parameter names, imports,
+instance fields, and enclosing declarations. It selects global or nested-module
+shared variables/constants and supported class enum members. A resolved module
+path is absolute; it does not perform lexical parent search. Once the path
+selects a stored value, later indexing, member reads/writes, and method calls
+follow that value's ordinary type and evaluation rules. Writes, compounds, and
+steps retain existing mutability and capture-before-RHS requirements; root
+qualification does not permit rebinding constants.
+
+`$.member(arguments)` selects a global function; `$.Tree.Branch.member(...)`
+selects the function in that absolute user module. They retain signatures,
+argument contexts, and call-target capture. Canonical native paths such as
+`$.Toybox.System.println(...)` and `$.Toybox.Lang.NUMBER_FORMAT_UINT8` use the
+existing native contracts and API gates. Root qualification does not broaden
+which native calls, constants, or constructors are implemented.
+
+Annotations, casts, constructors, and runtime class tests accept root-qualified
+type paths such as `$.Token` or `$.Tree.Token`. These resolve canonical type
+identities without imports or enclosing type lookup. Constructor and runtime-test
+qualifier checks still reject runtime locals/parameters shadowing the path's
+first named component; lexical type assertions use the type namespace. Native
+superclass declarations retain their existing spelling. Bare `$`, first-class
+module/class values, unbound function values, and class/static member access
+other than enum constants remain unsupported.
+
+Root qualifiers disappear during source resolution. Shared storage, class-enum
+reads, source construction, native operations, and global/module calls retain
+their existing IR, assembly, VM, and PRG representations. See the
+[root-value specimen](../../../examples/compiler-root-values/README.md) and
+[compatibility evidence](../../investigations/core-lang-completion.md#root-qualified-values-and-types).
 Unqualified resolution requires collected unit
 declarations; explicit calls in standalone IR/CODE retain external-callee
 obligations.

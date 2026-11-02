@@ -191,6 +191,12 @@ destruction of named locals based on last use.
 
 ### Nested module lookup
 
+Root-qualified source paths use the resolved declaration's ordinary direct
+lookup. Nested module paths select their statics owner without walking
+intermediate parents. Reads of a stored object/container then use ordinary
+value-member/index operations; the root qualifier adds no opcode or DATA record.
+
+
 Direct access uses the resolved module statics ID, independently of namespace
 depth. Lexical shared reads and function lookup use `getselfv` from the
 current module receiver, preserving parent-search initialization. Lexical shared
