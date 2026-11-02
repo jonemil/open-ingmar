@@ -201,8 +201,17 @@ Receiver-path module calls emit `getselfv` for the first namespace component,
 then `getsv` for each child and the final callable member. Selectors use ordinary
 member Symbol IDs, not module statics IDs. This selection precedes ordinary
 argument evaluation and preserves parent-search/child initialization. It uses
-existing instructions and DATA records; separately staged argument effects need
-explicit call-target capture before they can use this path.
+existing instructions and DATA records.
+
+For a captured global/module call, `.begin-call` performs the ordinary target
+selection followed by `frpush`, then saves context and callable in two private
+frame slots with `lputv`. Argument staging can branch or nest captures without
+leaving this setup on the operand stack. At invocation, `lgetv` restores callable
+then context, and `npush; lputv` clears both private slots before arguments are
+loaded. Emit `invokem` with the explicit argument count plus one; the restored
+context replaces a fresh `frpush`, including calls with no explicit arguments.
+Discarded calls also pop the result. Calls without captures retain their ordinary
+setup and zero-argument `invokemz`.
 
 Assembly aliases cannot contain dots. Root module names retain their spelling;
 nested paths encode each component as `<byte-length>_<name>`, separated by

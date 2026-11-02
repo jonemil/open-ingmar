@@ -83,7 +83,8 @@ fn join(a: &ReturnType, b: &ReturnType) -> Option<ReturnType> {
 fn barrier(op: &Operation) -> bool {
     matches!(
         op,
-        Operation::SelfCall { .. }
+        Operation::CallBegin { .. }
+            | Operation::SelfCall { .. }
             | Operation::SelfCallStatement { .. }
             | Operation::GlobalCall { .. }
             | Operation::GlobalCallStatement { .. }

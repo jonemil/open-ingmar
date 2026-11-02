@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, VecDeque};
 #[derive(Clone)]
 pub(crate) enum Contract {
     Shared,
+    Call,
     Array(ArrayElement),
     ByteArray,
     Source {
@@ -25,7 +26,11 @@ impl Contract {
                 crate::api::Type::named("Toybox.Lang.Number"),
                 crate::api::Type::named("Toybox.Lang.Char"),
             ])),
-            Self::Shared | Self::Dictionary(_) | Self::Record(_) | Self::Source { .. } => None,
+            Self::Call
+            | Self::Shared
+            | Self::Dictionary(_)
+            | Self::Record(_)
+            | Self::Source { .. } => None,
         }
     }
     pub(crate) fn dictionary(&self) -> Option<DictionaryType> {
@@ -48,6 +53,31 @@ pub(crate) fn validate(
         message: message.into(),
     };
     let mut declarations = BTreeMap::new();
+    for (index, op) in operations.iter().enumerate() {
+        if let Operation::CallBegin { builder } = op.operation {
+            if declarations.insert(builder, (Contract::Call, 0)).is_some() {
+                return Err(fail(index, "duplicate call capture builder"));
+            }
+            if operations
+                .iter()
+                .filter(|op| op.operation.call_capture() == Some(builder))
+                .count()
+                != 1
+            {
+                return Err(fail(
+                    index,
+                    "call capture requires exactly one consuming invocation",
+                ));
+            }
+        }
+        if let Some(builder) = op.operation.call_capture() {
+            if !operations.iter().any(
+                |op| matches!(op.operation,Operation::CallBegin { builder: id } if id == builder),
+            ) {
+                return Err(fail(index, "invocation requires a declared call capture"));
+            }
+        }
+    }
     for (index, op) in operations.iter().enumerate() {
         if let Operation::SharedBegin {
             builder,
@@ -201,8 +231,16 @@ pub(crate) fn validate(
         let mut active = inputs[&block].clone();
         let mut successors = vec![];
         for &index in &blocks[&block] {
+            if let Some(builder) = operations[index].operation.call_capture() {
+                if !matches!(declarations.get(&builder), Some((Contract::Call, _)))
+                    || active.remove(&builder).is_none()
+                {
+                    return Err(fail(index, "invocation requires its active call capture"));
+                }
+            }
             match operations[index].operation {
-                Operation::SourceBegin { builder, .. }
+                Operation::CallBegin { builder }
+                | Operation::SourceBegin { builder, .. }
                 | Operation::SharedBegin { builder, .. }
                 | Operation::DictionaryBegin { builder, .. }
                 | Operation::RecordBegin { builder, .. }

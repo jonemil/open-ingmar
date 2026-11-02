@@ -3,6 +3,7 @@
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Directive {
     SharedBegin,
+    CallBegin,
     SharedWrite,
     ClassFieldRead,
     EnumValue,
@@ -168,6 +169,38 @@ pub(crate) fn parse_function_ir_context(
         offset += line.len();
     }
     let fail = |offset, message: &str| Diagnostic::at(source, offset, message);
+    let mut capture_rows = std::collections::BTreeMap::new();
+    for (at, fields) in &mut rows {
+        if !matches!(
+            fields[0].as_str(),
+            ".call" | ".call-discard" | ".call-global" | ".call-global-discard"
+        ) {
+            continue;
+        }
+        if let Some(index) = fields
+            .iter()
+            .position(|field| field.starts_with("capture="))
+        {
+            if fields[..index].iter().any(|field| {
+                field.starts_with("via=") || field == "lookup=lexical" || field.starts_with("span=")
+            }) {
+                return Err(fail(*at, "capture must precede lookup metadata and span"));
+            }
+            if fields[index + 1..].iter().any(|field| {
+                !field.starts_with("via=")
+                    && field != "lookup=lexical"
+                    && !field.starts_with("span=")
+            }) {
+                return Err(fail(*at, "capture must follow call operands"));
+            }
+            let value = fields.remove(index);
+            let builder = value
+                .strip_prefix("capture=&")
+                .and_then(|value| value.parse::<u32>().ok())
+                .ok_or_else(|| fail(*at, "invalid call capture"))?;
+            capture_rows.insert(*at, crate::BuilderId(builder));
+        }
+    }
     let mut path_rows = std::collections::BTreeMap::new();
     for (at, fields) in &mut rows {
         if !matches!(fields[0].as_str(), ".call" | ".call-discard") {
@@ -306,6 +339,7 @@ pub(crate) fn parse_function_ir_context(
             Some(".call-object") => (Directive::CallObject, call_width()),
             Some(".call-object-discard") => (Directive::CallObjectDiscard, call_width()),
             Some(".integer") => (Directive::Integer, 3),
+            Some(".begin-call") => (Directive::CallBegin, 2),
             Some(".begin-shared") => (Directive::SharedBegin, 4),
             Some(".write-shared") => (Directive::SharedWrite, 3),
             Some(".read-shared") => (Directive::SharedRead, 5),
@@ -650,6 +684,9 @@ pub(crate) fn parse_function_ir_context(
                     class: fields[2].clone(),
                     field: fields[3].clone(),
                     result_type: call_contract(fields, 4, *at, source)?.0,
+                },
+                Directive::CallBegin => Operation::CallBegin {
+                    builder: parse_builder(&fields[1])?,
                 },
                 Directive::SharedBegin => Operation::SharedBegin {
                     lexical: false,
@@ -1157,6 +1194,7 @@ pub(crate) fn parse_function_ir_context(
                 Directive::CallGlobal => {
                     let (result_type, arguments_at) = call_contract(fields, 3, *at, source)?;
                     Operation::GlobalCall {
+                        capture: None,
                         lexical: false,
                         result: parse_value(&fields[1])?,
                         result_type,
@@ -1168,6 +1206,7 @@ pub(crate) fn parse_function_ir_context(
                     }
                 }
                 Directive::CallGlobalDiscard => Operation::GlobalCallStatement {
+                    capture: None,
                     lexical: false,
                     member: fields[1].clone(),
                     arguments: fields[2..width]
@@ -1196,6 +1235,7 @@ pub(crate) fn parse_function_ir_context(
                 },
                 Directive::ReturnVoid => Operation::ReturnVoid,
                 Directive::CallDiscard => Operation::ModuleCallStatement {
+                    capture: None,
                     path: Vec::new(),
                     lexical: false,
                     module: fields[1].clone(),
@@ -1416,6 +1456,7 @@ pub(crate) fn parse_function_ir_context(
                 Directive::Call => {
                     let (result_type, arguments_at) = call_contract(fields, 4, *at, source)?;
                     Operation::ModuleCall {
+                        capture: None,
                         path: Vec::new(),
                         lexical: false,
                         result: parse_value(&fields[1])?,
@@ -1479,6 +1520,11 @@ pub(crate) fn parse_function_ir_context(
                 | Operation::ModuleCall { lexical, .. }
                 | Operation::ModuleCallStatement { lexical, .. } => *lexical = true,
                 _ => return Err(fail(*at, "operation does not support lexical lookup")),
+            }
+        }
+        if let Some(builder) = capture_rows.remove(at) {
+            if !operation.set_call_capture(builder) {
+                return Err(fail(*at, "capture requires a user invocation"));
             }
         }
         if let Some(path) = path_rows.remove(at) {

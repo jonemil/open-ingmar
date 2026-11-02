@@ -65,6 +65,7 @@ pub(crate) fn lower_owned<'a>(
     let mut literals = Vec::new();
     let mut slots = BTreeMap::new();
     let mut builders = BTreeMap::new();
+    let mut builder_slots = 0usize;
     let shared_fields = function
         .operations()
         .iter()
@@ -211,8 +212,15 @@ pub(crate) fn lower_owned<'a>(
             | Operation::LocalVariable { local, .. } => {
                 slots.insert(
                     *local,
-                    (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
+                    (function.parameter_count() + slots.len() + builder_slots + 1) as u64,
                 );
+            }
+            Operation::CallBegin { builder } => {
+                builders.insert(
+                    *builder,
+                    (function.parameter_count() + slots.len() + builder_slots + 1) as u64,
+                );
+                builder_slots += 2;
             }
             Operation::SharedBegin { builder, .. }
             | Operation::SourceBegin { builder, .. }
@@ -222,8 +230,9 @@ pub(crate) fn lower_owned<'a>(
             | Operation::ByteArrayBegin { builder, .. } => {
                 builders.insert(
                     *builder,
-                    (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
+                    (function.parameter_count() + slots.len() + builder_slots + 1) as u64,
                 );
+                builder_slots += 1;
             }
             _ => {}
         }
@@ -240,7 +249,7 @@ pub(crate) fn lower_owned<'a>(
             Opcode::Argcincsp,
             vec![
                 Operand::Bits(function.parameter_count() as u64 + 1),
-                Operand::Bits((slots.len() + builders.len()) as u64),
+                Operand::Bits((slots.len() + builder_slots) as u64),
             ],
         )
     });
@@ -260,6 +269,27 @@ pub(crate) fn lower_owned<'a>(
     }
     for located in function.operations() {
         match located.operation {
+            Operation::CallBegin { builder } => {
+                let call = &function
+                    .operations()
+                    .iter()
+                    .find(|op| op.operation.call_capture() == Some(builder))
+                    .expect("validated capture")
+                    .operation;
+                let owner = uncaptured_owner(call);
+                call_receiver(owner, &mut items);
+                items.push(call_target(owner, call_member(call), definitions.owner));
+                items.push(instruction(Opcode::Frpush, vec![]));
+                items.push(instruction(
+                    Opcode::Lputv,
+                    vec![Operand::Bits(builders[&builder] + 1)],
+                ));
+                items.push(instruction(
+                    Opcode::Lputv,
+                    vec![Operand::Bits(builders[&builder])],
+                ));
+                continue;
+            }
             Operation::SharedBegin {
                 builder,
                 ref module,
@@ -729,7 +759,9 @@ pub(crate) fn lower_owned<'a>(
                 ..
             } => {
                 statement_call(
-                    if !located.operation.receiver_path().is_empty() {
+                    if let Some(builder) = located.operation.call_capture() {
+                        CallOwner::Captured(builders[&builder])
+                    } else if !located.operation.receiver_path().is_empty() {
                         CallOwner::Path(located.operation.receiver_path())
                     } else if located.operation.lexical_lookup() {
                         CallOwner::Lexical
@@ -766,7 +798,9 @@ pub(crate) fn lower_owned<'a>(
                 ..
             } => {
                 statement_call(
-                    if located.operation.lexical_lookup() {
+                    if let Some(builder) = located.operation.call_capture() {
+                        CallOwner::Captured(builders[&builder])
+                    } else if located.operation.lexical_lookup() {
                         CallOwner::Lexical
                     } else {
                         CallOwner::Global
@@ -862,6 +896,7 @@ fn expression(
         NewByteArray,
         Compare(ComparisonOp),
         Invoke(usize),
+        CapturedInvoke(usize),
         Context,
         NativeMember(String),
         SourceMember(String),
@@ -1159,12 +1194,17 @@ fn expression(
                 | Operation::GlobalCall {
                     member, arguments, ..
                 } => {
-                    tasks.push(Task::Invoke(arguments.len()));
+                    tasks.push(if definitions[&value].call_capture().is_some() {
+                        Task::CapturedInvoke(arguments.len())
+                    } else {
+                        Task::Invoke(arguments.len())
+                    });
                     if !arguments.is_empty() {
                         tasks.extend(arguments.iter().rev().map(|value| Task::Value(*value)));
-                        tasks.push(Task::Context);
                     }
-                    let owner = if !definitions[&value].receiver_path().is_empty() {
+                    let owner = if let Some(builder) = definitions[&value].call_capture() {
+                        CallOwner::Captured(builders[&builder])
+                    } else if !definitions[&value].receiver_path().is_empty() {
                         CallOwner::Path(definitions[&value].receiver_path())
                     } else if definitions[&value].lexical_lookup() {
                         CallOwner::Lexical
@@ -1175,13 +1215,14 @@ fn expression(
                             _ => CallOwner::Instance,
                         }
                     };
-                    call_receiver(owner, items);
-                    let Item::Instruction { opcode, operands } =
-                        call_target(owner, member, definitions.owner)
-                    else {
-                        unreachable!()
-                    };
-                    (opcode, operands)
+                    call_setup(
+                        owner,
+                        member,
+                        definitions.owner,
+                        !arguments.is_empty(),
+                        items,
+                    );
+                    continue;
                 }
                 Operation::ParameterRead { index, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(*index as u64 + 1)])
@@ -1307,6 +1348,7 @@ fn expression(
             Task::ArrayRead => (Opcode::Agetv, vec![]),
             Task::NewArray => (Opcode::Newa, vec![]),
             Task::NewByteArray => (Opcode::Newba, vec![]),
+            Task::CapturedInvoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
             Task::Invoke(0) => (Opcode::Invokemz, vec![]),
             Task::Invoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
             Task::Context => (Opcode::Frpush, vec![]),
@@ -1392,6 +1434,7 @@ fn expression(
 
 #[derive(Clone, Copy)]
 enum CallOwner<'a> {
+    Captured(u64),
     Path(&'a [String]),
     Lexical,
     Global,
@@ -1418,6 +1461,7 @@ fn call_target(owner: CallOwner<'_>, member: &str, current: Option<Option<&str>>
             vec![Operand::Symbol("__ciq_source_globals".into()), member],
         ),
         CallOwner::Lexical | CallOwner::Instance => instruction(Opcode::Getselfv, vec![member]),
+        CallOwner::Captured(_) => unreachable!("captured setup loads both saved values"),
         CallOwner::Path(_) => instruction(Opcode::Getsv, vec![member]),
     }
 }
@@ -1436,6 +1480,55 @@ fn call_receiver(owner: CallOwner<'_>, items: &mut Vec<Item>) {
         }
     }
 }
+/// Recover the resolved target without its optional private capture.
+fn uncaptured_owner(call: &Operation) -> CallOwner<'_> {
+    if !call.receiver_path().is_empty() {
+        CallOwner::Path(call.receiver_path())
+    } else if call.lexical_lookup() {
+        CallOwner::Lexical
+    } else {
+        match call {
+            Operation::ModuleCall { module, .. }
+            | Operation::ModuleCallStatement { module, .. } => CallOwner::Module(module),
+            Operation::GlobalCall { .. } | Operation::GlobalCallStatement { .. } => {
+                CallOwner::Global
+            }
+            _ => unreachable!("validated user call"),
+        }
+    }
+}
+fn call_member(call: &Operation) -> &str {
+    match call {
+        Operation::ModuleCall { member, .. }
+        | Operation::ModuleCallStatement { member, .. }
+        | Operation::GlobalCall { member, .. }
+        | Operation::GlobalCallStatement { member, .. } => member,
+        _ => unreachable!("validated user call"),
+    }
+}
+/// Load a callable and context, releasing private capture slots after their last read.
+fn call_setup(
+    owner: CallOwner<'_>,
+    member: &str,
+    current: Option<Option<&str>>,
+    context: bool,
+    items: &mut Vec<Item>,
+) {
+    if let CallOwner::Captured(slot) = owner {
+        items.push(instruction(Opcode::Lgetv, vec![Operand::Bits(slot)]));
+        items.push(instruction(Opcode::Lgetv, vec![Operand::Bits(slot + 1)]));
+        for slot in [slot, slot + 1] {
+            items.push(instruction(Opcode::Npush, vec![]));
+            items.push(instruction(Opcode::Lputv, vec![Operand::Bits(slot)]));
+        }
+    } else {
+        call_receiver(owner, items);
+        items.push(call_target(owner, member, current));
+        if context {
+            items.push(instruction(Opcode::Frpush, vec![]));
+        }
+    }
+}
 type Frame<'a> = (
     &'a BTreeMap<LocalId, u64>,
     &'a BTreeMap<crate::BuilderId, u64>,
@@ -1451,10 +1544,14 @@ fn statement_call(
     literal_aliases: &BTreeMap<LiteralKey, String>,
     items: &mut Vec<Item>,
 ) {
-    call_receiver(owner, items);
-    items.push(call_target(owner, member, definitions.owner));
+    call_setup(
+        owner,
+        member,
+        definitions.owner,
+        !arguments.is_empty(),
+        items,
+    );
     if !arguments.is_empty() {
-        items.push(instruction(Opcode::Frpush, vec![]));
         for value in arguments {
             expression(
                 *value,
@@ -1467,14 +1564,16 @@ fn statement_call(
             );
         }
     }
-    items.push(if arguments.is_empty() {
-        instruction(Opcode::Invokemz, vec![])
-    } else {
-        instruction(
-            Opcode::Invokem,
-            vec![Operand::Bits(arguments.len() as u64 + 1)],
-        )
-    });
+    items.push(
+        if arguments.is_empty() && !matches!(owner, CallOwner::Captured(_)) {
+            instruction(Opcode::Invokemz, vec![])
+        } else {
+            instruction(
+                Opcode::Invokem,
+                vec![Operand::Bits(arguments.len() as u64 + 1)],
+            )
+        },
+    );
     items.push(instruction(Opcode::Popv, vec![]));
 }
 

@@ -1154,9 +1154,10 @@ retain their existing storage/constant contracts.
 Namespace calls such as `me.Child.Deep.value(argument)` preserve receiver-based
 selection rather than replacing it with direct access to the resolved module.
 Parent search and child traversal can activate module initializers before the
-argument is evaluated. Arguments requiring separate IR staging (conditional or
-short-circuit branches and private construction) are currently rejected on these
-paths until call-target capture preserves that order. Bare `self`/`me` values
+argument is evaluated. Calls requiring separate argument staging (conditional or
+short-circuit branches and private construction) capture the callable and its VM
+context first, then evaluate arguments once in source order and invoke the saved
+target. This also applies to direct and lexical global/module calls. Bare `self`/`me` values
 outside instances remain unsupported; this qualification support does not make
 modules or classes first-class values.
 

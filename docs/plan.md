@@ -36,10 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Add private call-target capture before argument staging for module and
-  owner-relative namespace calls. Preserve lazy initialization before conditional,
-  short-circuit, and private-construction argument effects; enable currently
-  rejected staged arguments on receiver paths.
 - [ ] Support root-object `$.name` field/value access and nested qualified paths
   beyond the existing root-qualified call forms.
 - [ ] Represent class and module values, including bare `self`/`me` outside

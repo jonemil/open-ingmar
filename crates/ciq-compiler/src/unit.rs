@@ -85,6 +85,19 @@ fn activation_callees<'a>(
     bodies: &[(Owner<'a>, &'a Function)],
 ) -> Vec<(Owner<'a>, &'a str)> {
     let mut calls = effect_callees(owner, operation);
+    let operation = if let Operation::CallBegin { builder } = operation {
+        &function
+            .operations()
+            .iter()
+            .find(|op| op.operation.call_capture() == Some(*builder))
+            .expect("validated capture completion")
+            .operation
+    } else if operation.call_capture().is_some() {
+        return calls;
+    } else {
+        operation
+    };
+
     let module = match operation {
         Operation::SharedRead {
             module: Some(module),

@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-call-captures](compiler-call-captures/README.md): call-target/context
+  capture before branching, nested, and constructor argument effects.
 - [compiler-owner-receivers](compiler-owner-receivers/README.md): self/me member
   lookup, instance identity, and namespace initialization before arguments.
 - [compiler-source-imports](compiler-source-imports/README.md): source namespace

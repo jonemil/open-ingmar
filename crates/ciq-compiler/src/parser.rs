@@ -304,6 +304,10 @@ pub(crate) enum NativeConstructor {
 
 #[derive(Clone)]
 pub(crate) enum ExpressionKind {
+    CapturedCall {
+        builder: crate::BuilderId,
+        call: Box<Expression>,
+    },
     MemberRead {
         receiver: Box<Expression>,
         member: String,
@@ -438,6 +442,7 @@ impl Expression {
         use ExpressionKind as E;
         visitor(self);
         match &self.kind {
+            E::CapturedCall { call, .. } => call.visit(visitor),
             E::MemberRead { receiver, .. } => receiver.visit(visitor),
             E::Conditional {
                 condition,

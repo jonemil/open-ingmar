@@ -720,8 +720,17 @@ use `getself`, and enclosing/global calls retain receiver-relative selection.
 and value with `getsv`, before evaluating the argument. The specimen's markers
 104, 101, 102, 103, 105 establish parent search and namespace activation order.
 
-A compile-only variant replaces that argument with
-`Trace.mark(105) > 0 ? Trace.mark(107) : 108`. SDK CODE still selects the callable
-before evaluating the conditional. Our former argument staging put the branch
-first; receiver-path calls now reject staged arguments pending explicit target
-capture. This variant's instruction order was inspected, not simulator-tested.
+Experimentally observed, 2026-11-02: the
+[call-capture specimen](../../examples/compiler-call-captures/README.md) extends
+this check to conditional, short-circuit, source-construction, and nested
+arguments, direct/lexical namespace targets, global calls, and discarded/Void
+results. SDK and generated PRGs match its
+[expected console](../../examples/compiler-call-captures/expected.txt), using the
+same SDK/device/API/options and shared specimen checker. Supported sections
+export and reconstruct without raw CODE/DATA fallback.
+
+Saving the selected callable and the `frpush` context in separate frame slots,
+then restoring both for `invokem`, preserves receiver identity and initialization
+order across argument branches and nested calls in this specimen. This confirms
+that capture sequence for the tested user-call profile; it does not establish a
+general first-class callable representation or every VM context-binding rule.

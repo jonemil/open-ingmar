@@ -216,6 +216,21 @@ fn emit(
     operations: &mut Vec<LocatedOperation>,
     calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
+    if let parser::ExpressionKind::CapturedCall { builder, call } = expression.kind {
+        let value = emit(source, *call, locals, parameters, operations, calls)?;
+        let op = &mut operations
+            .last_mut()
+            .expect("captured invocation emitted")
+            .operation;
+        if !op.set_call_capture(builder) {
+            return Err(Diagnostic::at(
+                source,
+                expression.span.start,
+                "capture requires a user module/global call",
+            ));
+        }
+        return Ok(value);
+    }
     namespace_values(&mut expression, locals, parameters);
     if let Some(kind) = calls.qualified_call(&expression, locals, parameters) {
         return emit(
@@ -626,7 +641,8 @@ fn emit_non_call(
                 ));
             }
         }
-        parser::ExpressionKind::ValueCall { .. }
+        parser::ExpressionKind::CapturedCall { .. }
+        | parser::ExpressionKind::ValueCall { .. }
         | parser::ExpressionKind::ModuleCall { .. }
         | parser::ExpressionKind::GlobalCall { .. }
         | parser::ExpressionKind::OwnerCall { .. }
@@ -1113,6 +1129,7 @@ fn emit_call(
         }
     } else if let Some(module) = module {
         Operation::ModuleCall {
+            capture: None,
             path,
             lexical,
             result,
@@ -1126,6 +1143,7 @@ fn emit_call(
         }
     } else {
         Operation::GlobalCall {
+            capture: None,
             lexical,
             result,
             result_type: calls
@@ -1144,6 +1162,20 @@ fn emit_call(
 struct ControlTargets {
     break_to: BlockId,
     continue_to: Option<BlockId>,
+}
+
+fn captured_expression(
+    builder: Option<crate::BuilderId>,
+    kind: parser::ExpressionKind,
+    span: Span,
+) -> parser::ExpressionKind {
+    match builder {
+        Some(builder) => parser::ExpressionKind::CapturedCall {
+            builder,
+            call: Box::new(parser::Expression { kind, span }),
+        },
+        None => kind,
+    }
 }
 
 struct Builder<'a> {
@@ -2438,6 +2470,14 @@ impl Builder<'_> {
                 } else {
                     self.call_argument_context(&module, &member)
                 };
+                let capture = if receiver.is_none()
+                    && module != "self"
+                    && self.calls.get(&(module.clone(), member.clone())).is_some()
+                {
+                    self.capture_before_arguments(&arguments, locals, span)?
+                } else {
+                    None
+                };
                 let arguments = self.snapshot_arguments(arguments, locals, &expected)?;
                 if let Some(receiver) = receiver {
                     E::ValueCall {
@@ -2446,11 +2486,15 @@ impl Builder<'_> {
                         arguments,
                     }
                 } else {
-                    E::ModuleCall {
-                        module,
-                        member,
-                        arguments,
-                    }
+                    captured_expression(
+                        capture,
+                        E::ModuleCall {
+                            module,
+                            member,
+                            arguments,
+                        },
+                        span,
+                    )
                 }
             }
             E::GlobalCall {
@@ -2459,33 +2503,49 @@ impl Builder<'_> {
                 lexical,
             } => {
                 let expected = self.call_argument_context("", &member);
-                E::GlobalCall {
-                    lexical,
-                    member,
-                    arguments: self.snapshot_arguments(arguments, locals, &expected)?,
-                }
+                let capture = self.capture_before_arguments(&arguments, locals, span)?;
+                let arguments = self.snapshot_arguments(arguments, locals, &expected)?;
+                captured_expression(
+                    capture,
+                    E::GlobalCall {
+                        lexical,
+                        member,
+                        arguments,
+                    },
+                    span,
+                )
             }
             E::OwnerCall { target, arguments } => {
-                if !target.path.is_empty()
-                    && arguments
-                        .iter()
-                        .any(|argument| self.needs_staging(argument, locals))
-                {
-                    return Err(Diagnostic::at(
-                        self.source,
-                        span.start,
-                        "owner-relative namespace calls with staged arguments require call-target capture",
-                    ));
-                }
+                let capture = if target.module != "self" {
+                    self.capture_before_arguments(&arguments, locals, span)?
+                } else {
+                    None
+                };
                 let expected = self.call_argument_context(&target.module, &target.member);
-                E::OwnerCall {
-                    target,
-                    arguments: self.snapshot_arguments(arguments, locals, &expected)?,
-                }
+                let arguments = self.snapshot_arguments(arguments, locals, &expected)?;
+                captured_expression(capture, E::OwnerCall { target, arguments }, span)
             }
             kind => kind,
         };
         Ok(parser::Expression { kind, span })
+    }
+
+    /// Begin a private capture before argument staging; completion keeps the callee metadata.
+    fn capture_before_arguments(
+        &mut self,
+        arguments: &[parser::Expression],
+        locals: &BTreeMap<String, LocalId>,
+        span: Span,
+    ) -> Result<Option<crate::BuilderId>, Diagnostic> {
+        if !arguments
+            .iter()
+            .any(|argument| self.needs_staging(argument, locals))
+        {
+            return Ok(None);
+        }
+        let builder = crate::BuilderId(self.local_id(span)?.0);
+        self.push(Operation::CallBegin { builder }, Some(span));
+        Ok(Some(builder))
     }
 
     /// Evaluate statement arguments in source order. If any argument branches,
@@ -2644,6 +2704,69 @@ impl Builder<'_> {
         self.next_block += 1;
         id
     }
+    /// Resolve and emit a named call statement outside recursive statement frames.
+    fn named_call_statement(
+        &mut self,
+        module: String,
+        member: String,
+        arguments: Vec<parser::Expression>,
+        locals: &BTreeMap<String, LocalId>,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
+        if self
+            .calls
+            .module_name(&module, locals, &self.parameters)
+            .is_some()
+            || module == "Lang"
+            || self
+                .calls
+                .constant_named(&module, locals, &self.parameters)
+                .is_some()
+            || self.calls.field_names.contains(&module)
+            || self.calls.shared_name(&module)
+            || locals.contains_key(&module)
+            || self.parameters.contains_key(&module)
+            || (module == "self"
+                && (member == "method" || self.calls.inherited_object_member("self", &member))
+                && self.calls.get(&(module.clone(), member.clone())).is_none())
+        {
+            self.value_statement(
+                parser::Expression {
+                    kind: parser::ExpressionKind::ModuleCall {
+                        module,
+                        member,
+                        arguments,
+                    },
+                    span,
+                },
+                locals,
+                span,
+            )?;
+        } else {
+            let capture = if module != "self" {
+                self.capture_before_arguments(&arguments, locals, span)?
+            } else {
+                None
+            };
+            let expected = self.call_argument_context(&module, &member);
+            let arguments = self.arguments(arguments, locals, &expected)?;
+            let operation = if module == "self" {
+                Operation::SelfCallStatement { member, arguments }
+            } else {
+                Operation::ModuleCallStatement {
+                    capture,
+                    path: Vec::new(),
+                    lexical: false,
+                    module,
+                    member,
+                    arguments,
+                }
+            };
+            self.push(operation, Some(span));
+        }
+        Ok(())
+    }
+
     /// Emit a call statement, retaining Void as a statement-only native contract.
     fn value_statement(
         &mut self,
@@ -2675,6 +2798,7 @@ impl Builder<'_> {
             } = &last.operation
             {
                 last.operation = Operation::GlobalCallStatement {
+                    capture: last.operation.call_capture(),
                     lexical: *lexical,
                     member: member.clone(),
                     arguments: arguments.clone(),
@@ -2691,6 +2815,7 @@ impl Builder<'_> {
             } = &last.operation
             {
                 last.operation = Operation::ModuleCallStatement {
+                    capture: last.operation.call_capture(),
                     path: path.clone(),
                     lexical: *lexical,
                     module: module.clone(),
@@ -4005,52 +4130,7 @@ impl Builder<'_> {
                     arguments,
                     ..
                 } => {
-                    if self
-                        .calls
-                        .module_name(&module, locals, &self.parameters)
-                        .is_some()
-                        || module == "Lang"
-                        || self
-                            .calls
-                            .constant_named(&module, locals, &self.parameters)
-                            .is_some()
-                        || self.calls.field_names.contains(&module)
-                        || self.calls.shared_name(&module)
-                        || locals.contains_key(&module)
-                        || self.parameters.contains_key(&module)
-                        || (module == "self"
-                            && (member == "method"
-                                || self.calls.inherited_object_member("self", &member))
-                            && self.calls.get(&(module.clone(), member.clone())).is_none())
-                    {
-                        self.value_statement(
-                            parser::Expression {
-                                kind: parser::ExpressionKind::ModuleCall {
-                                    module,
-                                    member,
-                                    arguments,
-                                },
-                                span,
-                            },
-                            locals,
-                            span,
-                        )?;
-                    } else {
-                        let expected = self.call_argument_context(&module, &member);
-                        let arguments = self.arguments(arguments, locals, &expected)?;
-                        let operation = if module == "self" {
-                            Operation::SelfCallStatement { member, arguments }
-                        } else {
-                            Operation::ModuleCallStatement {
-                                path: Vec::new(),
-                                lexical: false,
-                                module,
-                                member,
-                                arguments,
-                            }
-                        };
-                        self.push(operation, Some(span));
-                    }
+                    self.named_call_statement(module, member, arguments, locals, span)?;
                 }
                 parser::Statement::Return { value, .. } => {
                     let operation = if let Some(value) = value {

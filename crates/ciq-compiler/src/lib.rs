@@ -1818,8 +1818,15 @@ pub enum Operation {
         index: usize,
         value: ValueId,
     },
+    /// Capture a user callable and its VM context before staged argument effects.
+    /// Its private builder must be consumed by exactly one matching call.
+    CallBegin {
+        builder: BuilderId,
+    },
     /// Invoke a global user function with a checked result contract.
     GlobalCall {
+        /// Use a previously captured callable/context instead of looking it up here.
+        capture: Option<BuilderId>,
         /// Search from the current module through lexical parents instead of direct lookup.
         lexical: bool,
         result: ValueId,
@@ -1829,12 +1836,16 @@ pub enum Operation {
     },
     /// Invoke a global user function for effects and discard its VM result.
     GlobalCallStatement {
+        /// Use a previously captured callable/context instead of looking it up here.
+        capture: Option<BuilderId>,
         /// Search from the current module through lexical parents instead of direct lookup.
         lexical: bool,
         member: String,
         arguments: Vec<ValueId>,
     },
     ModuleCall {
+        /// Use a previously captured callable/context instead of looking it up here.
+        capture: Option<BuilderId>,
         /// Namespace selectors searched from the current receiver; empty uses direct/lexical owner lookup.
         path: Vec<String>,
         /// Search from the current module through lexical parents instead of direct lookup.
@@ -1864,6 +1875,8 @@ pub enum Operation {
     /// Invoke a qualified user method for effects, discarding any VM result.
     /// Unit validation checks its parameter contracts and exact arity.
     ModuleCallStatement {
+        /// Use a previously captured callable/context instead of looking it up here.
+        capture: Option<BuilderId>,
         /// Namespace selectors searched from the current receiver; empty uses direct/lexical owner lookup.
         path: Vec<String>,
         /// Search from the current module through lexical parents instead of direct lookup.
@@ -1939,6 +1952,30 @@ impl Operation {
             | Self::GlobalCallStatement { lexical, .. }
             | Self::ModuleCall { lexical, .. }
             | Self::ModuleCallStatement { lexical, .. } => *lexical,
+            _ => false,
+        }
+    }
+
+    /// Return the private call-target capture consumed by this invocation.
+    pub(crate) fn call_capture(&self) -> Option<BuilderId> {
+        match self {
+            Self::ModuleCall { capture, .. }
+            | Self::GlobalCall { capture, .. }
+            | Self::ModuleCallStatement { capture, .. }
+            | Self::GlobalCallStatement { capture, .. } => *capture,
+            _ => None,
+        }
+    }
+    /// Attach a capture to a user invocation; return false for other operations.
+    pub(crate) fn set_call_capture(&mut self, builder: BuilderId) -> bool {
+        match self {
+            Self::ModuleCall { capture, .. }
+            | Self::GlobalCall { capture, .. }
+            | Self::ModuleCallStatement { capture, .. }
+            | Self::GlobalCallStatement { capture, .. } => {
+                *capture = Some(builder);
+                true
+            }
             _ => false,
         }
     }
@@ -2043,6 +2080,7 @@ impl Operation {
             | Self::LocalAssign { .. }
             | Self::Return { .. }
             | Self::ReturnVoid
+            | Self::CallBegin { .. }
             | Self::SharedBegin { .. }
             | Self::SharedWrite { .. }
             | Self::SourceBegin { .. } => None,
@@ -2572,7 +2610,17 @@ impl Function {
         };
         let mut inferred_types = std::collections::BTreeMap::new();
         let builders = builders::validate(&structure, &operations)?;
-        if parameter_count + builders.len() > MAX_LOCALS {
+        let builder_slots = builders
+            .values()
+            .map(|(contract, _)| {
+                if matches!(contract, builders::Contract::Call) {
+                    2
+                } else {
+                    1
+                }
+            })
+            .sum::<usize>();
+        if parameter_count + builder_slots > MAX_LOCALS {
             return Err(IrError {
                 operation: None,
                 message: "parameters plus builders exceed 255-slot limit".into(),
@@ -2774,7 +2822,8 @@ impl Function {
                     }
                     (None, vec![])
                 }
-                Operation::SharedBegin { .. }
+                Operation::CallBegin { .. }
+                | Operation::SharedBegin { .. }
                 | Operation::DictionaryBegin { .. }
                 | Operation::ArrayBegin { .. } => (None, vec![]),
                 Operation::DictionaryFill {
@@ -4199,7 +4248,7 @@ impl Function {
                     if !locals.insert(local) {
                         return Err(fail("duplicate variable declaration"));
                     }
-                    if parameter_count + locals.len() + builders.len() > MAX_LOCALS {
+                    if parameter_count + locals.len() + builder_slots > MAX_LOCALS {
                         return Err(fail("parameters plus locals exceed 255-slot limit"));
                     }
                     variable_locals.insert(local);
@@ -4269,7 +4318,7 @@ impl Function {
                     if !locals.insert(local) {
                         return Err(fail("duplicate local declaration"));
                     }
-                    if parameter_count + locals.len() + builders.len() > MAX_LOCALS {
+                    if parameter_count + locals.len() + builder_slots > MAX_LOCALS {
                         return Err(fail("parameters plus locals exceed 255-slot limit"));
                     }
                     available_declarations.insert(local);
@@ -4291,7 +4340,7 @@ impl Function {
                     if locals.len() > MAX_LOCALS {
                         return Err(fail("function exceeds 255-local limit"));
                     }
-                    if parameter_count + locals.len() + builders.len() > MAX_LOCALS {
+                    if parameter_count + locals.len() + builder_slots > MAX_LOCALS {
                         return Err(fail("parameters plus locals exceed 255-slot limit"));
                     }
                     (None, vec![value])
@@ -4641,6 +4690,7 @@ impl Function {
                     | Operation::TupleWrite { .. }
                     | Operation::TupleAppend { .. }
                     | Operation::SourceBegin { .. }
+                    | Operation::CallBegin { .. }
                     | Operation::SharedBegin { .. }
                     | Operation::SourceNew { .. }
                     | Operation::NativeCallStatement { .. }
@@ -4694,6 +4744,7 @@ impl Function {
                     Operation::LocalVariable { value: None, .. }
                     | Operation::LocalDeclare { .. }
                     | Operation::SourceBegin { .. }
+                    | Operation::CallBegin { .. }
                     | Operation::SharedBegin { .. }
                     | Operation::DictionaryBegin { .. }
                     | Operation::RecordBegin { .. }
@@ -5101,6 +5152,7 @@ impl Function {
                     module.as_deref().unwrap_or("$"),
                     crate::type_text::result_tag(result_type)
                 ),
+                Operation::CallBegin { builder } => format!(".begin-call &{}", builder.0),
                 Operation::SharedBegin {
                     builder,
                     ref module,
@@ -5648,6 +5700,9 @@ impl Function {
                 }
                 Operation::Return { value } => format!(".return %{}", value.0),
             });
+            if let Some(builder) = operation.operation.call_capture() {
+                text.push_str(&format!(" capture=&{}", builder.0));
+            }
             if !operation.operation.receiver_path().is_empty() {
                 text.push_str(&format!(
                     " via=self.{}",

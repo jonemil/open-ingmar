@@ -104,6 +104,7 @@ fn namespace_selection_effects_are_checked_before_field_completion() {
     let error = parse_unit_ir(&bad).unwrap_err();
     assert!(error.to_string().contains("shutdown"), "{error}");
     let source = "module M{module Child{function value(n as Toybox.Lang.Number){return n;}}function run(flag as Toybox.Lang.Boolean){return self.Child.value(flag?1:2);}}";
-    let error = compile_sources(&[source]).unwrap_err();
-    assert!(error.to_string().contains("call-target capture"), "{error}");
+    let unit = compile_sources(&[source]).unwrap();
+    assert!(unit.to_ir_text().contains(".begin-call"));
+    common::pipeline(unit);
 }

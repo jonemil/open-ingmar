@@ -595,7 +595,8 @@ impl State {
                     roots.insert(root);
                 }
             }
-            Operation::GlobalCallStatement { .. }
+            Operation::CallBegin { .. }
+            | Operation::GlobalCallStatement { .. }
             | Operation::ModuleCallStatement { .. }
             | Operation::SelfCallStatement { .. }
             | Operation::ObjectCallStatement { .. } => self.invalidate(),

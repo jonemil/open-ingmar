@@ -161,11 +161,12 @@ information is serialized. Editing text may require changing or omitting spans.
 ## Operation syntax
 
 `function-document` contains one or more `operation` records. Each consists of
-one directive body, an optional receiver lookup modifier, and an optional source
+one directive body, optional call capture/receiver lookup modifiers, and a source
 span:
 
 ```text
-operation = operation-body (lexical-lookup | receiver-path)? span? newline
+operation = operation-body call-capture? (lexical-lookup | receiver-path)? span? newline
+call-capture = "capture=" builder-id
 receiver-path = "via=self." module-name
 lexical-lookup = "lookup=lexical"
 operation-body = value-operation | storage-operation | unary-operation
@@ -184,6 +185,12 @@ and target; other directives reject the modifier.
 and before any span. It is mutually exclusive with `lexical-lookup`. Its path
 contains one to 64 simple namespace components; the call's module operand still
 names the canonical declaration. See [receiver lookup](README.md#lexical-module-lookup).
+
+`call-capture` is permitted only on `.call`, `.call-discard`, `.call-global`, and
+`.call-global-discard`. It follows operands and precedes lookup metadata and any
+span. `.begin-call` declares the private capture consumed by that invocation;
+[its lifetime contract](README.md#lexical-module-lookup) also applies across CFG
+joins. The invocation retains the target identity, lookup mode, and signature.
 
 In each result-producing directive the first `value-id` defines its result;
 other value IDs consume earlier values under the CFG rules. Repetition is
@@ -251,7 +258,8 @@ source literal grammar cannot produce. Source numeric syntax is independent. See
 ### Calls and objects
 
 ```text
-call-operation = ".call" value-id module-name identifier
+call-operation = ".begin-call" builder-id
+               | ".call" value-id module-name identifier
                  call-result-metadata? value-id*
                | ".call-discard" module-name identifier value-id*
                | ".call-global" value-id identifier call-result-metadata? value-id*

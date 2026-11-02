@@ -27,7 +27,7 @@ owning files for the definition to read or change.
 | Lexical assertions | [casts.rs] | [Assertions] |
 | Operators | [operators.rs] | [Expressions] |
 | IR text and shared type tags | [ir_text.rs], [type_text.rs] | [IR grammar] |
-| Private construction | [builders.rs] | [IR containers] |
+| Private construction and call captures | [builders.rs] | [IR containers] |
 | SDK declarations and member profiles | [api.rs], [native.rs] | [SDK contracts] |
 | Pinned VM API identities | [native_bindings.rs] | [SDK contracts] |
 | Literal and Symbol operand binding | [bindings.rs] | [Assembly] |

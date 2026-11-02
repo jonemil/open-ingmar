@@ -411,7 +411,21 @@ paths hidden by nearer fields, methods, shared bindings, or native base members,
 and paths resolving to a different declaration. Initialization effects include
 each searched enclosing module and traversed namespace, including shutdown and
 required-field readiness checks. Empty paths retain the ordinary direct/lexical
-mode; they do not introduce a captured call target.
+mode.
+
+`CallBegin` / `.begin-call &id` selects the callable and VM context for the one
+user global/module invocation carrying `capture=&id`. The invocation retains
+canonical target, result, argument, and lookup metadata; capture does not weaken
+signature or owner checks. Setup uses that metadata at the begin operation;
+lookup initialization/shutdown effects occur there, while callee-body effects
+occur at invocation. Setup invalidates mutable field/record knowledge like a
+call; saved local values retain their contracts. Captures are private builder
+identities, not source values or first-class Methods. Each declaration has exactly
+one consuming operation,
+which requires an active capture on every incoming path. Restart, cross-kind
+reuse, missing completion, and return with an active capture are errors. Nested
+captures and argument branches are allowed. Each capture reserves two frame
+slots within the shared 255-slot budget.
 
 ### Unit IR text
 
