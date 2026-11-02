@@ -703,3 +703,25 @@ with `Undefined symbol ':Own'`; a file-scoped alias for the same module compiled
 The tracked specimen uses file-scoped bindings for that field, and owner-local
 bindings in methods. Our frontend preserves the declaration environment in both
 positions rather than reproducing that SDK resolution failure.
+
+## Owner-relative self and me
+
+Experimentally observed, 2026-11-01: SDK 9.2.0, `fr265`, `-O 0`, minimum API
+3.0.0. The [owner-receiver specimen](../../examples/compiler-owner-receivers/README.md)
+checks global/module reads and writes, enclosing/global calls, instance identity,
+reflective Method binding, and nested namespace calls. SDK and generated PRGs
+match the [expected console](../../examples/compiler-owner-receivers/expected.txt).
+Reproduce with the documented scaffold and shared console-specimen checker;
+both PRGs also pass full supported-section export/reconstruction.
+
+In the authored SDK output, self/me fields use `getselfv`, bare instance values
+use `getself`, and enclosing/global calls retain receiver-relative selection.
+`me.Target.Deep.value(Trace.mark(105))` selects Target with `getselfv`, then Deep
+and value with `getsv`, before evaluating the argument. The specimen's markers
+104, 101, 102, 103, 105 establish parent search and namespace activation order.
+
+A compile-only variant replaces that argument with
+`Trace.mark(105) > 0 ? Trace.mark(107) : 108`. SDK CODE still selects the callable
+before evaluating the conditional. Our former argument staging put the branch
+first; receiver-path calls now reject staged arguments pending explicit target
+capture. This variant's instruction order was inspected, not simulator-tested.

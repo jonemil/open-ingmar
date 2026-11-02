@@ -1835,6 +1835,8 @@ pub enum Operation {
         arguments: Vec<ValueId>,
     },
     ModuleCall {
+        /// Namespace selectors searched from the current receiver; empty uses direct/lexical owner lookup.
+        path: Vec<String>,
         /// Search from the current module through lexical parents instead of direct lookup.
         lexical: bool,
         result: ValueId,
@@ -1862,6 +1864,8 @@ pub enum Operation {
     /// Invoke a qualified user method for effects, discarding any VM result.
     /// Unit validation checks its parameter contracts and exact arity.
     ModuleCallStatement {
+        /// Namespace selectors searched from the current receiver; empty uses direct/lexical owner lookup.
+        path: Vec<String>,
         /// Search from the current module through lexical parents instead of direct lookup.
         lexical: bool,
         module: String,
@@ -1936,6 +1940,14 @@ impl Operation {
             | Self::ModuleCall { lexical, .. }
             | Self::ModuleCallStatement { lexical, .. } => *lexical,
             _ => false,
+        }
+    }
+
+    /// Return owner-relative namespace selectors, before the final method selector.
+    pub(crate) fn receiver_path(&self) -> &[String] {
+        match self {
+            Self::ModuleCall { path, .. } | Self::ModuleCallStatement { path, .. } => path,
+            _ => &[],
         }
     }
 
@@ -4132,6 +4144,15 @@ impl Function {
                     ref arguments,
                     ..
                 } => {
+                    let path = located.operation.receiver_path();
+                    if path.len() > 64
+                        || path
+                            .iter()
+                            .any(|part| validate_call_names(None, part).is_err())
+                        || (!path.is_empty() && located.operation.lexical_lookup())
+                    {
+                        return Err(fail("invalid or conflicting receiver namespace path"));
+                    }
                     validate_call_names(Some(module), member).map_err(fail)?;
                     validate_call_arguments(arguments, &types).map_err(fail)?;
                     let result = if let Operation::ModuleCall {
@@ -5627,6 +5648,12 @@ impl Function {
                 }
                 Operation::Return { value } => format!(".return %{}", value.0),
             });
+            if !operation.operation.receiver_path().is_empty() {
+                text.push_str(&format!(
+                    " via=self.{}",
+                    operation.operation.receiver_path().join(".")
+                ));
+            }
             if operation.operation.lexical_lookup() {
                 text.push_str(" lookup=lexical");
             }

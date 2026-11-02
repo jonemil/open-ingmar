@@ -136,7 +136,45 @@ fn activation_callees<'a>(
             }
         }
     }
+    if let Some(module) = module {
+        for module in receiver_modules(owner, module, operation.receiver_path()) {
+            calls.extend(
+                bodies
+                    .iter()
+                    .filter(|(owner, f)| {
+                        *owner == Owner::Module(&module)
+                            && f.name().starts_with("__ciq_initialize_shared_")
+                    })
+                    .map(|(owner, f)| (*owner, f.name())),
+            );
+        }
+    }
     calls
+}
+
+/// List initializers reached while searching and traversing a relative namespace receiver.
+fn receiver_modules(owner: Owner<'_>, module: &str, path: &[String]) -> Vec<String> {
+    if path.is_empty() {
+        return Vec::new();
+    }
+    let parts = module.split('.').collect::<Vec<_>>();
+    let base = parts.len().saturating_sub(path.len());
+    let parent = parts[..base].join(".");
+    let mut result = Vec::new();
+    if let Owner::Module(current) | Owner::Class(current) = owner {
+        for scope in crate::names::scopes(current) {
+            if scope != current {
+                result.push(scope.into());
+            }
+            if scope == parent {
+                break;
+            }
+        }
+    }
+    for end in base + 1..=parts.len() {
+        result.push(parts[..end].join("."));
+    }
+    result
 }
 
 fn requests_exit(operation: &Operation) -> bool {
@@ -1515,6 +1553,71 @@ impl CompilationUnit {
                 }
             }
             for (at, located) in function.operations().iter().enumerate() {
+                let path = located.operation.receiver_path();
+                if path.is_empty() {
+                    continue;
+                }
+                let claimed = match &located.operation {
+                    Operation::ModuleCall { module, .. }
+                    | Operation::ModuleCallStatement { module, .. } => module,
+                    _ => unreachable!(),
+                };
+                let current = match owner {
+                    Owner::Module(current) | Owner::Class(current) => Some(current),
+                    Owner::Global => None,
+                };
+                let mut resolved = None;
+                for scope in current
+                    .into_iter()
+                    .flat_map(crate::names::scopes)
+                    .map(Some)
+                    .chain(std::iter::once(None))
+                {
+                    let root = scope
+                        .map_or_else(|| path[0].clone(), |scope| format!("{scope}.{}", path[0]));
+                    let shadow =
+                        self.shared
+                            .iter()
+                            .any(|b| b.module.as_deref() == scope && b.name == path[0])
+                            || self.declarations.iter().any(|d| {
+                                d.module.as_deref() == scope && d.function.name() == path[0]
+                            })
+                            || self.classes.iter().any(|c| {
+                                Some(c.name.as_str()) == scope
+                                    && (c.fields.iter().any(|f| f.name == path[0])
+                                        || c.methods.iter().any(|f| f.name() == path[0])
+                                        || c.base.api_name().rsplit('.').next()
+                                            == Some(path[0].as_str())
+                                        || crate::api::core()
+                                            .method(c.base.api_name(), &path[0])
+                                            .is_some())
+                            });
+                    if shadow {
+                        break;
+                    }
+                    if self.modules.contains(&root) {
+                        resolved = Some(root);
+                        break;
+                    }
+                }
+                if let Some(mut module) = resolved {
+                    let mut valid = true;
+                    for part in path.iter().skip(1) {
+                        module.push('.');
+                        module.push_str(part);
+                        valid &= self.modules.contains(&module);
+                    }
+                    if valid && module == *claimed {
+                        continue;
+                    }
+                }
+                return Err(fail(
+                    Some(index),
+                    Some(at),
+                    "receiver namespace path does not resolve to the claimed module".into(),
+                ));
+            }
+            for (at, located) in function.operations().iter().enumerate() {
                 let Some(target) = lexical_target(&located.operation, function) else {
                     continue;
                 };
@@ -1551,7 +1654,11 @@ impl CompilationUnit {
                         if self.classes.iter().any(|class| {
                             class.name == scope
                                 && (class.fields.iter().any(|field| field.name == member)
-                                    || class.methods.iter().any(|f| f.name() == member))
+                                    || class.methods.iter().any(|f| f.name() == member)
+                                    || class.base.api_name().rsplit('.').next() == Some(member)
+                                    || crate::api::core()
+                                        .method(class.base.api_name(), member)
+                                        .is_some())
                         }) || self.shared.iter().any(|binding| {
                             binding.module.as_deref() == Some(scope) && binding.name == member
                         }) || self.declarations.iter().any(|decl| {

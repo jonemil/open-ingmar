@@ -168,6 +168,31 @@ pub(crate) fn parse_function_ir_context(
         offset += line.len();
     }
     let fail = |offset, message: &str| Diagnostic::at(source, offset, message);
+    let mut path_rows = std::collections::BTreeMap::new();
+    for (at, fields) in &mut rows {
+        if !matches!(fields[0].as_str(), ".call" | ".call-discard") {
+            continue;
+        }
+        if let Some(index) = fields.iter().position(|field| field.starts_with("via=")) {
+            if index + 1 != fields.len()
+                && !(index + 2 == fields.len()
+                    && fields
+                        .last()
+                        .is_some_and(|field| field.starts_with("span=")))
+            {
+                return Err(fail(
+                    *at,
+                    "receiver path must precede the optional final span",
+                ));
+            }
+            let path = fields[index]
+                .strip_prefix("via=self.")
+                .filter(|path| crate::names::module_path(path))
+                .ok_or_else(|| fail(*at, "invalid receiver namespace path"))?;
+            path_rows.insert(*at, path.split('.').map(str::to_owned).collect::<Vec<_>>());
+            fields.remove(index);
+        }
+    }
     let mut lexical_rows = std::collections::BTreeSet::new();
     for (at, fields) in &mut rows {
         if !matches!(
@@ -1171,6 +1196,7 @@ pub(crate) fn parse_function_ir_context(
                 },
                 Directive::ReturnVoid => Operation::ReturnVoid,
                 Directive::CallDiscard => Operation::ModuleCallStatement {
+                    path: Vec::new(),
                     lexical: false,
                     module: fields[1].clone(),
                     member: fields[2].clone(),
@@ -1390,6 +1416,7 @@ pub(crate) fn parse_function_ir_context(
                 Directive::Call => {
                     let (result_type, arguments_at) = call_contract(fields, 4, *at, source)?;
                     Operation::ModuleCall {
+                        path: Vec::new(),
                         lexical: false,
                         result: parse_value(&fields[1])?,
                         result_type,
@@ -1452,6 +1479,13 @@ pub(crate) fn parse_function_ir_context(
                 | Operation::ModuleCall { lexical, .. }
                 | Operation::ModuleCallStatement { lexical, .. } => *lexical = true,
                 _ => return Err(fail(*at, "operation does not support lexical lookup")),
+            }
+        }
+        if let Some(path) = path_rows.remove(at) {
+            match &mut operation {
+                Operation::ModuleCall { path: target, .. }
+                | Operation::ModuleCallStatement { path: target, .. } => *target = path,
+                _ => return Err(fail(*at, "receiver path requires a module call")),
             }
         }
         operations.push(LocatedOperation { operation, span });

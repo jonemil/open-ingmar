@@ -263,6 +263,33 @@ pub(crate) enum CasePattern {
     Default,
 }
 
+/// Keep resolved lookup metadata off recursive expression frames.
+#[derive(Clone)]
+pub(crate) struct OwnerCallTarget {
+    pub module: String,
+    pub member: String,
+    pub lexical: bool,
+    pub path: Vec<String>,
+}
+
+pub(crate) fn owner_call(
+    module: String,
+    member: String,
+    arguments: Vec<Expression>,
+    lexical: bool,
+    path: Vec<String>,
+) -> ExpressionKind {
+    ExpressionKind::OwnerCall {
+        target: Box::new(OwnerCallTarget {
+            module,
+            member,
+            lexical,
+            path,
+        }),
+        arguments,
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct Expression {
     pub kind: ExpressionKind,
@@ -364,9 +391,7 @@ pub(crate) enum ExpressionKind {
     },
     // Fixed owner identity; lexical values cannot shadow this qualifier.
     OwnerCall {
-        lexical: bool,
-        module: String,
-        member: String,
+        target: Box<OwnerCallTarget>,
         arguments: Vec<Expression>,
     },
     ModuleCall {
@@ -2836,12 +2861,7 @@ impl<'a> Parser<'a> {
         let (arguments, end) = self.call_arguments(start, depth)?;
         self.node(
             if let Some(module) = module {
-                ExpressionKind::OwnerCall {
-                    lexical: false,
-                    module,
-                    member,
-                    arguments,
-                }
+                owner_call(module, member, arguments, false, Vec::new())
             } else {
                 ExpressionKind::GlobalCall {
                     lexical: false,
@@ -2893,8 +2913,8 @@ impl<'a> Parser<'a> {
             Kind::Punctuation('{') => self.dictionary_literal(token.span.start, depth),
             Kind::Word("true") => self.node(ExpressionKind::Boolean(true), token.span),
             Kind::Word("false") => self.node(ExpressionKind::Boolean(false), token.span),
-            Kind::Word(name) if name == "self" || !reserved_word(name) => {
-                self.named_atom(name, token.span, depth)
+            Kind::Word(name) if matches!(name, "self" | "me") || !reserved_word(name) => {
+                self.named_atom(if name == "me" { "self" } else { name }, token.span, depth)
             }
             _ => Err(self.error(
                 token.span.start,

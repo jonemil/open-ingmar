@@ -81,7 +81,7 @@ fn class_ownership_receiver_and_text_pipeline_preserve_complete_prg() {
 }
 
 #[test]
-fn self_calls_resolve_only_within_the_enclosing_class_and_check_signatures() {
+fn self_calls_respect_owner_members_and_check_signatures() {
     for source in [
         "class C extends Application.AppBase { function start() as Void { self.missing(); } }",
         "class C extends Application.AppBase { function start() as Void { self.f(); } function f(x as Toybox.Lang.Number) as Void {} }",
@@ -89,7 +89,7 @@ fn self_calls_resolve_only_within_the_enclosing_class_and_check_signatures() {
         "class C extends Application.AppBase { function start() as Toybox.Lang.Number { return M.f(); } function f() as Toybox.Lang.Number { return 1; } }",
         "class C extends Application.AppBase { function start() as Void { C.f(); } function f() as Void {} }",
         "module M { function f() as Void {} } class C extends Application.AppBase { function start() as Void { self.f(); } }",
-        "function f() as Toybox.Lang.Number { return 1; } class C extends Application.AppBase { function start() as Toybox.Lang.Number { return self.f(); } }",
+        "function f() as Toybox.Lang.Number { return 1; } class C extends Application.AppBase { var f=1; function start() as Toybox.Lang.Number { return self.f(); } }",
         "class C extends Application.AppBase { function f() as Void { D.f(); } } class D extends Application.AppBase { function f() as Void {} }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");

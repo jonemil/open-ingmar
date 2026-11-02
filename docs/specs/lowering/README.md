@@ -197,6 +197,13 @@ current module receiver, preserving parent-search initialization. Lexical shared
 stores capture `getself` before their RHS and complete with `putv`; direct stores
 retain target activation before the RHS.
 
+Receiver-path module calls emit `getselfv` for the first namespace component,
+then `getsv` for each child and the final callable member. Selectors use ordinary
+member Symbol IDs, not module statics IDs. This selection precedes ordinary
+argument evaluation and preserves parent-search/child initialization. It uses
+existing instructions and DATA records; separately staged argument effects need
+explicit call-target capture before they can use this path.
+
 Assembly aliases cannot contain dots. Root module names retain their spelling;
 nested paths encode each component as `<byte-length>_<name>`, separated by
 underscores. The leading digit distinguishes nested keys from root identifiers.

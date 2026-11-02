@@ -161,11 +161,12 @@ information is serialized. Editing text may require changing or omitting spans.
 ## Operation syntax
 
 `function-document` contains one or more `operation` records. Each consists of
-one directive body, an optional lexical lookup modifier, and an optional source
+one directive body, an optional receiver lookup modifier, and an optional source
 span:
 
 ```text
-operation = operation-body lexical-lookup? span? newline
+operation = operation-body (lexical-lookup | receiver-path)? span? newline
+receiver-path = "via=self." module-name
 lexical-lookup = "lookup=lexical"
 operation-body = value-operation | storage-operation | unary-operation
                | binary-operation | comparison-operation | predicate-operation
@@ -178,6 +179,11 @@ operation-body = value-operation | storage-operation | unary-operation
 `.call-global-discard`. It must follow all operands and precede the optional span.
 The [lexical lookup contract](README.md#lexical-module-lookup) constrains its owner
 and target; other directives reject the modifier.
+
+`receiver-path` is permitted only on `.call` and `.call-discard`, after operands
+and before any span. It is mutually exclusive with `lexical-lookup`. Its path
+contains one to 64 simple namespace components; the call's module operand still
+names the canonical declaration. See [receiver lookup](README.md#lexical-module-lookup).
 
 In each result-producing directive the first `value-id` defines its result;
 other value IDs consume earlier values under the CFG rules. Repetition is

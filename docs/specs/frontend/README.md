@@ -1144,6 +1144,22 @@ call does not select a global overload. A same-named instance field blocks
 fallback and is diagnosed as an unsupported callable value. Calls through
 lexical callable values and unresolved names remain unsupported.
 
+`self` and `me` denote the same receiver. Explicit member qualification bypasses
+local/parameter names. Instance fields, declared methods, and supported native
+base members take precedence; otherwise lookup searches enclosing modules and
+then globals. In module/global bodies these prefixes select owner members under
+the same declaration and type checks. Shared reads, writes, and literal constants
+retain their existing storage/constant contracts.
+
+Namespace calls such as `me.Child.Deep.value(argument)` preserve receiver-based
+selection rather than replacing it with direct access to the resolved module.
+Parent search and child traversal can activate module initializers before the
+argument is evaluated. Arguments requiring separate IR staging (conditional or
+short-circuit branches and private construction) are currently rejected on these
+paths until call-target capture preserves that order. Bare `self`/`me` values
+outside instances remain unsupported; this qualification support does not make
+modules or classes first-class values.
+
 `$.member(arguments)` selects the global function explicitly, bypassing owner
 lookup and local/parameter names. `$.Module.member(arguments)` selects a function
 in a user module with the same protection from qualifier shadowing; paths such
@@ -1162,7 +1178,8 @@ construction, and effect order with qualified calls. They become ordinary
 global/module/self call IR; Void results are statement-only and non-Void statement
 results are discarded. See [lookup evidence](../../investigations/compiler-unit.md#owner-relative-calls).
 
-IR contains `ModuleCall { result, result_type, module, member, arguments }`.
+IR module calls retain the resolved declaration, receiver lookup mode, arguments,
+and result contract.
 [Call text](../ir/README.md#module-calls-and-operation-order) preserves the
 result contract. Calls may have effects. For any function containing a call, IR
 operations must appear in the backend's left-to-right expression evaluation
@@ -1445,7 +1462,7 @@ names: `initialize`, `println`, `View`, `Object`, `onStart`, `getInitialView`.
 These restrictions belong to this constrained profile, not the general Monkey C
 language.
 
-`self` is reserved and cannot be rebound. In an instance body it may be a call
+`self` and `me` are reserved and cannot be rebound. In an instance body it may be a call
 or declared-field receiver, or produce the current instance value. For the
 supported source-reference bases (Lang.Object, Application.AppBase, WatchUi.View,
 and WatchUi.BehaviorDelegate), that value retains its enclosing class identity
@@ -1455,16 +1472,17 @@ requirements, including recursive interfaces. Saved metadata cannot replace that
 owner with another class, even when their shapes match. Initialization checks
 still forbid exposing `self` before required fields are assigned. Receiver
 identity is independent of construction: an AppBase-owned body retains its
-application class, but `new AppClass()` remains rejected. Bare member calls
-and class-name calls remain unsupported. Calls on constructed source objects
-follow the profile below. Module calls from methods retain their existing rules.
+application class, but `new AppClass()` remains rejected. Calls through class-name
+values remain unsupported. Calls on constructed source objects follow the profile
+below. Module calls from methods retain their existing rules.
 
-A self expression call requires a declared value-returning method in the same
-class. A self statement call discards any supported result, including Void.
+For declared instance methods, a self expression call requires a supported
+non-Void result. A self statement call discards any supported result, including
+Void.
 Arguments follow scalar/nullable assignability and result contracts must equal
 the callee's contract; counts must match exactly. Forward and recursive
-references are checked after collecting signatures. Self lookup never falls back
-to a global/module member. Object-rooted classes may use the supported inherited
+references are checked after collecting signatures. Owner-relative lookup follows the
+[member precedence rules](#user-calls-and-owner-lookup). Object-rooted classes may use the supported inherited
 Object members described below; source declarations keep priority. Recursion is
 accepted but termination is not proven.
 

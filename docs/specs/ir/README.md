@@ -402,6 +402,17 @@ Source namespace imports are resolved before semantic IR. Function/shared/class
 owners and type identities name canonical declarations, so aliases do not add
 IR operations, unit records, or a second symbol-binding environment.
 
+Module calls can instead carry a nonempty receiver `path`, serialized as
+`via=self.Child.Deep`. Lookup starts at the current receiver, selects the first
+namespace through owner search, then traverses each child before selecting the
+method. The canonical module operand continues to determine the signature.
+Path lookup and `lookup=lexical` cannot be combined. Unit validation rejects
+paths hidden by nearer fields, methods, shared bindings, or native base members,
+and paths resolving to a different declaration. Initialization effects include
+each searched enclosing module and traversed namespace, including shutdown and
+required-field readiness checks. Empty paths retain the ordinary direct/lexical
+mode; they do not introduce a captured call target.
+
 ### Unit IR text
 
 Source-class identities are canonical dotted paths throughout signatures,

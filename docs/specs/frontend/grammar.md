@@ -152,7 +152,7 @@ case-label = "case" expression ":" | "case" "instanceof" class-target ":"
            | "default" ":"
 break-statement = "break" ";"
 continue-statement = "continue" ";"
-assign-target = identifier | "self" "." identifier | primary "[" expression "]"
+assign-target = identifier | owner-receiver "." identifier | primary "[" expression "]"
               | primary "." identifier
               | "(" assign-target ")"
 update-target = assign-target
@@ -207,12 +207,13 @@ postfix = member-call | member-access | index-access
 member-call = "." identifier "(" argument-list? ")"
 member-access = "." identifier
 index-access = "[" expression "]"
-atom = literal | identifier | "self" | self-field
+atom = literal | identifier | owner-receiver | self-field
      | named-call | native-constant
      | "(" expression ")" | array-literal | dictionary-literal | construction
-self-field = "self" "." identifier
+owner-receiver = "self" | "me"
+self-field = owner-receiver "." identifier
 named-call = call-name "(" argument-list? ")"
-call-name = path | "self" "." identifier | root-call-name
+call-name = path | owner-receiver "." path | root-call-name
 root-call-name = "$" "." identifier ("." identifier)*
 call-expression = named-call | primary member-call | "(" call-expression ")"
 native-constant = path
@@ -443,7 +444,7 @@ new null or private protected public return self static switch throw true try
 typedef using var while
 ```
 
-`self` is accepted as a receiver expression. Source keyword reservation does not
+`self` and `me` are accepted as receiver expressions. Source keyword reservation does not
 restrict saved IR or assembly names. Additional reserved owner/native names
 follow [name
 resolution](README.md#declarations-and-name-resolution) and

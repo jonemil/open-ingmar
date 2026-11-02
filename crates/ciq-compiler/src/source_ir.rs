@@ -80,12 +80,13 @@ fn resolve_implicit_call(
     };
     for scope in scopes.iter().copied().filter(|scope| !scope.is_empty()) {
         if calls.get(&(scope.into(), member.clone())).is_some() {
-            return Ok(parser::ExpressionKind::OwnerCall {
-                module: scope.into(),
+            return Ok(parser::owner_call(
+                scope.into(),
                 member,
                 arguments,
-                lexical: scope != owner,
-            });
+                scope != owner,
+                Vec::new(),
+            ));
         }
         if calls.shared_contains(Some(scope), &member)
             || calls.modules.contains(&format!("{scope}.{member}"))
@@ -851,21 +852,22 @@ fn emit_call(
     operations: &mut Vec<LocatedOperation>,
     calls: &CallContext,
 ) -> Result<Operation, Diagnostic> {
-    let lexical = matches!(
-        &kind,
-        parser::ExpressionKind::GlobalCall { lexical: true, .. }
-            | parser::ExpressionKind::OwnerCall { lexical: true, .. }
-    );
+    let path = match &kind {
+        parser::ExpressionKind::OwnerCall { target, .. } => target.path.clone(),
+        _ => Vec::new(),
+    };
+    let lexical = match &kind {
+        parser::ExpressionKind::GlobalCall { lexical, .. } => *lexical,
+        parser::ExpressionKind::OwnerCall { target, .. } => target.lexical,
+        _ => false,
+    };
     let (receiver, module, member, arguments) = match kind {
         parser::ExpressionKind::GlobalCall {
             member, arguments, ..
         } => (None, None, member, arguments),
-        parser::ExpressionKind::OwnerCall {
-            module,
-            member,
-            arguments,
-            ..
-        } => (None, Some(module), member, arguments),
+        parser::ExpressionKind::OwnerCall { target, arguments } => {
+            (None, Some(target.module), target.member, arguments)
+        }
         parser::ExpressionKind::ValueCall {
             receiver,
             member,
@@ -1111,6 +1113,7 @@ fn emit_call(
         }
     } else if let Some(module) = module {
         Operation::ModuleCall {
+            path,
             lexical,
             result,
             result_type: calls
@@ -2462,17 +2465,21 @@ impl Builder<'_> {
                     arguments: self.snapshot_arguments(arguments, locals, &expected)?,
                 }
             }
-            E::OwnerCall {
-                module,
-                member,
-                arguments,
-                lexical,
-            } => {
-                let expected = self.call_argument_context(&module, &member);
+            E::OwnerCall { target, arguments } => {
+                if !target.path.is_empty()
+                    && arguments
+                        .iter()
+                        .any(|argument| self.needs_staging(argument, locals))
+                {
+                    return Err(Diagnostic::at(
+                        self.source,
+                        span.start,
+                        "owner-relative namespace calls with staged arguments require call-target capture",
+                    ));
+                }
+                let expected = self.call_argument_context(&target.module, &target.member);
                 E::OwnerCall {
-                    lexical,
-                    module,
-                    member,
+                    target,
                     arguments: self.snapshot_arguments(arguments, locals, &expected)?,
                 }
             }
@@ -2675,6 +2682,7 @@ impl Builder<'_> {
                 return Ok(());
             }
             if let Operation::ModuleCall {
+                path,
                 module,
                 member,
                 arguments,
@@ -2683,6 +2691,7 @@ impl Builder<'_> {
             } = &last.operation
             {
                 last.operation = Operation::ModuleCallStatement {
+                    path: path.clone(),
                     lexical: *lexical,
                     module: module.clone(),
                     member: member.clone(),
@@ -4033,6 +4042,7 @@ impl Builder<'_> {
                             Operation::SelfCallStatement { member, arguments }
                         } else {
                             Operation::ModuleCallStatement {
+                                path: Vec::new(),
                                 lexical: false,
                                 module,
                                 member,
@@ -4262,38 +4272,76 @@ impl CallContext {
             } => (crate::constants::path(receiver)?, member, arguments),
             _ => return None,
         };
+        if path == "self" {
+            if self.current_class.is_some()
+                && (self.get(&("self".into(), member.clone())).is_some()
+                    || self.current_class.as_ref().is_some_and(|class| {
+                        crate::api::core()
+                            .method(class.base.api_name(), member)
+                            .is_some()
+                    })
+                    || member == "method"
+                    || self.field_names.contains(member))
+            {
+                return None;
+            }
+            let current = self.current_module.as_deref();
+            for scope in current.into_iter().flat_map(crate::names::scopes) {
+                if self.get(&(scope.into(), member.clone())).is_some() {
+                    return Some(parser::owner_call(
+                        scope.into(),
+                        member.clone(),
+                        arguments.clone(),
+                        self.current_class.is_some() || Some(scope) != current,
+                        Vec::new(),
+                    ));
+                }
+                if self.shared_contains(Some(scope), member)
+                    || self.modules.contains(&format!("{scope}.{member}"))
+                {
+                    return None;
+                }
+            }
+            if self.get(&(String::new(), member.clone())).is_some() {
+                return Some(E::GlobalCall {
+                    member: member.clone(),
+                    arguments: arguments.clone(),
+                    lexical: self.current_class.is_some() || current.is_some(),
+                });
+            }
+            return None;
+        }
         let fixed = match &expression.kind {
             E::ValueCall { receiver, .. } => crate::constants::namespace_alias(receiver).is_some(),
             _ => false,
         };
+        let relative = path.strip_prefix("self.");
+        if let Some(relative) = relative {
+            let root = relative.split('.').next().unwrap();
+            if self.current_class.as_ref().is_some_and(|class| {
+                self.field_names.contains(root)
+                    || class.base.api_name().rsplit('.').next() == Some(root)
+                    || crate::api::core()
+                        .method(class.base.api_name(), root)
+                        .is_some()
+            }) {
+                return None;
+            }
+        }
         let module = if fixed {
             self.modules.contains(&path).then_some(path.clone())?
         } else {
             self.module_name(&path, locals, parameters)?
         };
-        if path == "self" {
-            for scope in crate::names::scopes(&module) {
-                if self.get(&(scope.into(), member.clone())).is_some() {
-                    return Some(E::OwnerCall {
-                        module: scope.into(),
-                        member: member.clone(),
-                        arguments: arguments.clone(),
-                        lexical: scope != module,
-                    });
-                }
-                if self.shared_contains(Some(scope), member)
-                    || self.modules.contains(&format!("{scope}.{member}"))
-                {
-                    break;
-                }
-            }
-        }
-        Some(E::OwnerCall {
+        Some(parser::owner_call(
             module,
-            member: member.clone(),
-            arguments: arguments.clone(),
-            lexical: false,
-        })
+            member.clone(),
+            arguments.clone(),
+            false,
+            relative.map_or_else(Vec::new, |path| {
+                path.split('.').map(str::to_owned).collect()
+            }),
+        ))
     }
     fn shared_name(&self, name: &str) -> bool {
         self.current_module.as_deref().is_some_and(|owner| {
@@ -4455,18 +4503,21 @@ impl CallContext {
         }
         let (module, field, lexical) = if let Some((owner, field)) = path.rsplit_once('.') {
             if owner == "self" {
-                if self.current_class.is_some() {
+                if self.current_class.as_ref().is_some_and(|class| {
+                    self.field_names.contains(field)
+                        || class.base.api_name().rsplit('.').next() == Some(field)
+                        || crate::api::core()
+                            .method(class.base.api_name(), field)
+                            .is_some()
+                }) {
                     return None;
                 }
                 let module = self.lexical_shared(field)?;
-                let lexical = self.current_module.as_deref().is_some_and(|current| {
-                    (self
-                        .current_class
-                        .as_ref()
-                        .is_some_and(|c| c.name.contains('.'))
-                        || current.contains('.'))
-                        && (self.current_class.is_some() || module.as_deref() != Some(current))
-                });
+                let lexical = self.current_class.is_some()
+                    || self
+                        .current_module
+                        .as_deref()
+                        .is_some_and(|current| module.as_deref() != Some(current));
                 (module, field, lexical)
             } else {
                 (
@@ -4552,7 +4603,14 @@ impl CallContext {
             .map(|c| c.name.as_str())
             .or(self.current_module.as_deref());
         if let Some(member) = path.strip_prefix("self.") {
-            return self.constants.get(&format!("{}.{member}", owner?));
+            if self.current_class.is_some() && self.field_names.contains(member) {
+                return None;
+            }
+            return owner
+                .into_iter()
+                .flat_map(crate::names::scopes)
+                .find_map(|owner| self.constants.get(&format!("{owner}.{member}")))
+                .or_else(|| self.constants.get(member));
         }
         for scope in owner.into_iter().flat_map(crate::names::scopes) {
             if let Some(value) = self.constants.get(&format!("{scope}.{path}")) {

@@ -729,7 +729,9 @@ pub(crate) fn lower_owned<'a>(
                 ..
             } => {
                 statement_call(
-                    if located.operation.lexical_lookup() {
+                    if !located.operation.receiver_path().is_empty() {
+                        CallOwner::Path(located.operation.receiver_path())
+                    } else if located.operation.lexical_lookup() {
                         CallOwner::Lexical
                     } else {
                         CallOwner::Module(module)
@@ -1162,7 +1164,9 @@ fn expression(
                         tasks.extend(arguments.iter().rev().map(|value| Task::Value(*value)));
                         tasks.push(Task::Context);
                     }
-                    let owner = if definitions[&value].lexical_lookup() {
+                    let owner = if !definitions[&value].receiver_path().is_empty() {
+                        CallOwner::Path(definitions[&value].receiver_path())
+                    } else if definitions[&value].lexical_lookup() {
                         CallOwner::Lexical
                     } else {
                         match definitions[&value] {
@@ -1171,6 +1175,7 @@ fn expression(
                             _ => CallOwner::Instance,
                         }
                     };
+                    call_receiver(owner, items);
                     let Item::Instruction { opcode, operands } =
                         call_target(owner, member, definitions.owner)
                     else {
@@ -1385,7 +1390,9 @@ fn expression(
     }
 }
 
+#[derive(Clone, Copy)]
 enum CallOwner<'a> {
+    Path(&'a [String]),
     Lexical,
     Global,
     Module(&'a str),
@@ -1411,6 +1418,22 @@ fn call_target(owner: CallOwner<'_>, member: &str, current: Option<Option<&str>>
             vec![Operand::Symbol("__ciq_source_globals".into()), member],
         ),
         CallOwner::Lexical | CallOwner::Instance => instruction(Opcode::Getselfv, vec![member]),
+        CallOwner::Path(_) => instruction(Opcode::Getsv, vec![member]),
+    }
+}
+/// Resolve owner-relative namespace selectors before the final callable and its arguments.
+fn call_receiver(owner: CallOwner<'_>, items: &mut Vec<Item>) {
+    if let CallOwner::Path(path) = owner {
+        for (index, part) in path.iter().enumerate() {
+            items.push(instruction(
+                if index == 0 {
+                    Opcode::Getselfv
+                } else {
+                    Opcode::Getsv
+                },
+                vec![Operand::Symbol(format!("__ciq_member_{part}"))],
+            ));
+        }
     }
 }
 type Frame<'a> = (
@@ -1428,6 +1451,7 @@ fn statement_call(
     literal_aliases: &BTreeMap<LiteralKey, String>,
     items: &mut Vec<Item>,
 ) {
+    call_receiver(owner, items);
     items.push(call_target(owner, member, definitions.owner));
     if !arguments.is_empty() {
         items.push(instruction(Opcode::Frpush, vec![]));

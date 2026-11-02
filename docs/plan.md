@@ -36,12 +36,14 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Implement `me` and owner-relative `self` in module/global contexts after
-  checking their distinct SDK meanings; preserve instance receiver identity.
+- [ ] Add private call-target capture before argument staging for module and
+  owner-relative namespace calls. Preserve lazy initialization before conditional,
+  short-circuit, and private-construction argument effects; enable currently
+  rejected staged arguments on receiver paths.
 - [ ] Support root-object `$.name` field/value access and nested qualified paths
   beyond the existing root-qualified call forms.
-- [ ] Represent class and module values so they can be stored, passed, returned,
-  and used as Method receivers.
+- [ ] Represent class and module values, including bare `self`/`me` outside
+  instances, so they can be stored, passed, returned, and used as Method receivers.
 - [ ] Support static fields/methods, their initialization, and class-qualified
   access; distinguish static owners from instance receivers.
 - [ ] Enforce `public`, `private`, `protected`, and `hidden` on declarations and
