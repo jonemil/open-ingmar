@@ -10,7 +10,8 @@ SDK/version and scope; they are not current feature inventories. Use
 - [Runtime object typing](compiler-object-tests.md): class/member predicates,
   branch refinement, lexical casts, and nullable receiver failure.
 - [Object-rooted classes](compiler-root-objects.md): implicit/explicit bases,
-  return-only allocation hooks, native Object imports, and receiver state.
+  return-only allocation hooks, native Object imports, receiver state, and
+  separate static storage/receivers.
 - [Source comparators](compiler-comparators.md): exact structural signatures,
   runtime callback identity, stateful ordering, and rejected parameter variants.
 - [Source interfaces](compiler-structural-interfaces.md): lexical fields/methods,

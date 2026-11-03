@@ -71,6 +71,62 @@ The initial accepted probe and structured SDK export are in
 directory. This does not establish default initialization for other native bases
 or source superclass chains.
 
+## Static storage and receivers
+
+**Observed, 2026-11-03:** SDK/compiler/simulator 9.2.0, `fr265`, `-O 0`,
+minimum API 3.0.0. The independently authored
+[static-members specimen](../../examples/static-members/README.md) reproduces
+the successful cases; its README owns build/run commands and expected output.
+No compiler or SDK implementation was inspected.
+
+Static fields and methods occupy a separate DATA class record, referenced by
+the instance class's `statics` header word and registered under the root statics
+record. The instance record contains `own`, `bump`, and `initialize`; the static
+record contains `literal`, `value`, `add`, `owner`, and a separate hidden
+initializer. In the initial probe, these records were at DATA `0x4fc` and
+`0x53e` respectively. Those offsets identify that probe, not a layout rule.
+
+The static literal Number uses type `0x01`, value `7`; the expression-initialized
+static Number starts as type `0x00`, value `0` and is assigned in the static
+initializer. Static variable key low bytes are `0x40`; static method low bytes
+are `0x50`, compared with `0x10` for ordinary instance methods. Hidden initializer
+keys use `0x30`. These observations do not establish every flag bit's meaning.
+
+Reading the class value alone leaves the trace at zero. Reading its static
+literal then activates the expression initializer once, changing the trace to
+`2`. Two allocations append `3` independently, giving `233`; they do not rerun
+the static initializer. Static reads/writes and calls through instances share
+the same mutable slot. A nullable uninitialized static defaults to Null.
+
+The SDK emits class selection followed by `getsv` for direct static reads/calls,
+and class selection, Symbol, value, `putv` for direct writes. Within the static
+method, accesses use `getselfv` / `getself; spush; ...; putv`. Its `self` compares
+unequal to the class-definition value. Methods bound to that static `self`, or
+through `instance.method(:add)`, invoke successfully and update the shared slot.
+
+Isolated source variants delimit the contract:
+
+- Replacing `Counter.owner()` with `Counter` in
+  `new Lang.Method(Counter.owner(), :add)` compiles and constructs, but invocation
+  crashes with `Unexpected Type Error`. The failing CODE site is the outer
+  `invoke` call, not constructor allocation.
+- Printing `Counter.owner()` directly crashes with `Symbol Not Found` in native
+  API conversion. The successful specimen compares identity instead; this does
+  not establish inherited Object observer methods for static storage.
+- Replacing the nullable `absent` declaration with
+  `static var absent as Lang.Number;` is rejected as potentially uninitialized
+  and not accepting Null.
+- Replacing static `owner`'s body with `return own;` is rejected because the
+  instance member is absent on static `self`.
+
+**Interpretation:** class definitions, static storage, and source instances must
+remain distinct receiver contexts. A static declaration must not acquire
+instance-field proofs, and a class-definition Method binding must not be given
+a proven static callable signature merely because the selector exists.
+The [plan](../plan.md#1-declarations-namespaces-and-member-storage) owns the
+remaining source/IR/lowering work. This specimen does not establish inheritance,
+cross-class static cycles, or access-control behavior.
+
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md
 [check]: ../../scripts/README.md#console-specimen-check

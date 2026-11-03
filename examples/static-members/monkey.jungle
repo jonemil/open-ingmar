@@ -1,0 +1,3 @@
+project.manifest = ../minimal-console/manifest.xml
+base.sourcePath = source
+base.resourcePath = ../minimal-console/resources

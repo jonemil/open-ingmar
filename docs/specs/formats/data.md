@@ -186,6 +186,13 @@ version 2 stores the type separately. Flag-bit semantics and the app-flags
 bitmask remain uninterpreted. Repeated field IDs and fields sharing method
 targets are retained.
 
+The SDK 9.2.0 static-member specimen places static variables/methods in a
+separate record referenced by the instance record's `statics` header word.
+Observed key low bytes are `0x40` for static variables and `0x50` for static
+methods, with `0x10` on instance methods and `0x30` on hidden initializers.
+These are scoped observations, not a complete flag-bit interpretation; readers
+and writers retain all bits. See the [static receiver evidence](../../investigations/compiler-root-objects.md#static-storage-and-receivers).
+
 Type `0x06` identifies a method. An observed value with high byte `0x10`
 identifies ordinary CODE, with its lower 24 bits as the code offset. When the
 unique ordinary CODE section can be fully decoded, the listing checks whether

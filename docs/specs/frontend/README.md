@@ -1240,7 +1240,10 @@ Known declaration-qualified calls and field access retain their existing static
 resolution. Reading a namespace value through `self.Child` is not yet supported;
 receiver traversal must not be replaced with direct declaration lookup.
 Arbitrary member dispatch through namespace-valued variables and class/static
-member dispatch are not enabled by this representation. Namespace receivers can
+member dispatch are not enabled by this representation. SDK static storage is
+distinct from the class-definition value; see the
+[static receiver evidence](../../investigations/compiler-root-objects.md#static-storage-and-receivers).
+Namespace receivers can
 be bound through [Method construction](#method-values-and-invocation).
 Modules have no inherited Object.method implementation;
 these values must not acquire Object operations merely because their runtime

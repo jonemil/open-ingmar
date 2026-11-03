@@ -36,9 +36,14 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Support static fields/methods, their initialization, and class-qualified
-  access, including invocation of Methods bound to static targets;
-  distinguish static owners from instance receivers.
+- [ ] Represent static declarations in source/saved IR and application metadata:
+  separate static storage and method ownership, static `self`, once-only
+  first-member initialization, literal defaults, and required initialization of
+  non-null static fields. Use the [SDK specimen][static-members] as the baseline.
+- [ ] Implement class-qualified, lexical, and instance static reads/writes/calls
+  and Method bindings to static-storage or instance receivers. Preserve the
+  distinction from class-definition receivers; the SDK accepts binding a class
+  definition but its static-target invocation fails in the observed profile.
 - [ ] Enforce `public`, `private`, `protected`, and `hidden` on declarations and
   inherited/member access, including access across source files.
 
@@ -447,3 +452,4 @@ for evidence and reproduction; do not keep completed-step lists in this plan.
 [builds]: specs/build/README.md#planned-project-builds-and-targets
 [constraints]: specs/build/README.md#target-constraints-and-section-layout
 [boundary]: investigations/string-address-boundary.md
+[static-members]: ../examples/static-members/README.md
