@@ -104,13 +104,13 @@ fn saved_static_receivers_have_explicit_ownership_and_no_instance_proof() {
         assert_ne!(text, forged);
         assert!(parse_unit_ir(&forged).is_err(), "{forged}");
     }
-    let function = parse_function_ir("ciq-ir\n.function owner receiver=static result=module-value\n.static-self %0 C\n.return %0\n.end\n").unwrap();
+    let function = parse_function_ir("ciq-ir\n.function owner receiver=static result=static-receiver(C)\n.static-self %0 C\n.return %0\n.end\n").unwrap();
     assert!(function.is_static_method());
     assert!(!function.is_instance_method());
     let typed = ciq_compiler::Function::static_method_with_signature(
         "owner".into(),
         vec![],
-        ciq_compiler::ReturnType::ModuleValue,
+        ciq_compiler::ReturnType::StaticReceiver("C".into()),
         function.operations().to_vec(),
     )
     .unwrap();

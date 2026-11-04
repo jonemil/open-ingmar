@@ -2,8 +2,9 @@
 
 [app.mc](app.mc) checks static lookup before argument effects, callable captures
 across branching/constructed arguments, Void calls, aliases/root qualification,
-source-class results, and receiver identity. Explicit casts illustrate that a
-static receiver need not be an instance. Compare [expected.txt](expected.txt).
+source-class results, and receiver identity. Object/source-class return
+annotations through aliases and stored receivers illustrate that a static
+receiver need not be an instance. Compare [expected.txt](expected.txt).
 
 ```sh
 mkdir -p scratch/compiler-class-calls

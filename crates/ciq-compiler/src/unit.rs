@@ -1573,6 +1573,8 @@ impl CompilationUnit {
             }
             let mut references = Vec::new();
             for field in &class.fields {
+                self.check_static_origins(crate::tuples::exact_type(&field.result_type()))
+                    .map_err(|message| fail(Some(at), None, message))?;
                 crate::structural::resolve_result(&mut field.result_type(), &mut |target| {
                     references.push(target.clone());
                     Ok::<_, std::convert::Infallible>(())
@@ -1683,9 +1685,22 @@ impl CompilationUnit {
                         }),
                 )
             {
+                self.check_static_origins(ty.clone())
+                    .map_err(|message| fail(Some(index), None, message))?;
                 if let Some(mut result) = crate::unions::result(ty) {
                     crate::structural::resolve_result(&mut result, &mut collect).unwrap();
                 }
+            }
+            for ty in function
+                .parameter_types()
+                .iter()
+                .map(crate::ParameterType::exact_type)
+                .chain(std::iter::once(crate::tuples::exact_type(
+                    &function.return_type(),
+                )))
+            {
+                self.check_static_origins(ty)
+                    .map_err(|message| fail(Some(index), None, message))?;
             }
             for name in source_classes {
                 if !self
@@ -3212,6 +3227,45 @@ impl CompilationUnit {
                         "call result type does not match resolved callee contracts".into(),
                     ));
                 }
+            }
+        }
+        Ok(())
+    }
+
+    /// Require every opaque receiver origin in a stored contract to name a
+    /// declared class, including origins nested in containers and signatures.
+    fn check_static_origins(&self, ty: crate::api::Type) -> Result<(), String> {
+        use crate::api::Type;
+        let mut pending = vec![ty];
+        while let Some(ty) = pending.pop() {
+            match ty {
+                Type::StaticReceiver(class) => {
+                    if !self.classes.iter().any(|c| c.name == class) {
+                        return Err(format!(
+                            "static receiver origin {class} must name a declared class"
+                        ));
+                    }
+                }
+                Type::Recursive(body) | Type::Array(body) => pending.push(*body),
+                Type::Enum(identity) => pending.extend(identity.backing().cloned()),
+                Type::SourceValue(contract) => pending.extend(contract.native().iter().cloned()),
+                Type::Union(parts) | Type::Tuple(parts) => pending.extend(parts),
+                Type::Dictionary { key, value } => pending.extend([*key, *value]),
+                Type::Options(fields) => pending.extend(fields.into_values()),
+                Type::TupleValue(tuple) => {
+                    pending.extend(tuple.slots().iter().map(crate::tuples::exact_type))
+                }
+                Type::Callback(signature) => {
+                    pending.extend(
+                        signature
+                            .parameters
+                            .iter()
+                            .map(crate::ParameterType::exact_type),
+                    );
+                    pending.push(crate::tuples::exact_type(&signature.result));
+                }
+                Type::Structural(shape) => pending.extend(shape.api_types()),
+                _ => {}
             }
         }
         Ok(())

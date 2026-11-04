@@ -174,6 +174,9 @@ impl ApiContext {
             Type::Union(types) => types
                 .iter()
                 .try_for_each(|ty| self.check_type(catalogue, ty)),
+            Type::StaticReceiver(class) => crate::names::module_path(class)
+                .then_some(())
+                .ok_or_else(|| "invalid static receiver origin".into()),
             Type::ModuleValue | Type::ClassValue | Type::Any | Type::Null | Type::Void => Ok(()),
         }
     }
@@ -223,8 +226,10 @@ impl ApiContext {
 /// Null and Void are distinct from classes, and unions retain their alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
-    /// An opaque module/global namespace or static receiver view; no Object contract is implied.
+    /// An opaque module/global namespace; no Object contract is implied.
     ModuleValue,
+    /// Opaque static receiver origin; this is not a source-instance witness.
+    StaticReceiver(String),
     /// A runtime class definition, distinct from an instance of that class.
     ClassValue,
     /// A unit-declared nominal enum with explicit native backing types.
@@ -1495,7 +1500,12 @@ mod tests {
                 Type::Recursive(_) | Type::RecursionRef(_) => {
                     panic!("core API declarations do not define recursive aliases")
                 }
-                Type::ModuleValue | Type::ClassValue | Type::Any | Type::Null | Type::Void => {}
+                Type::ModuleValue
+                | Type::StaticReceiver(_)
+                | Type::ClassValue
+                | Type::Any
+                | Type::Null
+                | Type::Void => {}
             }
         }
         for class in api.classes.values() {

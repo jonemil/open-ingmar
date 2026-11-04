@@ -393,7 +393,8 @@ common-tag = namespace-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag
            | numeric-alias-tag | interface-tag | enum-tag | "dictionary"
            | dictionary-tag | "app-base" | "view" | "dc" | "behavior-delegate" | structural-tag
            | callback-tag | tuple-tag | record-tag
-namespace-tag = "module-value" | "class-value"
+namespace-tag = "module-value" | "class-value" | static-receiver-tag
+static-receiver-tag = "static-receiver(" class-path ")"
 record-tag = "options(" record-fields? ")"
 record-fields = record-field-tag (";" record-field-tag)*
 record-field-tag = identifier "=" call-result-tag
@@ -440,7 +441,7 @@ element-tag = "any" | "null" | "number" | "nullable-number" | other-scalar-tag
             | numeric-alias-tag | interface-tag | source-enum-tag | "view"
             | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag
             | union-tag | nested-element-tag | exact-element-tag
-            | recursive-tag | recursive-reference-tag
+            | recursive-tag | recursive-reference-tag | static-receiver-tag
 exact-element-tag = "exact(" (source-tag | nullable-source-tag | source-union-tag) ")"
 nested-element-tag = ["nullable-"] "nested(" nested-container-tag ")"
 nested-container-tag = array-tag | dictionary-tag | tuple-tag | record-tag

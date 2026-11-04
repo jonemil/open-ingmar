@@ -233,7 +233,8 @@ impl SourceUnion {
         crate::unions::normalize(types)
     }
     pub(crate) fn accepts_api(&self, actual: &Type) -> bool {
-        crate::native::accepts(&self.native_type(), actual)
+        matches!(actual, Type::StaticReceiver(class) if self.classes.iter().any(|c| c.name == *class))
+            || crate::native::accepts(&self.native_type(), actual)
     }
     pub(crate) fn accepts_with(
         &self,

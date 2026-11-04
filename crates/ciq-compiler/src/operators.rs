@@ -225,15 +225,20 @@ fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Typ
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 fn comparison_proven_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
     if matches!(kind, ComparisonOp::Equal | ComparisonOp::NotEqual)
-        && (matches!(left, Type::ModuleValue | Type::ClassValue)
-            || matches!(right, Type::ModuleValue | Type::ClassValue))
+        && (matches!(
+            left,
+            Type::ModuleValue | Type::StaticReceiver(_) | Type::ClassValue
+        ) || matches!(
+            right,
+            Type::ModuleValue | Type::StaticReceiver(_) | Type::ClassValue
+        ))
         && matches!(
             left,
-            Type::ModuleValue | Type::ClassValue | Type::Null | Type::Any
+            Type::ModuleValue | Type::StaticReceiver(_) | Type::ClassValue | Type::Null | Type::Any
         )
         && matches!(
             right,
-            Type::ModuleValue | Type::ClassValue | Type::Null | Type::Any
+            Type::ModuleValue | Type::StaticReceiver(_) | Type::ClassValue | Type::Null | Type::Any
         )
     {
         return Some(Type::named("Toybox.Lang.Boolean"));
@@ -311,6 +316,7 @@ fn string_operand(ty: &Type, boolean: bool) -> bool {
         }
         Type::Union(types) => types.iter().all(|ty| string_operand(ty, boolean)),
         Type::ModuleValue
+        | Type::StaticReceiver(_)
         | Type::ClassValue
         | Type::Void
         | Type::SourceValue(_)

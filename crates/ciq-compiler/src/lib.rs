@@ -183,6 +183,8 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// Opaque static invocation contexts of the named declaring class.
+    StaticReceiver(String),
     /// A nominal source enum retaining its resolved backing contract.
     Enum(Box<crate::EnumType>),
     /// A finite recursive contract, unfolded only for the current value operation.
@@ -273,6 +275,11 @@ impl ArrayElement {
         }
 
         crate::recursive::validate(&self.api_type())?;
+        if let Self::StaticReceiver(class) = self {
+            if !crate::names::module_path(class) {
+                return Err("invalid static receiver origin".into());
+            }
+        }
 
         if let Self::Source(contract) = self {
             SourceUnion::with_native(
@@ -319,6 +326,7 @@ impl ArrayElement {
     pub fn api_type(&self) -> api::Type {
         let base = api::Type::named(match self {
             Self::Enum(name) => return api::Type::Enum(name.clone()),
+            Self::StaticReceiver(class) => return api::Type::StaticReceiver(class.clone()),
             Self::Recursive(ty) => return ty.clone(),
             Self::Source(contract) => return api::Type::SourceValue(contract.clone()),
             Self::Nested { contract, nullable } => {
@@ -424,6 +432,9 @@ impl ArrayElement {
     }
 
     fn from_api_type(ty: &api::Type) -> Option<Self> {
+        if let api::Type::StaticReceiver(class) = ty {
+            return crate::names::module_path(class).then(|| Self::StaticReceiver(class.clone()));
+        }
         if let api::Type::Enum(name) = ty {
             return Some(Self::Enum(name.clone()));
         }
@@ -505,6 +516,9 @@ impl ArrayElement {
     }
 
     fn text(&self) -> std::borrow::Cow<'static, str> {
+        if let Self::StaticReceiver(class) = self {
+            return format!("static-receiver({class})").into();
+        }
         if let Self::Recursive(ty) = self {
             return std::borrow::Cow::Owned(crate::recursive::tag(ty));
         }
@@ -551,6 +565,7 @@ impl ArrayElement {
             Self::Enum(name) => return std::borrow::Cow::Owned(format!("enum({name})")),
             Self::Recursive(_) => unreachable!(),
             Self::Source(_)
+            | Self::StaticReceiver(_)
             | Self::Nested { .. }
             | Self::Structural { .. }
             | Self::Callback { .. }
@@ -693,8 +708,10 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
-    /// An opaque module/global namespace or static receiver view; no instance proof.
+    /// An opaque module/global namespace; no instance proof.
     ModuleValue,
+    /// An opaque static invocation receiver, retaining its declaring class.
+    StaticReceiver(String),
     /// A runtime class definition, distinct from source instances.
     ClassValue,
     /// A nominal source enum retaining its resolved backing contract.
@@ -786,8 +803,10 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
-    /// An opaque module/global namespace or static receiver view; no instance proof.
+    /// An opaque module/global namespace; no instance proof.
     ModuleValue,
+    /// An opaque static invocation receiver, retaining its declaring class.
+    StaticReceiver(String),
     /// A runtime class definition, distinct from source instances.
     ClassValue,
     /// A nominal source enum retaining its resolved backing contract.
@@ -892,6 +911,7 @@ impl ParameterType {
     pub fn api_type(&self) -> api::Type {
         match self {
             Self::ModuleValue => api::Type::ModuleValue,
+            Self::StaticReceiver(class) => api::Type::StaticReceiver(class.clone()),
             Self::ClassValue => api::Type::ClassValue,
             Self::Enum(name) => api::Type::Enum(name.clone()),
             Self::Recursive(ty) => ty.clone(),
@@ -957,6 +977,7 @@ impl ReturnType {
     pub fn api_type(&self) -> api::Type {
         match self {
             Self::ModuleValue => api::Type::ModuleValue,
+            Self::StaticReceiver(class) => api::Type::StaticReceiver(class.clone()),
             Self::ClassValue => api::Type::ClassValue,
             Self::Enum(name) => api::Type::Enum(name.clone()),
             Self::Recursive(ty) => ty.clone(),
@@ -1017,8 +1038,10 @@ impl ReturnType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ValueType {
-    /// An opaque module/global namespace or static receiver view; no instance proof.
+    /// An opaque module/global namespace; no instance proof.
     ModuleValue,
+    /// An opaque static invocation receiver, retaining its declaring class.
+    StaticReceiver(String),
     /// A runtime class definition, distinct from source instances.
     ClassValue,
     /// A nominal source enum retaining its resolved backing contract.
@@ -1134,6 +1157,7 @@ impl ValueType {
     fn api_type(&self) -> api::Type {
         match self {
             Self::ModuleValue => api::Type::ModuleValue,
+            Self::StaticReceiver(class) => api::Type::StaticReceiver(class.clone()),
             Self::ClassValue => api::Type::ClassValue,
             Self::Enum(name) => api::Type::Enum(name.clone()),
             Self::Recursive(ty) => ty.clone(),
@@ -1226,6 +1250,10 @@ impl ValueType {
     fn from_api_type(ty: &api::Type) -> Option<Self> {
         match ty {
             api::Type::ModuleValue => return Some(Self::ModuleValue),
+            api::Type::StaticReceiver(class) => {
+                return crate::names::module_path(class)
+                    .then(|| Self::StaticReceiver(class.clone()));
+            }
             api::Type::ClassValue => return Some(Self::ClassValue),
             _ => {}
         }
@@ -3351,7 +3379,7 @@ impl Function {
                         return Err(fail("static-self requires a static method"));
                     }
                     validate_call_names(Some(class), "class").map_err(fail)?;
-                    types.insert(result, ValueType::ModuleValue);
+                    types.insert(result, ValueType::StaticReceiver(class.clone()));
                     (Some(result), vec![])
                 }
                 Operation::ModuleSelf { result } => {
@@ -3549,11 +3577,15 @@ impl Function {
                     if !crate::unions::alternatives(&type_of(value).api_type())
                         .iter()
                         .all(|ty| {
-                            matches!(ty, api::Type::ModuleValue | api::Type::ClassValue)
-                                || native::accepts(
-                                    &api::Type::named("Toybox.Lang.Object").with_null(),
-                                    ty,
-                                )
+                            matches!(
+                                ty,
+                                api::Type::ModuleValue
+                                    | api::Type::StaticReceiver(_)
+                                    | api::Type::ClassValue
+                            ) || native::accepts(
+                                &api::Type::named("Toybox.Lang.Object").with_null(),
+                                ty,
+                            )
                         })
                     {
                         return Err(fail(
@@ -4730,6 +4762,7 @@ impl Function {
                     } else {
                         match type_of(value) {
                             ValueType::ModuleValue => ReturnType::ModuleValue,
+                            ValueType::StaticReceiver(class) => ReturnType::StaticReceiver(class),
                             ValueType::ClassValue => ReturnType::ClassValue,
                             ValueType::NumberFormat => ReturnType::NumberFormat,
                             ValueType::Endian => ReturnType::Endian,
@@ -6107,6 +6140,7 @@ fn validate_call_arguments(
                     | ValueType::Union(_)
                     | ValueType::Options(_)
                     | ValueType::ModuleValue
+                    | ValueType::StaticReceiver(_)
                     | ValueType::ClassValue
                     | ValueType::Any
                     | ValueType::Enum(_)
@@ -6164,6 +6198,10 @@ fn validate_call_arguments(
 fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
         ReturnType::ModuleValue => Ok(ValueType::ModuleValue),
+        ReturnType::StaticReceiver(class) => {
+            ValueType::from_api_type(&api::Type::StaticReceiver(class.clone()))
+                .ok_or("invalid static receiver origin")
+        }
         ReturnType::ClassValue => Ok(ValueType::ClassValue),
         ReturnType::Recursive(ty) => {
             if !matches!(ty, api::Type::Recursive(_)) {

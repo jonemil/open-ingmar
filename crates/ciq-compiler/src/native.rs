@@ -851,6 +851,18 @@ fn accepts_step(
         return crate::tuples::matches_with(expected, actual, &accepts);
     }
 
+    // Static receiver annotations assert a view of the actual hidden context.
+    // They do not give an unannotated receiver native/source member lookup.
+    if let api::Type::StaticReceiver(class) = actual {
+        if matches!(expected, api::Type::Named(name) if name == "Toybox.Lang.Object") {
+            return true;
+        }
+        if let api::Type::SourceValue(expected) = expected {
+            return expected.classes().iter().any(|c| c.name == *class)
+                || expected.native().iter().any(|ty| accepts(ty, actual));
+        }
+    }
+
     if let (api::Type::Dictionary { key, value }, api::Type::Options(fields)) = (expected, actual) {
         return accepts(key, &api::Type::named("Toybox.Lang.Symbol"))
             && fields.values().all(|ty| accepts(value, ty));

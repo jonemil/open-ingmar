@@ -79,6 +79,7 @@ pub(crate) fn parameter(ty: Type) -> Option<ParameterType> {
         return Some(p);
     }
     match ty {
+        Type::StaticReceiver(class) => Some(ParameterType::StaticReceiver(class)),
         Type::Enum(name) => Some(ParameterType::Enum(name)),
         Type::Options(fields) => crate::records::validate(&fields)
             .ok()
@@ -111,6 +112,7 @@ pub(crate) fn result(ty: Type) -> Option<ReturnType> {
         return Some(r);
     }
     match ty {
+        Type::StaticReceiver(class) => Some(ReturnType::StaticReceiver(class)),
         Type::Enum(name) => Some(ReturnType::Enum(name)),
         Type::Options(fields) => crate::records::validate(&fields)
             .ok()

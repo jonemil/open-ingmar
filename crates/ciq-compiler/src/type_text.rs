@@ -234,6 +234,11 @@ pub(super) const ARRAY_ELEMENTS: &[ArrayElement] = &[
 
 /// Parse an Array element tag; admissible contents are checked by its consumer.
 pub(super) fn element(tag: &str) -> Option<ArrayElement> {
+    if tag.starts_with("static-receiver(") {
+        if let ReturnType::StaticReceiver(class) = call_result(tag).ok()? {
+            return Some(ArrayElement::StaticReceiver(class));
+        }
+    }
     if tag.starts_with("rec(") || tag.starts_with("ref(") {
         if let ParameterType::Recursive(ty) = parameter(tag).ok()? {
             return Some(ArrayElement::Recursive(ty));
@@ -361,6 +366,14 @@ pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
         return crate::unions::result(crate::unions::normalize(types))
             .ok_or("unsupported union contract");
     }
+    if let Some(class) = tag
+        .strip_prefix("static-receiver(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        return crate::names::module_path(class)
+            .then(|| ReturnType::StaticReceiver(class.into()))
+            .ok_or("invalid static receiver origin");
+    }
     if tag.starts_with("nullable-source(") && tag.ends_with(')') {
         return SourceClass::parse(&tag[16..tag.len() - 1])
             .map(ReturnType::NullableSourceObject)
@@ -411,6 +424,7 @@ pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
         return Ok(parameter.clone());
     }
     match call_result(tag) {
+        Ok(ReturnType::StaticReceiver(class)) => Ok(ParameterType::StaticReceiver(class)),
         Ok(ReturnType::Enum(name)) => Ok(ParameterType::Enum(name)),
         Ok(ReturnType::Options(fields)) => Ok(ParameterType::Options(fields)),
         Ok(ReturnType::Tuple(tuple)) => Ok(ParameterType::Tuple(tuple)),
@@ -470,6 +484,7 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
         return Cow::Owned(crate::records::tag(fields));
     }
     match ty {
+        ReturnType::StaticReceiver(class) => Cow::Owned(format!("static-receiver({class})")),
         ReturnType::Structural(shape) => Cow::Owned(shape.tag()),
         ReturnType::Callback(signature) => Cow::Owned(crate::callbacks::tag(signature)),
         ReturnType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
@@ -503,6 +518,7 @@ pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
     match ty {
         ParameterType::Enum(name) => Cow::Owned(format!("enum({name})")),
         ParameterType::Tuple(tuple) => Cow::Owned(tuple.tag()),
+        ParameterType::StaticReceiver(class) => Cow::Owned(format!("static-receiver({class})")),
         ParameterType::Structural(shape) => Cow::Owned(shape.tag()),
         ParameterType::Callback(signature) => Cow::Owned(crate::callbacks::tag(signature)),
         ParameterType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
@@ -568,6 +584,9 @@ pub(super) fn join_tag(ty: &Type) -> Option<Cow<'static, str>> {
         return ArrayElement::from_api_type(element)
             .map(|e| Cow::Owned(format!("array-{}", e.text())));
     }
+    if let Type::StaticReceiver(class) = ty {
+        return Some(Cow::Owned(format!("static-receiver({class})")));
+    }
     NAMED.iter().find_map(|(tag, _, r)| {
         (r.api_type() == *ty && join(tag).is_some()).then_some(Cow::Borrowed(*tag))
     })
@@ -585,6 +604,9 @@ pub(super) fn local_contract(tag: &str) -> Option<crate::JoinType> {
 pub(super) fn local_contract_tag(ty: &crate::JoinType) -> Option<Cow<'static, str>> {
     crate::joins::contract_tag(ty).or_else(|| {
         let api = ty.api_type();
+        if let Type::StaticReceiver(class) = api {
+            return Some(Cow::Owned(format!("static-receiver({class})")));
+        }
         NAMED
             .iter()
             .find_map(|(tag, _, result)| (result.api_type() == api).then_some(Cow::Borrowed(*tag)))

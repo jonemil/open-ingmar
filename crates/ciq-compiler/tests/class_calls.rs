@@ -43,8 +43,6 @@ fn class_calls_require_static_targets_and_checked_signatures() {
         "class C{static function f(n as Toybox.Lang.Number){}}function run(){C.f();}",
         "class C{static function f(n as Toybox.Lang.Number){}}function run(){C.f(\"bad\");}",
         "class C{static function f(){}}function run(){var C=1;C.f();}",
-        "class C{static function f() as Toybox.Lang.Object{return self;}}",
-        "class C{static function f() as C{return self;}}",
         "class C{static var S as Toybox.Lang.String=read();static function read() as Toybox.Lang.String{return S;}}function run(){C.read();}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");

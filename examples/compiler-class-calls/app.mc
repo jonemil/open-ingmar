@@ -12,8 +12,9 @@ class Cold {
     static function add(n as Lang.Number) as Lang.Number { VALUE += n; return VALUE; }
     static function owner() { return self; }
     static function clear() as Void { VALUE = 0; }
-    static function selfAsObject() as Lang.Object { return self as Lang.Object; }
-    static function selfAsCold() as Cold { return self as Cold; }
+    static function selfAsObject() as Lang.Object { var receiver = self; return receiver; }
+    static function selfAsCold() as Cold { var receiver = self; return receiver; }
+    static function storedAsCold() as Cold { return OWNER; }
 }
 class Token {
     var value as Lang.Number;
@@ -45,6 +46,8 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(cold.selfAsObject() instanceof Lang.Object);
         System.println(Cold.selfAsCold() instanceof Cold);
         System.println(cold.selfAsCold() instanceof Cold);
+        System.println(Cold.storedAsCold() instanceof Cold);
+        System.println(cold.storedAsCold() instanceof Cold);
         System.println(Alias.Methods.twice(4));
         System.println($.Nested.Methods.twice(true ? 5 : 6));
         System.println(Factory.value(new Token(7)));

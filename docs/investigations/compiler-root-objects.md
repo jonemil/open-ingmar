@@ -214,7 +214,7 @@ checked member scope. The matched specimen does not establish Object inheritance
 for every possible static receiver.
 
 The [class-call specimen](../../examples/compiler-class-calls/README.md) matches
-all 17 SDK/generated lines with structured reconstruction under the same profile.
+all 19 SDK/generated lines with structured reconstruction under the same profile.
 `Cold.add(Trace.mark(3))` first initializes static storage (trace `2`), then
 runs the argument (trace `23`); captures preserve this order across conditional
 and constructed arguments. Aliases/root paths reach the same static declarations.
@@ -225,8 +225,11 @@ Separate authored probes returned static `self` with Object and source-class
 annotations, both implicitly and via explicit casts. SDK compilation and
 execution succeed. On direct class calls, `instanceof` the annotated type is
 false; through instances it is true. Thus accepted annotations do not prove
-physical instance identity. Our compiler accepts explicit unchecked casts;
-implicit annotations still require origin-aware typing.
+physical instance identity. The checked specimen exercises implicit Object/source-class returns through a
+local receiver alias and the stored `OWNER` constant. Returning stored `OWNER`
+fails `instanceof Cold` for both class and instance dispatch, while returning the
+current `self` passes for instance dispatch only. Origin-aware opaque contracts
+allow these annotations without treating an unannotated alias as an instance.
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md

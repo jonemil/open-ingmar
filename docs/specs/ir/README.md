@@ -2104,9 +2104,14 @@ bodies may call/bind static members through normal source-instance dispatch.
 
 `StaticSelf { result, class }` / `.static-self %result CLASS` reads that body's
 actual hidden receiver and requires `receiver=static`. Unit validation anchors
-CLASS to the enclosing declaration. It produces the opaque `module-value`
-view: identity and storage are preserved, but no ordinary Object inheritance or
-source-instance evidence is implied. An instance call supplies the instance;
+CLASS to the enclosing declaration. It produces `static-receiver(CLASS)`:
+identity and storage are preserved, but no source-instance witness or native
+member lookup is implied. The type is distinct from module and class-definition
+values. Aliases, storage, container contracts, and saved parameter/result tags
+retain this origin until a declared annotation widens it or Any erases it.
+Object and the same source-class annotations accept it as an unchecked view of
+the supplied receiver; unannotated values remain opaque. Units require every
+origin in a contract to name a declared class, including nested contracts. An instance call supplies the instance;
 a statics initializer or class-qualified call supplies static storage. These
 views must not be replaced
 with a class-definition value or a forged `.self class=...` operation.

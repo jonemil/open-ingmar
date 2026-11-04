@@ -36,11 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Track static receiver origin through aliases, storage, and returns; accept
-  SDK-valid Object/source-class annotations on static `self` without granting
-  an unannotated receiver instance proofs. Preserve the distinction from class
-  definitions: binding a class definition's static target fails on invocation
-  in the observed SDK profile. See the [receiver evidence][static-members].
 - [ ] Enforce `public`, `private`, `protected`, and `hidden` on declarations and
   inherited/member access, including access across source files.
 

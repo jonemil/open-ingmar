@@ -1037,15 +1037,21 @@ Static `self`/`me` reads the actual invocation receiver. When called through an
 instance, it is that instance; the statics initializer receives the class's
 static storage. Direct class calls also use static storage. The
 compiler preserves this identity without claiming instance-member access:
-static `self` has the existing opaque `module-value` view in IR. That view
-describes permitted operations, not a guarantee that the physical value is a
-module. It provides identity/`has` and storage, without Object inheritance,
-source-class identity, or callable-signature proofs. Static bodies cannot use
-ordinary instance members even when an instance supplied their receiver.
-Explicit casts can assert Object/source-class contracts without runtime checks;
-a class-call receiver can still fail the corresponding `instanceof` test.
-Implicit Object/source-class return annotations on bare static `self` are
-currently rejected, although the SDK accepts them.
+static `self` has the opaque `static-receiver(CLASS)` view in IR. It retains
+the declaring class through local aliases, inferred constants, and supported
+container storage, without supplying instance-member or callable-signature
+proofs. Ordinary module values and class definitions have separate contracts.
+Static bodies cannot use ordinary instance members even when an instance supplied
+their receiver.
+
+Object and declaring-source-class annotations accept this receiver at value
+boundaries, including returns and arguments. Such annotations assert the requested
+view without a runtime check, like explicit casts; they do not establish that
+every invocation context is physically an instance. A class-call result can fail
+the corresponding `instanceof` test. Unannotated aliases retain the opaque view;
+an Any boundary deliberately erases its origin. Returning a receiver stored by
+the statics initializer preserves that stored value, regardless of the current
+invocation's receiver.
 
 The statics initializer uses the same static scope. Helper calls are checked
 for reads/writes of incomplete slots and shutdown effects; static receiver

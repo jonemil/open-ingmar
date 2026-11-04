@@ -492,7 +492,9 @@ its hidden initializer is the checked statics hook or the shared no-op.
 The hook itself is not a callable user method.
 
 `StaticSelf` emits `getself`; it does not load or synthesize the class's statics
-object. Instance dispatch and binding reuse existing member lookup/invocation,
+object. Its `static-receiver(CLASS)` contract retains origin only for checking;
+Object/source-class annotations and explicit casts emit no conversion or runtime
+check. Instance dispatch and binding reuse existing member lookup/invocation,
 preserving the supplied receiver. Self calls reuse `getselfv` and ordinary
 invocation. Class-qualified calls select the canonical class with the existing
 class lookup, then use `getsv` to obtain the static callable/context. Zero-argument
