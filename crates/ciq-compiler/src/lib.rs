@@ -693,7 +693,7 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
-    /// A module namespace value, distinct from ordinary instances.
+    /// An opaque module/global namespace or static receiver view; no instance proof.
     ModuleValue,
     /// A runtime class definition, distinct from source instances.
     ClassValue,
@@ -786,7 +786,7 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
-    /// A module namespace value, distinct from ordinary instances.
+    /// An opaque module/global namespace or static receiver view; no instance proof.
     ModuleValue,
     /// A runtime class definition, distinct from source instances.
     ClassValue,
@@ -1017,7 +1017,7 @@ impl ReturnType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ValueType {
-    /// A module namespace value, distinct from ordinary instances.
+    /// An opaque module/global namespace or static receiver view; no instance proof.
     ModuleValue,
     /// A runtime class definition, distinct from source instances.
     ClassValue,
@@ -1501,6 +1501,11 @@ pub enum Operation {
     ModuleSelf {
         result: ValueId,
     },
+    /// Read a static method's hidden receiver; class ownership is checked by the unit.
+    StaticSelf {
+        result: ValueId,
+        class: String,
+    },
     /// Read the current instance, optionally retaining its exact source class.
     /// Unit validation must anchor the claimed class to the enclosing owner.
     SelfValue {
@@ -1548,7 +1553,7 @@ pub enum Operation {
         class: String,
         field: String,
     },
-    /// Read the actual current-instance field under a checked result contract.
+    /// Read the current receiver field under a checked result contract.
     /// Unit validation anchors its declaration and initialization; positional
     /// field flow independently verifies any refined result view.
     SelfFieldRead {
@@ -1567,7 +1572,7 @@ pub enum Operation {
         field: String,
         result_type: ReturnType,
     },
-    /// Replace a declared field on the current instance, preserving its type.
+    /// Replace a declared field on the current receiver, preserving its type.
     SelfFieldAssign {
         field: String,
         value: ValueId,
@@ -2061,6 +2066,7 @@ impl Operation {
             | Self::ModuleValue { result, .. }
             | Self::ClassValue { result, .. }
             | Self::ModuleSelf { result }
+            | Self::StaticSelf { result, .. }
             | Self::SelfValue { result, .. }
             | Self::SelfFieldRead { result, .. }
             | Self::ClassFieldRead { result, .. }
@@ -2183,17 +2189,33 @@ impl std::error::Error for IrError {}
 /// Native callback parameters may carry opaque nullable Dictionary state.
 /// Returns consistently produce one supported type or no value. Statement calls
 /// discard results; unit validation rejects using a void callee as a value.
-/// Instance methods permit self calls and require class ownership at unit
-/// validation. Other functions cannot assume an instance receiver.
+/// Instance and static methods permit checked self access and require class
+/// ownership. Static receiver views do not establish source-instance identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     name: String,
     parameter_count: usize,
     parameter_types: Vec<ParameterType>,
     return_type: ReturnType,
-    instance_method: bool,
+    receiver: Receiver,
     operations: Vec<LocatedOperation>,
     value_types: std::collections::BTreeMap<ValueId, ValueType>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Receiver {
+    Function,
+    Instance,
+    Static,
+}
+impl From<bool> for Receiver {
+    fn from(instance: bool) -> Self {
+        if instance {
+            Self::Instance
+        } else {
+            Self::Function
+        }
+    }
 }
 
 impl Function {
@@ -2212,7 +2234,12 @@ impl Function {
 
     /// Whether this body requires an instance receiver in its hidden context slot.
     pub fn is_instance_method(&self) -> bool {
-        self.instance_method
+        self.receiver == Receiver::Instance
+    }
+
+    /// Whether this body uses static member rules for its hidden receiver.
+    pub fn is_static_method(&self) -> bool {
+        self.receiver == Receiver::Static
     }
 
     pub fn operations(&self) -> &[LocatedOperation] {
@@ -2223,13 +2250,14 @@ impl Function {
     /// explicit target and deployment levels. Returns an operation-indexed error
     /// where possible; does not change IR or establish device compatibility.
     pub fn validate_api(&self, context: api::ApiContext) -> Result<(), IrError> {
-        Self::construct_for_api(
+        Self::construct_with_join_inference(
             self.name.clone(),
             self.parameter_types.clone(),
             self.operations.clone(),
-            self.instance_method,
+            self.receiver,
             Some(context),
             Some(self.return_type.clone()),
+            false,
         )
         .map(|_| ())
     }
@@ -2314,6 +2342,25 @@ impl Function {
         Self::construct_for_api(name, parameter_types, operations, true, None, Some(result))
     }
 
+    /// Construct a static method with explicit argument/result contracts.
+    /// Unit validation checks its class owner and restricts self access to statics.
+    pub fn static_method_with_signature(
+        name: String,
+        parameter_types: Vec<ParameterType>,
+        result: ReturnType,
+        operations: Vec<LocatedOperation>,
+    ) -> Result<Self, IrError> {
+        Self::construct_with_join_inference(
+            name,
+            parameter_types,
+            operations,
+            Receiver::Static,
+            None,
+            Some(result),
+            false,
+        )
+    }
+
     /// Return explicit parameter types in source order, excluding the receiver.
     pub fn parameter_types(&self) -> &[ParameterType] {
         &self.parameter_types
@@ -2367,7 +2414,7 @@ impl Function {
             name,
             parameter_types,
             operations,
-            instance_method,
+            instance_method.into(),
             context,
             declared_result,
             false,
@@ -2381,11 +2428,13 @@ impl Function {
         name: String,
         parameter_types: Vec<ParameterType>,
         mut operations: Vec<LocatedOperation>,
-        instance_method: bool,
+        receiver: Receiver,
         context: Option<api::ApiContext>,
         declared_result: Option<ReturnType>,
         infer_joins: bool,
     ) -> Result<Self, IrError> {
+        let instance_method = receiver == Receiver::Instance;
+        let member_method = receiver != Receiver::Function;
         let validate_parameter = |parameter: &ParameterType| -> Result<(), String> {
             match parameter {
                 ParameterType::Recursive(ty) if !matches!(ty, api::Type::Recursive(_)) => {
@@ -3272,8 +3321,16 @@ impl Function {
                     types.insert(result, ValueType::ModuleValue);
                     (Some(result), vec![])
                 }
+                Operation::StaticSelf { result, ref class } => {
+                    if receiver != Receiver::Static {
+                        return Err(fail("static-self requires a static method"));
+                    }
+                    validate_call_names(Some(class), "class").map_err(fail)?;
+                    types.insert(result, ValueType::ModuleValue);
+                    (Some(result), vec![])
+                }
                 Operation::ModuleSelf { result } => {
-                    if instance_method {
+                    if member_method {
                         return Err(fail("module-self cannot replace an instance receiver"));
                     }
                     types.insert(result, ValueType::ModuleValue);
@@ -3447,7 +3504,7 @@ impl Function {
                     ref result_type,
                     ref declared_type,
                 } => {
-                    if !instance_method {
+                    if !member_method {
                         return Err(fail("self field reads require an instance receiver"));
                     }
                     validate_call_names(None, field).map_err(fail)?;
@@ -3460,7 +3517,7 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::SelfFieldAssign { ref field, value } => {
-                    if !instance_method {
+                    if !member_method {
                         return Err(fail("self field assignments require an instance receiver"));
                     }
                     validate_call_names(None, field).map_err(fail)?;
@@ -4351,7 +4408,7 @@ impl Function {
                     ref member,
                     ref arguments,
                 } => {
-                    if !instance_method {
+                    if !member_method {
                         return Err(fail("self calls require an instance method"));
                     }
                     validate_call_names(None, member).map_err(fail)?;
@@ -4845,6 +4902,7 @@ impl Function {
                     | Operation::ModuleValue { .. }
                     | Operation::ClassValue { .. }
                     | Operation::ModuleSelf { .. }
+                    | Operation::StaticSelf { .. }
                     | Operation::SharedRead { .. }
                     | Operation::SharedAssign { .. }
                     | Operation::SharedWrite { .. }
@@ -5047,7 +5105,7 @@ impl Function {
             name,
             parameter_count,
             parameter_types,
-            instance_method,
+            receiver,
             return_type: return_type.expect("final return establishes result type"),
             operations,
             value_types: types,
@@ -5082,10 +5140,10 @@ impl Function {
         } else {
             format!(" parameters={}", self.parameter_count)
         };
-        let receiver = if self.instance_method {
-            " receiver=instance"
-        } else {
-            ""
+        let receiver = match self.receiver {
+            Receiver::Function => "",
+            Receiver::Instance => " receiver=instance",
+            Receiver::Static => " receiver=static",
         };
         let parameter_types = if self
             .parameter_types
@@ -5354,6 +5412,9 @@ impl Function {
                 ),
                 Operation::ClassValue { result, ref class } => {
                     format!(".class-value %{} {class}", result.0)
+                }
+                Operation::StaticSelf { result, ref class } => {
+                    format!(".static-self %{} {class}", result.0)
                 }
                 Operation::ModuleSelf { result } => format!(".module-self %{}", result.0),
                 Operation::SelfValue { result, ref class } => format!(

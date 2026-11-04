@@ -179,6 +179,41 @@ receiver behavior or unrestricted initialization cycles. Current contracts and
 conservative readiness checks belong in the
 [frontend spec](../specs/frontend/README.md#mutable-static-fields).
 
+## Static method contexts
+
+**Observed, 2026-11-04:** SDK/simulator 9.2.0, `fr265`, `-O 0`, minimum API
+3.0.0, target 5.2.0. The [static-method
+specimen](../../examples/compiler-static-methods/README.md) matches all 17
+[expected SDK/generated output lines](../../examples/compiler-static-methods/expected.txt)
+through the shared specimen checker, including structured reconstruction.
+
+An initial `new Counter()` only marks instance allocation: the trace becomes
+`4`. First static method access then runs the statics hook, which marks `2`
+and calls static `seed()` to mark `3`; later allocations produce trace `42344`
+without rerunning statics. This isolates a limit the earlier specimens did not:
+allocation alone does not activate static storage. Instance initialization can
+activate it indirectly by accessing a static member.
+
+For static `owner(){ return self; }`, calls through two instances return
+different receivers. `first.owner() == first` is true, while comparison with
+the class value and with the statics hook's stored `OWNER=self` is false.
+The earlier direct `Counter.owner()` probe instead returns static storage.
+Thus a static declaration alone does not determine the physical receiver;
+lookup/invocation context matters. The compiler's opaque receiver view retains
+identity without supplying instance-member evidence.
+
+Instance `method(:add)`, a Method constructed from a static body's `self`, and
+a Method constructed from the hook's stored receiver all update the same
+static slot. A method-only class needs a separate statics record even without
+shared fields. A static method in `Nested.Settings` reaches an enclosing-module
+helper through the statics record's parent. These cases require existing member
+lookup/invocation and `getself`, not a new opcode or DATA record kind.
+
+The [frontend contract](../specs/frontend/README.md#static-methods) defines the
+checked member scope. Direct class-call lowering and broader static-self
+annotation/cast contracts remain in the plan; the matched specimen does not
+establish Object inheritance for every possible static receiver.
+
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md
 [check]: ../../scripts/README.md#console-specimen-check

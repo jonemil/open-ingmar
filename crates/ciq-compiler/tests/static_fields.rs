@@ -56,7 +56,6 @@ fn static_writes_check_contracts_mutability_scope_and_readiness() {
         "class C{static var N=0;var N=1;}",
         "class C{static var N=0;}function f(C as Toybox.Lang.Number){C.N=1;}",
         "class C{var N=0;static var OTHER=N;}",
-        "class C{static var SELF=self;}",
         "using Toybox.Lang;class C{static var PAIR as [Lang.Number] or Null;function f(other as C){if(self.PAIR!=null){other.PAIR=null;self.PAIR[0]=7;}}}",
         "using Toybox.Lang;class C{static var PAIR as [Lang.Number] or Null;function f(){if(self.PAIR!=null){C.PAIR=null;self.PAIR[0]=7;}}}",
         "using Toybox.Lang;class C{static var A as Lang.Number=change();static var B as Lang.Number=value();}function value() as Lang.Number{return 1;}function change() as Lang.Number{C.B=9;return 0;}",

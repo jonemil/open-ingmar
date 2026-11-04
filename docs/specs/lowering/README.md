@@ -484,6 +484,18 @@ retain their original value construction even when the slot contract is Any.
 
 ### Shared storage
 
+Static method CODE uses the ordinary hidden context and argument convention.
+Application metadata places user static methods in the class statics record
+with key low byte `0x50`, excluding them from instance records. A method-only
+class still needs a statics record. Its parent is the containing module and
+its hidden initializer is the checked statics hook or the shared no-op.
+The hook itself is not a callable user method.
+
+`StaticSelf` emits `getself`; it does not load or synthesize the class's statics
+object. Instance dispatch and binding reuse existing member lookup/invocation,
+preserving the supplied receiver. Self calls reuse `getselfv` and ordinary
+invocation. No VM opcode or DATA record kind is added.
+
 Class-qualified mutable stores select the class with the ordinary class lookup
 and save it in a private slot at `.begin-class`. Selection accesses no field.
 The generic `.write-shared` completion loads that capture, pushes the field

@@ -952,8 +952,9 @@ forbidden after initialization; referenced container contents remain mutable.
 read the same slot. Canonical/root-qualified class paths and source module
 aliases retain ordinary lookup and shadowing rules. Class-qualified reads do
 not allocate an instance. Reading the class value alone does not initialize
-statics; accessing a shared member or allocating an instance initializes them
-once, independently of instance field expressions and user `initialize()`.
+statics. First shared-member access initializes them once. Merely allocating an
+instance does not; instance field expressions or `initialize()` can themselves
+access shared members and thereby activate statics.
 
 Direct Number literals use metadata defaults. Other initializers run in the
 class statics hook: literal-default expressions precede runtime expressions,
@@ -962,9 +963,9 @@ use ordinary CFG staging. Each designated slot must receive one write on every
 returning path. Direct and source-call-mediated reads of unwritten constants
 are rejected, including reentry through another owner. The analysis is
 conservative; it does not use runtime branch values to prove a cycle harmless.
-Static initializers cannot use instance fields/methods or expose `self` as an
-instance value. Static-self values and static method declarations are not yet
-part of the executable source profile.
+Static initializers cannot use instance fields/methods or claim `self` as a
+source instance. They use the static receiver view below and may call checked
+static helpers when their access requirements are satisfied.
 
 The class statics record's lexical parent is the containing module, or globals
 for a global class. Module helpers and shared bindings therefore resolve from
@@ -1003,11 +1004,46 @@ Writes check the declared contract and gradual-checking policy. Direct or
 call-mediated mutation of still-unwritten slots is rejected during static
 initialization. Class captures/shared writes and member writes invalidate
 field guards that may have become stale through shared storage or aliases;
-this is conservative across unrelated fields. Static `self` exposure and
-static method declarations remain unsupported. See the
+this is conservative across unrelated fields. Static receiver views follow
+the method rules below. See the
 [SDK/generated specimen](../../../examples/compiler-static-fields/README.md),
 [IR contract](../ir/README.md#mutable-static-fields), and
 [runtime evidence](../../investigations/compiler-root-objects.md#mutable-static-fields).
+
+### Static methods
+
+Class `static function` declarations retain ordinary argument/result contracts
+and use separate class-statics metadata. Bodies can read/write static fields,
+call static members through bare names or `self`, and resolve enclosing
+module/global declarations. Instance declarations still block inappropriate
+fallback to outer declarations, but inherited Object members do not appear in
+the static scope. Instance fields/methods are rejected, including in unused
+bodies. `initialize` and supported native lifecycle callbacks require instance
+receivers.
+
+Source instances can call static methods and bind them with `method(Symbol)`.
+Known instance bindings retain checked callback signatures. Explicit
+`new Lang.Method(receiver, selector)` remains erased. A static body can capture
+its `self` that way, and static fields can store that receiver view. Direct
+`Class.method(...)` calls remain unsupported by the compiler.
+
+Static `self`/`me` reads the actual invocation receiver. When called through an
+instance, it is that instance; the statics initializer receives the class's
+static storage. The SDK's direct class calls use static storage too. The
+compiler preserves this identity without claiming instance-member access:
+static `self` has the existing opaque `module-value` view in IR. That view
+describes permitted operations, not a guarantee that the physical value is a
+module. It provides identity/`has` and storage, without Object inheritance,
+source-class identity, or callable-signature proofs. Static bodies cannot use
+ordinary instance members even when an instance supplied their receiver.
+
+The statics initializer uses the same static scope. Helper calls are checked
+for reads/writes of incomplete slots and shutdown effects; static receiver
+capture alone does not invoke a bound target. Native and saved-IR paths retain
+the same receiver contracts. See the
+[specimen](../../../examples/compiler-static-methods/README.md),
+[IR contract](../ir/README.md#static-receivers), and
+[SDK evidence](../../investigations/compiler-root-objects.md#static-method-contexts).
 
 ### Shared variables
 
@@ -1108,7 +1144,7 @@ member within the class read the same slot. A named class enum declares the type
 
 Direct integer and implicit members have Number metadata defaults. Other scalar
 literals and nonempty flat scalar Arrays/ByteArrays initialize once through the
-class statics hook, making them available before allocation. Their stored
+class statics hook, making them available without allocation. Their stored
 references and mutations survive subsequent allocations. Null literals are
 defaults too, with a concrete Null contract for anonymous members.
 
@@ -1254,8 +1290,8 @@ qualifier checks still reject runtime locals/parameters shadowing the path's
 first named component; lexical type assertions use the type namespace. Native
 superclass declarations retain their existing spelling. Namespace values follow
 the rules below. Class-qualified field access supports enum members and static
-constants/variables. Unbound function values and static methods remain
-unsupported.
+constants/variables. Unbound function values and direct class-qualified static
+calls remain unsupported.
 
 Root qualifiers disappear during source resolution. Shared storage, class-shared
 reads, source construction, native operations, and global/module calls retain
@@ -1291,6 +1327,7 @@ and runtime classes use their canonical API identities; imported aliases retain
 the existing value-shadowing rules. Root-qualified paths bypass lexical names.
 Bare `$` denotes globals. Bare `self`/`me` in global/module bodies produce that
 body's module receiver; instance bodies retain their exact source instance.
+Static bodies use the [opaque static receiver view](#static-methods).
 
 Module references and class-definition references have distinct value kinds.
 Neither is a Lang.Object instance, and a class value cannot satisfy an instance
@@ -1310,8 +1347,9 @@ instance. Reading a namespace does not copy it.
 Known declaration-qualified calls and field access retain their existing static
 resolution. Reading a namespace value through `self.Child` is not yet supported;
 receiver traversal must not be replaced with direct declaration lookup.
-Arbitrary member dispatch through namespace-valued variables and static method
-dispatch are not enabled by this representation. Direct declared class paths
+Arbitrary member dispatch through namespace-valued variables and direct
+class-qualified method calls are not enabled by this representation.
+Direct declared class paths
 retain their separate checked field access. SDK static storage is
 distinct from the class-definition value; see the
 [static receiver evidence](../../investigations/compiler-root-objects.md#static-storage-and-receivers).
@@ -1567,8 +1605,9 @@ identity,
 resolved through the [native name profile](#namespace-declarations). It
 accepts canonical/qualified, aliased, and imported Object/AppBase/View/
 BehaviorDelegate spellings. An omitted base selects Lang.Object. Supported
-[field contracts](#instance-fields) are defined separately. Static methods,
-annotations, source superclass lookup, and nested classes are unsupported.
+[field contracts](#instance-fields) are defined separately. Static methods use
+the [restricted dispatch profile](#static-methods). Annotations, source
+superclass lookup, and nested classes are unsupported.
 Object-rooted classes may be empty; other classes require at least one method.
 Class identities must be unique within their containing namespace; classes
 cannot be reopened. Reject class/module/function/shared-binding collisions in

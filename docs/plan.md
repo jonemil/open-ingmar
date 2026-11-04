@@ -36,12 +36,11 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Add static methods to source/saved IR and application metadata, reusing
-  class-shared storage and initialization. Represent static `self` separately
-  from instances/class definitions. Use the
-  [SDK specimen][static-members] as the baseline.
-- [ ] Implement class-qualified, lexical, and instance static calls
-  and Method bindings to static-storage or instance receivers. Preserve the
+- [ ] Implement class-qualified static calls, including root/module aliases and
+  callable capture before branching argument effects. Preserve static-storage
+  versus instance receiver identity, and establish SDK-supported static `self`
+  annotation/cast contracts for both invocation forms. Use the
+  [SDK specimen][static-members] as the baseline. Preserve the
   distinction from class-definition receivers; the SDK accepts binding a class
   definition but its static-target invocation fails in the observed profile.
 - [ ] Enforce `public`, `private`, `protected`, and `hidden` on declarations and

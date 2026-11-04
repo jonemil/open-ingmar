@@ -2078,7 +2078,7 @@ Standalone functions leave external source declaration/binding obligations to
 their enclosing unit.
 
 `ModuleSelf` / `.module-self %result` reads the current global/module receiver.
-It is forbidden in instance methods; `.self` remains the separate instance
+It is forbidden in instance/static methods; `.self` remains the separate instance
 operation. Module and class-definition references have semantic/API types and
 saved tags `module-value` and `class-value`. These tags work in signature,
 local, field, tuple, and union contracts; they do not introduce source annotation
@@ -2091,6 +2091,30 @@ effects. Namespace identity equality and `has` use existing operations. No
 native Object inheritance, method signature, or static dispatch can be inferred
 from either value kind. [Source semantics](../frontend/README.md#namespace-reference-values)
 define supported storage and use.
+
+### Static receivers
+
+`receiver=static` marks a class body with static member rules, independently of
+the hidden receiver's physical runtime type. Function models retain one receiver
+category; instance and static contracts cannot coexist. Unit validation requires
+a class owner and rejects instance field/method access and native callbacks on
+static bodies. Self field/call operations otherwise reuse their ordinary
+contracts and refer only to declared shared fields/static methods. Instance
+bodies may call/bind static members through normal source-instance dispatch.
+
+`StaticSelf { result, class }` / `.static-self %result CLASS` reads that body's
+actual hidden receiver and requires `receiver=static`. Unit validation anchors
+CLASS to the enclosing declaration. It produces the opaque `module-value`
+view: identity and storage are preserved, but no ordinary Object inheritance or
+source-instance evidence is implied. An instance call supplies the instance;
+a statics initializer supplies static storage. These views must not be replaced
+with a class-definition value or a forged `.self class=...` operation.
+
+Methods remain in `ClassDeclaration.methods`; `Function::is_static_method`
+controls metadata placement. Typed clients can construct the same model through
+`Function::static_method_with_signature`. Source, text parsing, and API
+revalidation retain the receiver category. See
+[source semantics](../frontend/README.md#static-methods).
 
 ### Instance receivers
 
@@ -2369,11 +2393,11 @@ Graphics.Dc and retains supported source, container, and callback identities.
 Static constants use the same `.read-class` and instance/self reads as class
 enums. Unit validation checks readonly storage and exact declared contracts.
 The reserved statics body exists exactly when a field needs it, has no
-parameters and a Void result, and uses the existing hidden-initializer
-`receiver=instance` encoding for its runtime storage receiver. It is not a
-callable instance member. It may write only its designated static/default
+parameters and a Void result, and declares `receiver=static`. It is not a
+callable user member. It may write only its designated static/default
 slots and must initialize each once on every continuing path. It cannot
-expose a source instance receiver or access ordinary instance members.
+claim a source instance receiver or access ordinary instance members. Static
+receiver capture and checked static helper calls retain the static scope.
 
 Readiness checks follow direct reads, source calls, known comparator calls,
 and lazy owner initialization. Reads of a still-unwritten slot in the active

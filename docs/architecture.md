@@ -153,6 +153,13 @@ its containing module as lexical parent and places shared slots there,
 leaving ordinary fields in instance metadata. Source construction uses private allocation/completion
 builders to preserve allocation before user argument effects.
 
+Function bodies retain a single ordinary/instance/static receiver category.
+Class declarations hold both kinds of member bodies; application generation
+places static methods in statics records. Static self is an opaque receiver
+view with declaration-checked static member access, preserving dispatch-time
+identity without fabricating a source instance. Statics hooks use that same
+scope and call-effect/readiness validation.
+
 Class-qualified writes capture a class definition before RHS effects and reuse
 the shared-store completion. Unit validation checks the actual storage owner,
 mutability, value contract, and initialization requirements; field-flow guards

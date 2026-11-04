@@ -61,6 +61,7 @@ const NAN_LITERAL_BITS: u32 = 0x7fc00000;
 // SourceClass bases in parsed annotations are placeholders. Unit declaration
 // collection resolves them before signatures or bodies enter semantic IR.
 pub(crate) struct ParsedFunction {
+    pub is_static: bool,
     pub name: String,
     pub parameters: Vec<String>,
     pub parameter_types: Vec<Option<crate::ParameterType>>,
@@ -1158,7 +1159,7 @@ pub(crate) fn collect_declarations<'a>(
                             .owner
                             .as_ref()
                             .is_some_and(|owner| aliases.classes.contains(owner))
-                            || !matches!(parser.peek()?, Kind::Word("const" | "var"))
+                            || !matches!(parser.peek()?, Kind::Word("const" | "var" | "function"))
                         {
                             return Err(parser.error(
                                 parser.offset,
@@ -1167,7 +1168,7 @@ pub(crate) fn collect_declarations<'a>(
                         }
                         // The normal binding arm records every member in this list
                         // and consumes its type/initializer on the next iteration.
-                        static_binding = true;
+                        static_binding = matches!(parser.peek()?, Kind::Word("const" | "var"));
                     }
                     Kind::Word("const" | "enum" | "var")
                         if parser.peek()? != Kind::Word("var")
@@ -4363,6 +4364,7 @@ impl Parser<'_> {
         };
         let (statements, body_span) = self.block(0)?;
         Ok(ParsedFunction {
+            is_static: false,
             name: identifier.to_owned(),
             parameters,
             parameter_types,
@@ -4511,6 +4513,19 @@ pub(crate) fn declarations<'a>(
             while parser.peek()? != Kind::Punctuation('}') {
                 if parser.peek()? == Kind::Word("static") {
                     parser.token()?;
+                    if parser.peek()? == Kind::Word("function") {
+                        let mut method = parser.function()?;
+                        method.is_static = true;
+                        methods.push(method);
+                        count += 1;
+                        if count > crate::unit::MAX_FUNCTIONS {
+                            return Err(parser.error(
+                                token.span.start,
+                                "compilation unit exceeds 256-function limit",
+                            ));
+                        }
+                        continue;
+                    }
                     if !matches!(parser.peek()?, Kind::Word("const" | "var")) {
                         return Err(parser.error(
                             parser.offset,

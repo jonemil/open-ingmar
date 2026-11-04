@@ -7,6 +7,7 @@ enum Directive {
     ModuleValue,
     ClassValue,
     ModuleSelf,
+    StaticSelf,
     SharedBegin,
     ClassFieldBegin,
     CallBegin,
@@ -279,7 +280,7 @@ pub(crate) fn parse_function_ir_context(
     let mut parameter_count = 0;
     let mut parameters = false;
     let mut parameter_types = None;
-    let mut instance_method = false;
+    let mut receiver = crate::Receiver::Function;
     let mut result_type = None;
     for field in declaration.iter().skip(2) {
         if let Some(result) = field.strip_prefix("result=") {
@@ -290,8 +291,10 @@ pub(crate) fn parse_function_ir_context(
                 crate::type_text::function_result(result)
                     .map_err(|message| fail(*name_at, message))?,
             );
-        } else if field == "receiver=instance" && !instance_method {
-            instance_method = true;
+        } else if field == "receiver=instance" && receiver == crate::Receiver::Function {
+            receiver = crate::Receiver::Instance;
+        } else if field == "receiver=static" && receiver == crate::Receiver::Function {
+            receiver = crate::Receiver::Static;
         } else if let Some(types) = field.strip_prefix("parameter-types=") {
             if parameter_types.is_some() {
                 return Err(fail(*name_at, "duplicate parameter types"));
@@ -425,6 +428,7 @@ pub(crate) fn parse_function_ir_context(
             Some(".module-value") => (Directive::ModuleValue, 3),
             Some(".class-value") => (Directive::ClassValue, 3),
             Some(".module-self") => (Directive::ModuleSelf, 2),
+            Some(".static-self") => (Directive::StaticSelf, 3),
             Some(".self") => {
                 let width = call_width();
                 if !(2..=3).contains(&width) {
@@ -1415,6 +1419,10 @@ pub(crate) fn parse_function_ir_context(
                     result: parse_value(&fields[1])?,
                     class: fields[2].clone(),
                 },
+                Directive::StaticSelf => Operation::StaticSelf {
+                    result: parse_value(&fields[1])?,
+                    class: fields[2].clone(),
+                },
                 Directive::ModuleSelf => Operation::ModuleSelf {
                     result: parse_value(&fields[1])?,
                 },
@@ -1585,13 +1593,14 @@ pub(crate) fn parse_function_ir_context(
     } else {
         vec![crate::ParameterType::Integer; parameter_count]
     };
-    let result = Function::construct_for_api(
+    let result = Function::construct_with_join_inference(
         declaration[1].to_string(),
         types,
         operations,
-        instance_method,
+        receiver,
         context,
         result_type,
+        false,
     );
     result.map_err(|error| {
         Diagnostic::at(

@@ -86,7 +86,6 @@ fn static_constants_reject_rebinding_invalid_scopes_and_instance_context() {
         "class C{static const N=7;var N=9;}",
         "class C{static const N=7;function N(){}}",
         "class C{var n=7;static const N=n;}",
-        "class C{static const ME=self;}",
         "class C{function n(){return 7;}static const N=n();}",
         "class C{static const N=7;}function f(C as Toybox.Lang.Number){return C.N;}",
         "class C{static const N as Toybox.Lang.String=7;}",

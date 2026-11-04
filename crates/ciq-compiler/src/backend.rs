@@ -163,6 +163,7 @@ pub(crate) fn lower_owned<'a>(
             | Operation::ModuleValue { result, .. }
             | Operation::ClassValue { result, .. }
             | Operation::ModuleSelf { result }
+            | Operation::StaticSelf { result, .. }
             | Operation::SelfValue { result, .. }
             | Operation::MemberRead { result, .. }
             | Operation::SelfFieldRead { result, .. }
@@ -1149,7 +1150,9 @@ fn expression(
                     };
                     (opcode, operands)
                 }
-                Operation::SelfValue { .. } => (Opcode::Getself, vec![]),
+                Operation::SelfValue { .. } | Operation::StaticSelf { .. } => {
+                    (Opcode::Getself, vec![])
+                }
                 Operation::MemberRead {
                     receiver, member, ..
                 } => {

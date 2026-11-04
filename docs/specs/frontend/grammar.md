@@ -38,6 +38,7 @@ typedef = "typedef" identifier "as" value-type ";"
 constant = "const" constant-binding ("," constant-binding)* ";"
 static-constant = "static" constant
 static-variable = "static" shared-variable
+static-function = "static" function
 constant-binding = identifier ("as" value-type)? ("=" expression)?
 shared-variable = "var" constant-binding ("," constant-binding)* ";"
 enumeration = "enum" identifier? "{" enum-member ("," enum-member)* ","? "}"
@@ -45,7 +46,7 @@ enum-member = identifier ("=" expression)?
 module = "module" identifier "{" namespace-declaration*
          (module | class | function | typedef | constant | enumeration | shared-variable)* "}"
 class = "class" identifier ("extends" native-base)?
-        "{" namespace-declaration* (field | function | typedef | constant | static-constant | static-variable | enumeration)* "}"
+        "{" namespace-declaration* (field | function | static-function | typedef | constant | static-constant | static-variable | enumeration)* "}"
 namespace-declaration = "using" namespace-path ("as" identifier)? ";"
                       | "import" namespace-path ";"
 namespace-path = native-module | source-module
@@ -77,7 +78,8 @@ expression grammar.
 storage across instances and initialize once under the
 [static constant](README.md#static-constants) and
 [mutable static field](README.md#mutable-static-fields) rules.
-Static functions remain unsupported.
+`static-function` is also restricted to class scope; its body follows the
+[static method rules](README.md#static-methods).
 
 `shared-variable` reuses the binding-list syntax at global/module scope.
 An omitted initializer produces Null; an omitted annotation gives the mutable

@@ -944,7 +944,7 @@ pub struct ClassDeclaration {
     pub base: ClassBase,
     /// Member storage in declaration order, including instance and class-shared slots.
     pub fields: Vec<InstanceField>,
-    /// Instance-method IR bodies, checked together during unit construction.
+    /// Instance/static method IR bodies, checked together during unit construction.
     pub methods: Vec<Function>,
 }
 impl ClassDeclaration {
@@ -1144,7 +1144,9 @@ impl CompilationUnit {
                     message,
                 })?;
             for method in &class.methods {
-                if crate::native::callback(class.base, method.name()).is_some() {
+                if method.is_instance_method()
+                    && crate::native::callback(class.base, method.name()).is_some()
+                {
                     context
                         .method(crate::api::core(), class.base.api_name(), method.name())
                         .map_err(|message| UnitError {
@@ -1687,7 +1689,53 @@ impl CompilationUnit {
                     ));
                 }
             }
-            let callback = matches!(owner, Owner::Class(_))
+            if function.is_static_method() {
+                let declaration = self
+                    .classes
+                    .iter()
+                    .find(|c| owner == Owner::Class(c.name.as_str()))
+                    .ok_or_else(|| {
+                        fail(
+                            Some(index),
+                            None,
+                            "static methods require a class owner".into(),
+                        )
+                    })?;
+                if function.name() == "initialize"
+                    || crate::native::callback(declaration.base, function.name()).is_some()
+                {
+                    return Err(fail(
+                        Some(index),
+                        None,
+                        "initializers and native callbacks require instance receivers".into(),
+                    ));
+                }
+                for (at, op) in function.operations().iter().enumerate() {
+                    let invalid = match &op.operation {
+                        Operation::StaticSelf { class, .. } => class != &declaration.name,
+                        Operation::SelfFieldRead { field, .. }
+                        | Operation::SelfFieldAssign { field, .. } => !declaration
+                            .fields
+                            .iter()
+                            .any(|f| f.name == *field && f.kind.class_shared()),
+                        Operation::SelfCall { member, .. }
+                        | Operation::SelfCallStatement { member, .. } => !declaration
+                            .methods
+                            .iter()
+                            .any(|f| f.name() == member && f.is_static_method()),
+                        _ => false,
+                    };
+                    if invalid {
+                        return Err(fail(
+                            Some(index),
+                            Some(at),
+                            "static method receiver does not declare that static field or method"
+                                .into(),
+                        ));
+                    }
+                }
+            }
+            let callback = (matches!(owner, Owner::Class(_)) && function.is_instance_method())
                 .then(|| {
                     crate::native::callback(
                         self.classes
@@ -1747,11 +1795,12 @@ impl CompilationUnit {
                                 Some(c.name.as_str()) == scope
                                     && (c.fields.iter().any(|f| f.name == path[0])
                                         || c.methods.iter().any(|f| f.name() == path[0])
-                                        || c.base.api_name().rsplit('.').next()
-                                            == Some(path[0].as_str())
-                                        || crate::api::core()
-                                            .method(c.base.api_name(), &path[0])
-                                            .is_some())
+                                        || (!function.is_static_method()
+                                            && (c.base.api_name().rsplit('.').next()
+                                                == Some(path[0].as_str())
+                                                || crate::api::core()
+                                                    .method(c.base.api_name(), &path[0])
+                                                    .is_some())))
                             });
                     if shadow {
                         break;
@@ -1816,10 +1865,12 @@ impl CompilationUnit {
                             class.name == scope
                                 && (class.fields.iter().any(|field| field.name == member)
                                     || class.methods.iter().any(|f| f.name() == member)
-                                    || class.base.api_name().rsplit('.').next() == Some(member)
-                                    || crate::api::core()
-                                        .method(class.base.api_name(), member)
-                                        .is_some())
+                                    || (!function.is_static_method()
+                                        && (class.base.api_name().rsplit('.').next()
+                                            == Some(member)
+                                            || crate::api::core()
+                                                .method(class.base.api_name(), member)
+                                                .is_some())))
                         }) || self.shared.iter().any(|binding| {
                             binding.module.as_deref() == Some(scope) && binding.name == member
                         }) || self.declarations.iter().any(|decl| {
@@ -1842,13 +1893,14 @@ impl CompilationUnit {
                 .count();
             if field_initializer(function.name()) {
                 if !matches!(owner, Owner::Class(_))
+                    || function.is_static_method() != (function.name() == STATIC_INITIALIZER)
                     || function.parameter_count() != 0
                     || function.return_type() != ReturnType::Void
                     || base_calls != 0
                 {
                     return Err(fail(
                         Some(index), None,
-                        "field initializer requires an instance, no parameters, Void, and no native base initialization".into(),
+                        "field initializer requires its declared instance/static receiver, no parameters, Void, and no native base initialization".into(),
                     ));
                 }
                 let declaration = self
@@ -1893,24 +1945,6 @@ impl CompilationUnit {
                     .collect::<Result<BTreeMap<_, _>, _>>()?;
                 for (operation, located) in function.operations().iter().enumerate() {
                     if function.name() == STATIC_INITIALIZER {
-                        let instance_only = match &located.operation {
-                            Operation::SelfFieldRead { field, .. } => declaration
-                                .fields
-                                .iter()
-                                .any(|f| f.name == *field && !f.kind.class_shared()),
-                            Operation::SelfValue { .. }
-                            | Operation::SelfCall { .. }
-                            | Operation::SelfCallStatement { .. } => true,
-                            _ => false,
-                        };
-                        if instance_only {
-                            return Err(fail(
-                                Some(index),
-                                Some(operation),
-                                "statics initializer cannot expose self or use instance members"
-                                    .into(),
-                            ));
-                        }
                         let mut required = BTreeSet::new();
                         if let Some((class, field)) = class_store(&located.operation, function) {
                             required.insert((class.to_owned(), field.to_owned()));
@@ -1984,7 +2018,8 @@ impl CompilationUnit {
                         Operation::SelfValue { .. }
                         | Operation::SelfCall { .. }
                         | Operation::SelfCallStatement { .. }
-                            if incomplete || !unreadable.is_empty() =>
+                            if function.name() != STATIC_INITIALIZER
+                                && (incomplete || !unreadable.is_empty()) =>
                         {
                             Some(
                                 "initialize required fields before exposing the initializer receiver",
@@ -2063,7 +2098,9 @@ impl CompilationUnit {
                         .into(),
                 ));
             }
-            if function.is_instance_method() != matches!(owner, Owner::Class(_)) {
+            if (function.is_instance_method() || function.is_static_method())
+                != matches!(owner, Owner::Class(_))
+            {
                 return Err(fail(
                     Some(index),
                     None,
@@ -4280,6 +4317,7 @@ pub(crate) fn compile_sources_mapped(
                 .find(|c| c.module == *module && c.name == declaration.name)
                 .unwrap();
             let ast = parser::ParsedFunction {
+                is_static: false,
                 name: constant.initializer(),
                 parameters: Vec::new(),
                 parameter_types: Vec::new(),
@@ -4403,6 +4441,7 @@ pub(crate) fn compile_sources_mapped(
                     span: class.name_span,
                 });
                 class.methods.push(parser::ParsedFunction {
+                    is_static: name == STATIC_INITIALIZER,
                     name: name.into(),
                     parameters: Vec::new(),
                     parameter_types: Vec::new(),
@@ -4487,15 +4526,10 @@ pub(crate) fn compile_sources_mapped(
                     )));
                 }
                 class_origins.push((source_index, ast.body_span.start));
+                let receiver_base = (!ast.is_static).then_some(class.base);
                 methods.push(
-                    source_ir::build_with_calls(
-                        source,
-                        ast,
-                        context,
-                        Some(class.base),
-                        &method_calls,
-                    )
-                    .map_err(diagnostic)?,
+                    source_ir::build_with_calls(source, ast, context, receiver_base, &method_calls)
+                        .map_err(diagnostic)?,
                 );
             }
             classes.push(ClassDeclaration {
@@ -4587,6 +4621,7 @@ fn prepare_sources<'a>(
             && !class.methods.iter().any(|m| m.name == "initialize")
         {
             class.methods.push(parser::ParsedFunction {
+                is_static: false,
                 name: "initialize".into(),
                 parameters: Vec::new(),
                 parameter_types: Vec::new(),
@@ -4849,6 +4884,20 @@ fn infer_stored_constants(
                         name: class.into(),
                         base,
                     });
+                    if declaration.static_binding {
+                        if let Some(declaration) = parsed
+                            .iter()
+                            .flat_map(|p| &p.classes)
+                            .find(|c| c.name == class)
+                        {
+                            for method in &declaration.methods {
+                                owner_calls.insert(
+                                    ("self".into(), method.name.clone()),
+                                    source_ir::declared_signature(method),
+                                );
+                            }
+                        }
+                    }
                     owner_calls.field_names = field_names[class].clone();
                     owner_calls.readonly_fields = class_names[class].clone();
                     owner_calls.field_types = calls.source_fields[class].clone();
@@ -4941,6 +4990,7 @@ fn infer_constant(
     calls: &source_ir::CallContext,
 ) -> Result<ReturnType, Diagnostic> {
     let probe = parser::ParsedFunction {
+        is_static: declaration.static_binding,
         name: FIELD_INITIALIZER.into(),
         parameters: Vec::new(),
         parameter_types: Vec::new(),

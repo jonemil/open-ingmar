@@ -223,7 +223,7 @@ impl ApiContext {
 /// Null and Void are distinct from classes, and unions retain their alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
-    /// A module namespace reference, including the global root; not a Lang.Object instance.
+    /// An opaque module/global namespace or static receiver view; no Object contract is implied.
     ModuleValue,
     /// A runtime class definition, distinct from an instance of that class.
     ClassValue,

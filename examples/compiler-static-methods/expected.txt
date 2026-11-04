@@ -1,0 +1,17 @@
+0
+4
+6
+7
+19
+false
+false
+true
+false
+false
+15
+17
+18
+19
+42344
+8
+18

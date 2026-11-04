@@ -81,7 +81,9 @@ fn resolve_implicit_call(
                     .into_iter()
                     .flat_map(crate::names::scopes)
                     .filter(|_| {
-                        member != "method" && !calls.inherited_object_member(owner, &member)
+                        calls.static_context
+                            || (member != "method"
+                                && !calls.inherited_object_member(owner, &member))
                     }),
             )
             .collect()
@@ -108,7 +110,10 @@ fn resolve_implicit_call(
             ));
         }
     }
-    if owner == "self" && (member == "method" || calls.inherited_object_member(owner, &member)) {
+    if owner == "self"
+        && !calls.static_context
+        && (member == "method" || calls.inherited_object_member(owner, &member))
+    {
         if locals.contains_key(&member)
             || parameters.contains_key(&member)
             || calls.field_names.contains(&member)
@@ -605,7 +610,12 @@ fn emit_non_call(
             emit_unary(source, kind, locals, parameters, operations, calls)?
         }
         parser::ExpressionKind::SelfValue => {
-            if calls.current_class.is_some() {
+            if calls.static_context {
+                Operation::StaticSelf {
+                    result: ValueId(operations.len() as u32),
+                    class: calls.current_class.as_ref().unwrap().name.clone(),
+                }
+            } else if calls.current_class.is_some() {
                 Operation::SelfValue {
                     result: ValueId(operations.len() as u32),
                     class: calls.current_class.clone(),
@@ -983,6 +993,7 @@ fn emit_call(
                     arguments,
                 )
             } else if module == "self"
+                && !calls.static_context
                 && (member == "method" || calls.inherited_object_member("self", &member))
                 && calls.get(&(module.clone(), member.clone())).is_none()
             {
@@ -2835,6 +2846,7 @@ impl Builder<'_> {
             || locals.contains_key(&module)
             || self.parameters.contains_key(&module)
             || (module == "self"
+                && !self.calls.static_context
                 && (member == "method" || self.calls.inherited_object_member("self", &member))
                 && self.calls.get(&(module.clone(), member.clone())).is_none())
         {
@@ -4519,6 +4531,7 @@ pub(crate) struct CallContext {
     pub(crate) source_fields: BTreeMap<String, BTreeMap<String, crate::ReturnType>>,
     pub(crate) current_module: Option<String>,
     pub(crate) current_class: Option<crate::SourceClass>,
+    pub(crate) static_context: bool,
 }
 impl CallContext {
     /// Resolve literal namespace references after lexical values/constants have had priority.
@@ -5147,7 +5160,8 @@ impl CallContext {
     }
     /// Resolve inherited Object members only when the source class has no override.
     fn inherited_object_member(&self, class: &str, member: &str) -> bool {
-        self.class_bases.get(class) == Some(&crate::ClassBase::LangObject)
+        !(class == "self" && self.static_context)
+            && self.class_bases.get(class) == Some(&crate::ClassBase::LangObject)
             && crate::api::core()
                 .method("Toybox.Lang.Object", member)
                 .is_some()
@@ -5205,8 +5219,12 @@ fn build_body(
                 .collect()
         });
     let mut body_calls = calls.clone();
+    body_calls.static_context = ast.is_static;
     body_calls.parameter_types = candidate_parameters.clone();
-    if let Some(base) = method {
+    if let Some(base) = method.or_else(|| {
+        ast.is_static
+            .then(|| calls.current_class.as_ref().unwrap().base)
+    }) {
         body_calls.class_bases.insert("self".into(), base);
     }
     let mut builder = Builder {
@@ -5379,7 +5397,11 @@ fn build_body(
         ast.name,
         parameter_types,
         builder.operations,
-        method.is_some(),
+        if ast.is_static {
+            crate::Receiver::Static
+        } else {
+            method.is_some().into()
+        },
         context,
         callback
             .as_ref()

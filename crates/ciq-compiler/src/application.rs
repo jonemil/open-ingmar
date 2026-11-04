@@ -315,6 +315,9 @@ pub fn build_console_application(
             "console entry requires a non-null scalar or Void result, or Any",
         ));
     }
+    if instance && !entry.is_instance_method() {
+        return Err(error("application entry requires an instance method"));
+    }
     let source_start = instance
         && app_class
             .unwrap()
@@ -423,11 +426,10 @@ pub fn build_console_application(
         next += 1;
     }
     let mut class_statics = BTreeMap::new();
-    for c in unit
-        .classes()
-        .iter()
-        .filter(|c| c.fields.iter().any(|f| f.kind.class_shared()))
-    {
+    for c in unit.classes().iter().filter(|c| {
+        c.fields.iter().any(|f| f.kind.class_shared())
+            || c.methods.iter().any(|m| m.is_static_method())
+    }) {
         class_statics.insert(c.name.clone(), next);
         next += 1;
     }
@@ -739,6 +741,7 @@ pub fn build_console_application(
             source_class
                 .methods
                 .iter()
+                .filter(|f| !f.is_static_method())
                 .map(|f| method(ids[f.name()], 0x10, &source_class.code_label(f.name()))),
         );
         application.fields.sort_by_key(|f| match f.key {
@@ -789,6 +792,7 @@ pub fn build_console_application(
             source_class
                 .methods
                 .iter()
+                .filter(|f| !f.is_static_method())
                 .map(|f| method(ids[f.name()], 0x10, &source_class.code_label(f.name()))),
         );
         fields.sort_by_key(|field| match field.key {
@@ -842,6 +846,15 @@ pub fn build_console_application(
                 .iter()
                 .filter(|f| f.kind.class_shared())
                 .map(|f| storage_field(f, &ids))
+                .chain(
+                    source_class
+                        .methods
+                        .iter()
+                        .filter(|f| {
+                            f.is_static_method() && !crate::unit::field_initializer(f.name())
+                        })
+                        .map(|f| method(ids[f.name()], 0x50, &source_class.code_label(f.name()))),
+                )
                 .chain(std::iter::once(method(
                     INIT,
                     0x30,

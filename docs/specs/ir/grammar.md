@@ -55,8 +55,8 @@ next sections. Class records use `field-record` below before their methods.
 
 An owner applies to exactly one following function document. There is no unit
 end directive. Class field records precede all methods; class methods require
-`receiver=instance`. Canonical output places module scopes first (parents before
-children), enum types next, shared declarations
+`receiver=instance` or `receiver=static`. Canonical output places module scopes
+first (parents before children), enum types next, shared declarations
 next, then global/module functions,
 then classes, retaining declaration order inside each group. `$` selects global
 shared storage; a dotted path selects a source module. Module records preserve
@@ -130,7 +130,7 @@ is literal text. Unknown escapes and malformed quoting are errors.
 
 ```text
 function-header = ".function" identifier metadata*
-metadata = "parameters=" decimal-usize | "receiver=instance"
+metadata = "parameters=" decimal-usize | "receiver=instance" | "receiver=static"
          | "parameter-types=" parameter-tag (":" parameter-tag)*
          | "result=" declared-result-tag
 value-id = "%" decimal-u32
@@ -215,6 +215,7 @@ value-operation = ".integer" value-id signed-decimal-i32
                 | ".module-value" value-id shared-owner
                 | ".class-value" value-id class-path
                 | ".module-self" value-id
+                | ".static-self" value-id class-path
                 | ".string" value-id quoted-string
                 | ".symbol" value-id identifier
                 | ".constant" value-id module-name identifier

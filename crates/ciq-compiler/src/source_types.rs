@@ -259,9 +259,9 @@ impl Types {
             Operation::MethodFinish { result, .. } => {
                 (*result, Some(Type::named("Toybox.Lang.Method")))
             }
-            Operation::ModuleValue { result, .. } | Operation::ModuleSelf { result } => {
-                (*result, Some(Type::ModuleValue))
-            }
+            Operation::ModuleValue { result, .. }
+            | Operation::ModuleSelf { result }
+            | Operation::StaticSelf { result, .. } => (*result, Some(Type::ModuleValue)),
             Operation::ClassValue { result, .. } => (*result, Some(Type::ClassValue)),
             Operation::SelfValue { result, class } => (
                 *result,

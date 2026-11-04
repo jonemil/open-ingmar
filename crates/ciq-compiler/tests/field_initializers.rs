@@ -121,12 +121,12 @@ fn class_statics_cannot_read_fields_awaiting_instance_allocation() {
         .to_ir_text();
     let start = text.find(".function __ciq_initialize_statics").unwrap();
     let end = start + text[start..].find(".end").unwrap() + ".end".len();
-    text.replace_range(start..end, ".function __ciq_initialize_statics receiver=instance\n.read-self %0 X result=string\n.assign-self A %0\n.return-void\n.end");
+    text.replace_range(start..end, ".function __ciq_initialize_statics receiver=static\n.read-self %0 X result=string\n.assign-self A %0\n.return-void\n.end");
     let error = parse_unit_ir(&text).unwrap_err();
     assert!(
         error
             .message
-            .contains("statics initializer cannot expose self or use instance members"),
+            .contains("static method receiver does not declare that static field or method"),
         "{error}"
     );
 }
