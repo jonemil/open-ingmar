@@ -4458,7 +4458,7 @@ pub(crate) struct CallContext {
     pub(crate) shared_initializer: bool,
     pub(crate) shared_mutable: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) enum_members: BTreeMap<(Option<String>, String), Box<crate::EnumType>>,
-    pub(crate) class_enums: std::collections::BTreeSet<(String, String)>,
+    pub(crate) class_shared: std::collections::BTreeSet<(String, String)>,
     pub(crate) shared_fields: BTreeMap<(Option<String>, String), crate::ReturnType>,
     /// All declared instance field names, including contracts still being inferred.
     pub(crate) field_names: std::collections::BTreeSet<String>,
@@ -4768,7 +4768,7 @@ impl CallContext {
                         qualifier: "$".into(),
                     }
                 } else if owner
-                    .is_some_and(|owner| self.class_enums.contains(&(owner.into(), field.into())))
+                    .is_some_and(|owner| self.class_shared.contains(&(owner.into(), field.into())))
                 {
                     E::ClassField {
                         class: owner.unwrap().into(),
@@ -4791,7 +4791,7 @@ impl CallContext {
         if crate::constants::namespace_alias(expression).is_some() {
             let path = crate::constants::path(expression)?;
             let (owner, field) = path.rsplit_once('.')?;
-            let kind = if self.class_enums.contains(&(owner.into(), field.into())) {
+            let kind = if self.class_shared.contains(&(owner.into(), field.into())) {
                 E::ClassField {
                     class: owner.into(),
                     field: field.into(),
@@ -4823,7 +4823,9 @@ impl CallContext {
                     .map(|scope| format!("{scope}.{class}"))
                     .find(|name| self.class_bases.contains_key(name))
                     .unwrap_or_else(|| class.into());
-                if self.class_enums.contains(&(resolved.clone(), field.into()))
+                if self
+                    .class_shared
+                    .contains(&(resolved.clone(), field.into()))
                     && !locals.contains_key(qualifier)
                     && !parameters.contains_key(qualifier)
                     && !self.field_names.contains(qualifier)

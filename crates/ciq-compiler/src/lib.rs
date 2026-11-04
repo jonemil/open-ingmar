@@ -21,7 +21,7 @@ mod callbacks;
 mod casts;
 mod constants;
 mod enums;
-pub use enums::{EnumDeclaration, EnumInitialization, EnumType};
+pub use enums::{ClassFieldInitialization, EnumDeclaration, EnumType};
 mod control_flow;
 mod dictionary;
 mod record_flow;

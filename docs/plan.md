@@ -36,11 +36,12 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Represent static declarations in source/saved IR and application metadata:
-  separate static storage and method ownership, static `self`, once-only
-  first-member initialization, literal defaults, and required initialization of
-  non-null static fields. Use the [SDK specimen][static-members] as the baseline.
-- [ ] Implement class-qualified, lexical, and instance static reads/writes/calls
+- [ ] Add mutable static fields and static methods to source/saved IR and
+  application metadata, reusing class-shared storage and initialization.
+  Represent static `self` separately from instances/class definitions and
+  require initialization of non-null static fields. Use the
+  [SDK specimen][static-members] as the baseline.
+- [ ] Implement class-qualified, lexical, and instance mutable static reads/writes/calls
   and Method bindings to static-storage or instance receivers. Preserve the
   distinction from class-definition receivers; the SDK accepts binding a class
   definition but its static-target invocation fails in the observed profile.

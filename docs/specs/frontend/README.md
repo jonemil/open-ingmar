@@ -896,7 +896,7 @@ constants; references do not require recursive compile-time expansion. Missing
 names and unresolved type dependencies fail. API checks include unused
 declarations.
 
-Class constants use per-instance fields for both immediate and heap-backed
+Ordinary class `const` declarations use per-instance fields for both immediate and heap-backed
 values. Initializers may produce String, Long, Double, supported containers,
 source instances, or other supported field values through typed runtime
 expressions. Their inferred contracts follow ordinary field restrictions.
@@ -904,7 +904,7 @@ Array literals receive ordinary Array element contracts so mutation changes
 contents without rebinding a positional field view. A stored alias shares its
 initializer's reference; another instance evaluates its own initializer.
 
-Class constants use `self.NAME`, a bare owner reference, or a proven source
+Ordinary class constants use `self.NAME`, a bare owner reference, or a proven source
 instance; `Class.NAME` is rejected. Reads evaluate the receiver once and access
 its actual field. Source-class union alternatives may contain differing values
 under compatible field contracts. Readonly fields cannot satisfy mutable
@@ -938,6 +938,41 @@ See the [scalar example](../../../examples/compiler-constants/README.md),
 [typed declaration example](../../../examples/compiler-constant-declarations/README.md), and
 [anonymous enum example](../../../examples/compiler-anonymous-enums/README.md), and
 [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
+
+### Static constants
+
+Class `static const` declarations create readonly slots shared by all instances.
+Each binding has the ordinary optional annotation and initializer; an omitted
+initializer produces Null and must satisfy any annotation. Initializers accept
+the same supported value contracts as ordinary class constants, including
+reference containers, source objects, and Methods. Assignment to the slot is
+forbidden after initialization; referenced container contents remain mutable.
+
+`Class.NAME`, a proven instance's `NAME`, `self.NAME`, and a bare class member
+read the same slot. Canonical/root-qualified class paths and source module
+aliases retain ordinary lookup and shadowing rules. Class-qualified reads do
+not allocate an instance. Reading the class value alone does not initialize
+statics; accessing a shared member or allocating an instance initializes them
+once, independently of instance field expressions and user `initialize()`.
+
+Direct Number literals use metadata defaults. Other initializers run in the
+class statics hook: literal-default expressions precede runtime expressions,
+with declaration order preserved within each phase. Conditional expressions
+use ordinary CFG staging. Each designated slot must receive one write on every
+returning path. Direct and source-call-mediated reads of unwritten constants
+are rejected, including reentry through another owner. The analysis is
+conservative; it does not use runtime branch values to prove a cycle harmless.
+Static initializers cannot use instance fields/methods or expose `self` as an
+instance value. Static-self values and static method declarations are not yet
+part of the executable source profile.
+
+The class statics record's lexical parent is the containing module, or globals
+for a global class. Module helpers and shared bindings therefore resolve from
+the correct owner during initialization. Static constants and class enums share
+the same storage/lookup infrastructure while retaining their distinct
+initialization rules. See the [specimen](../../../examples/compiler-static-constants/README.md),
+[IR contract](../ir/README.md#static-constants), and
+[SDK evidence](../../investigations/compiler-root-objects.md#static-constants).
 
 ### Shared variables
 
@@ -1183,10 +1218,11 @@ identities without imports or enclosing type lookup. Constructor and runtime-tes
 qualifier checks still reject runtime locals/parameters shadowing the path's
 first named component; lexical type assertions use the type namespace. Native
 superclass declarations retain their existing spelling. Namespace values follow
-the rules below. Unbound function values and class/static member access other
-than enum constants remain unsupported.
+the rules below. Class-qualified reads support enum members and static
+constants. Unbound function values, mutable static fields, and static methods
+remain unsupported.
 
-Root qualifiers disappear during source resolution. Shared storage, class-enum
+Root qualifiers disappear during source resolution. Shared storage, class-shared
 reads, source construction, native operations, and global/module calls retain
 their existing IR, assembly, VM, and PRG representations. See the
 [root-value specimen](../../../examples/compiler-root-values/README.md) and
@@ -1862,7 +1898,7 @@ Number fields also support all ten arithmetic/bitwise compound operators:
 corresponding Number binary operation, then stores the result. A RHS that
 changes the field does not change the captured old value. Branching RHS
 expressions stage the old read through ordinary typed locals. Non-Number results
-are rejected. Static fields and source-inherited fields remain unsupported. See
+are rejected. Mutable static fields and source-inherited fields remain unsupported. See
 [target evidence](../../investigations/compiler-compound-targets.md).
 
 `ClassDeclaration.fields` holds names and FieldKind defaults/contracts. Unit

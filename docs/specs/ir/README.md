@@ -2337,11 +2337,11 @@ no VM field flag or new DATA kind.
 
 `FieldKind::Enum { value_type, initial }` / `.field-enum name tag mode`
 declares a readonly shared class enum slot under an ordinary stored value
-contract, excluding Void and Graphics.Dc. `EnumInitialization` selects an i32
+contract, excluding Void and Graphics.Dc. `ClassFieldInitialization` selects an i32
 metadata default, `static`, or `null`. A Number default must satisfy the
 field's native or enum backing contract. `null` requires exactly
 one write in each allocation initializer invocation. `static` requires exactly
-one write in `__ciq_initialize_enum_defaults`, invoked once as the class statics
+one write in `__ciq_initialize_statics`, invoked once as the class statics
 initialization hook; it has an instance-shaped receiver, no parameters, and a
 Void result. Static defaults have no allocation write. Each hook must exist
 exactly when its fields require it. They cannot write each other's bindings,
@@ -2356,6 +2356,29 @@ enum field, and exact contract to match their declaration; an ordinary instance
 field is not a class read target. Reads remain ordered relative to allocations
 and their effects. The declared contract does not prove that a runtime enum
 initializer has executed: a pre-allocation read can still return Null.
+
+### Static constants
+
+`FieldKind::StaticConstant { value_type, initial }` is saved as
+`.field-static-constant NAME TAG MODE`. `ClassFieldInitialization` represents
+the shared initialization modes: a Number metadata default or `static` for a
+write in `__ciq_initialize_statics`. Allocation mode (`null` in enum records)
+is rejected for static constants. The value contract excludes Void and
+Graphics.Dc and retains supported source, container, and callback identities.
+
+Static constants use the same `.read-class` and instance/self reads as class
+enums. Unit validation checks readonly storage and exact declared contracts.
+The reserved statics body exists exactly when a field needs it, has no
+parameters and a Void result, and uses the existing hidden-initializer
+`receiver=instance` encoding for its runtime storage receiver. It is not a
+callable instance member. It may write only its designated static/default
+slots and must initialize each once on every continuing path. It cannot
+expose a source instance receiver or access ordinary instance members.
+
+Readiness checks follow direct reads, source calls, known comparator calls,
+and lazy owner initialization. Reads of a still-unwritten slot in the active
+statics initializer are rejected, including class-qualified reads and
+cross-owner reentry. See [source semantics](../frontend/README.md#static-constants).
 Class reads and construction include statics-default bodies in effect analysis.
 
 `FieldKind::Value { value_type: ReturnType }` carries field contracts without an

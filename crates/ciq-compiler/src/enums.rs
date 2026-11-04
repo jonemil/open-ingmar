@@ -102,17 +102,17 @@ pub(crate) fn has_unresolved(ty: &crate::api::Type) -> bool {
     }
 }
 
-/// Select when a shared class enum slot receives its initial value.
+/// Select when a class-shared field receives its initial value.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EnumInitialization {
+pub enum ClassFieldInitialization {
     /// A Number embedded directly in class metadata.
     Number(i32),
-    /// A literal/default expression evaluated once by the statics initializer.
+    /// An expression evaluated once by the statics initializer.
     Static,
     /// A computed expression evaluated by each allocation initializer.
     Allocation,
 }
-impl EnumInitialization {
+impl ClassFieldInitialization {
     pub(crate) fn text(&self) -> String {
         match self {
             Self::Number(n) => n.to_string(),

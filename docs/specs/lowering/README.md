@@ -251,12 +251,21 @@ source-class provenance does not pass through an opaque native assertion.
 
 ### Source-class tests and casts
 
-Construction and class enum reads use the same statically resolved class lookup
+Construction and class-shared reads use the same statically resolved class lookup
 as runtime tests. Their symbols encode the canonical class path using the
 [nested owner key](#nested-module-lookup), while the bound member ID names the
 class's short name. Intermediate containing modules are not activated by class
 selection. Class method CODE labels use that same path key after their `c` owner
 prefix, keeping identical short names in different modules disjoint.
+
+Static constants and class enums occupy the class's separate statics DATA
+record. Readonly fields use key low byte `0x50`; direct Number defaults use
+type `0x01`, and other static constants start as Null and receive checked
+initializer writes. The statics record's parent is the containing module's
+runtime identity, or globals for global classes. Its hidden initializer targets
+`__ciq_initialize_statics` when required. The VM activates that storage once on
+member access; ordinary class-value selection does not activate it. Class reads
+reuse class selection followed by `getsv`, with no new VM opcode or DATA tag.
 
 Lowering a source test evaluates its operand, selects the class from its
 declaring module with `getmv` (or `getselfv` in that same module), and emits `isa`. The target is the emitted source class

@@ -71,6 +71,8 @@ module or a class: `.enum C Kind integer` declares `C.Kind` backed by Number.
 ```text
 field-record = field-body newline
 field-body = ".field-constant" identifier call-result-tag
+           | ".field-static-constant" identifier call-result-tag
+             (signed-decimal-i32 | "static")
            | ".field-initialized" identifier call-result-tag
            | ".field-enum" identifier call-result-tag
              (signed-decimal-i32 | "static" | "null")

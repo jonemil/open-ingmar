@@ -127,6 +127,33 @@ The [plan](../plan.md#1-declarations-namespaces-and-member-storage) owns the
 remaining source/IR/lowering work. This specimen does not establish inheritance,
 cross-class static cycles, or access-control behavior.
 
+## Static constants
+
+**Observed, 2026-11-03:** SDK/simulator 9.2.0, `fr265`, `-O 0`, minimum API
+3.0.0, target 5.2.0. The [static-constant
+specimen](../../examples/compiler-static-constants/README.md) produces matching
+[SDK/generated console output](../../examples/compiler-static-constants/expected.txt)
+through the shared specimen checker. Static Array/Method references survive
+two allocations and retain shared contents; conditional initialization runs
+once. The trace is `235` after first access and `23544` after the two instance
+allocations. The SDK also accepts an added unannotated `static const EMPTY;`
+declaration without an initializer.
+
+A nested `Nested.Settings` initializer calling `Nested.select()` exposed the
+statics record's lexical parent requirement. SDK DATA puts both the instance
+definition and statics record under the runtime `Nested` module. Generated
+statics initially parented to globals failed with `Symbol Not Found` during
+that helper lookup. Using the containing module as parent made the generated
+application match the SDK, including the final `10`. This applies to the
+shared class-enum storage path too.
+
+The SDK uses String DATA defaults directly for `MESSAGE`; our current profile
+writes it in the statics hook before runtime expressions. The matched trace
+establishes the specimen's observable order and identity, not identical SDK
+instruction selection or static-initialization cycle behavior. Current
+contracts and conservative readiness restrictions belong in the
+[frontend spec](../specs/frontend/README.md#static-constants).
+
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md
 [check]: ../../scripts/README.md#console-specimen-check

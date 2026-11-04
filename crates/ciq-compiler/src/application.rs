@@ -72,8 +72,13 @@ fn storage_field(
     ids: &BTreeMap<String, u32>,
 ) -> FieldDeclaration {
     let (kind, value) = match &declaration.kind {
+        crate::FieldKind::StaticConstant {
+            initial: crate::ClassFieldInitialization::Number(n),
+            ..
+        } => (1, *n as u32),
+        crate::FieldKind::StaticConstant { .. } => (0, 0),
         crate::FieldKind::Enum {
-            initial: crate::EnumInitialization::Number(n),
+            initial: crate::ClassFieldInitialization::Number(n),
             ..
         } => (1, *n as u32),
         crate::FieldKind::Enum { .. } => (0, 0),
@@ -103,7 +108,7 @@ fn storage_field(
     };
     field(
         ids[&declaration.name],
-        if matches!(declaration.kind, crate::FieldKind::Enum { .. }) {
+        if declaration.kind.class_shared() {
             0x50
         } else {
             0
@@ -411,11 +416,11 @@ pub fn build_console_application(
         next += 1;
     }
     let mut class_statics = BTreeMap::new();
-    for c in unit.classes().iter().filter(|c| {
-        c.fields
-            .iter()
-            .any(|f| matches!(f.kind, crate::FieldKind::Enum { .. }))
-    }) {
+    for c in unit
+        .classes()
+        .iter()
+        .filter(|c| c.fields.iter().any(|f| f.kind.class_shared()))
+    {
         class_statics.insert(c.name.clone(), next);
         next += 1;
     }
@@ -697,7 +702,7 @@ pub fn build_console_application(
             source_class
                 .fields
                 .iter()
-                .filter(|f| !matches!(f.kind, crate::FieldKind::Enum { .. }))
+                .filter(|f| !f.kind.class_shared())
                 .map(|declaration| storage_field(declaration, &ids)),
         );
         if source_class
@@ -770,7 +775,7 @@ pub fn build_console_application(
             source_class
                 .fields
                 .iter()
-                .filter(|f| !matches!(f.kind, crate::FieldKind::Enum { .. }))
+                .filter(|f| !f.kind.class_shared())
                 .map(|declaration| storage_field(declaration, &ids)),
         );
         fields.extend(
@@ -814,11 +819,21 @@ pub fn build_console_application(
                 "__ciq_data_statics_{}",
                 crate::names::module_key(&source_class.name)
             ),
-            [None, None, Some(Reference::Raw(GLOBALS)), None],
+            [
+                None,
+                None,
+                Some(Reference::Raw(
+                    source_class
+                        .name
+                        .rsplit_once('.')
+                        .map_or(GLOBALS, |(owner, _)| module_ids[owner]),
+                )),
+                None,
+            ],
             source_class
                 .fields
                 .iter()
-                .filter(|f| matches!(f.kind, crate::FieldKind::Enum { .. }))
+                .filter(|f| f.kind.class_shared())
                 .map(|f| storage_field(f, &ids))
                 .chain(std::iter::once(method(
                     INIT,
@@ -826,9 +841,9 @@ pub fn build_console_application(
                     &if source_class
                         .methods
                         .iter()
-                        .any(|f| f.name() == crate::unit::ENUM_DEFAULT_INITIALIZER)
+                        .any(|f| f.name() == crate::unit::STATIC_INITIALIZER)
                     {
-                        source_class.code_label(crate::unit::ENUM_DEFAULT_INITIALIZER)
+                        source_class.code_label(crate::unit::STATIC_INITIALIZER)
                     } else {
                         "__ciq_noop".into()
                     },

@@ -34,7 +34,7 @@ fn enum_value_types_and_defaults_keep_all_stages() {
             ".field-enum TEXT string static",
             ".field-enum TEXT void static",
         ),
-        text.replace("__ciq_initialize_enum_defaults", "arbitrary_default_method"),
+        text.replace("__ciq_initialize_statics", "arbitrary_default_method"),
     ] {
         assert_ne!(forged, text);
         assert!(parse_unit_ir(&forged).is_err());
@@ -46,7 +46,7 @@ fn anonymous_members_keep_types_and_named_members_keep_backings() {
     for source in [
         "using Toybox.Lang;enum{F=1.5f}function f() as Lang.Number{return F;}",
         "class C{enum{A=1.5f}function initialize(){self.A=2.5f;}}",
-        "class C{enum{A=1.5f}function initialize(){}}function __ciq_initialize_enum_defaults(){}",
+        "class C{enum{A=1.5f}function initialize(){}}function __ciq_initialize_statics(){}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
