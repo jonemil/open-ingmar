@@ -94,7 +94,9 @@ fn barrier(op: &Operation) -> bool {
             | Operation::GlobalCall { .. }
             | Operation::GlobalCallStatement { .. }
             | Operation::ModuleCall { .. }
+            | Operation::ClassCall { .. }
             | Operation::ModuleCallStatement { .. }
+            | Operation::ClassCallStatement { .. }
             | Operation::ObjectCall { .. }
             | Operation::ObjectCallStatement { .. }
             | Operation::NativeCall { .. }

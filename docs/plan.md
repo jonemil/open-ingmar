@@ -36,13 +36,11 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Implement class-qualified static calls, including root/module aliases and
-  callable capture before branching argument effects. Preserve static-storage
-  versus instance receiver identity, and establish SDK-supported static `self`
-  annotation/cast contracts for both invocation forms. Use the
-  [SDK specimen][static-members] as the baseline. Preserve the
-  distinction from class-definition receivers; the SDK accepts binding a class
-  definition but its static-target invocation fails in the observed profile.
+- [ ] Track static receiver origin through aliases, storage, and returns; accept
+  SDK-valid Object/source-class annotations on static `self` without granting
+  an unannotated receiver instance proofs. Preserve the distinction from class
+  definitions: binding a class definition's static target fails on invocation
+  in the observed SDK profile. See the [receiver evidence][static-members].
 - [ ] Enforce `public`, `private`, `protected`, and `hidden` on declarations and
   inherited/member access, including access across source files.
 

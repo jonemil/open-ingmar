@@ -1,9 +1,8 @@
 # Static member SDK reference
 
 This SDK-only specimen establishes static storage and receiver behavior.
-Our source compiler supports static fields and methods through instances;
-this specimen also needs direct class-qualified calls, whose implementation is
-pending. See the executable [method](../compiler-static-methods/README.md),
+See the compiler-validated [class-call](../compiler-class-calls/README.md),
+[method](../compiler-static-methods/README.md),
 [mutable field](../compiler-static-fields/README.md) and
 [constant](../compiler-static-constants/README.md) compiler examples.
 It reuses the [minimal console](../minimal-console/README.md) manifest/resources;

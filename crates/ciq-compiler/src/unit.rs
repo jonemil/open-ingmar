@@ -48,6 +48,10 @@ fn source_callee<'a>(owner: Owner<'a>, operation: &'a Operation) -> Option<(Owne
         Operation::GlobalCall { member, .. } | Operation::GlobalCallStatement { member, .. } => {
             Some((Owner::Global, member))
         }
+        Operation::ClassCall { class, member, .. }
+        | Operation::ClassCallStatement { class, member, .. } => {
+            Some((Owner::Class(class), member))
+        }
         Operation::ModuleCall { module, member, .. }
         | Operation::ModuleCallStatement { module, member, .. } => {
             Some((Owner::Module(module), member))
@@ -103,6 +107,13 @@ fn activation_callees<'a>(
         operation
     };
 
+    if let Operation::ClassCall { class, .. } | Operation::ClassCallStatement { class, .. } =
+        operation
+    {
+        if !(owner == Owner::Class(class) && function.is_static_method()) {
+            calls.push((Owner::Class(class), STATIC_INITIALIZER));
+        }
+    }
     let module = match operation {
         Operation::ModuleValue {
             module: Some(module),
@@ -121,6 +132,8 @@ fn activation_callees<'a>(
         | Operation::ModuleCallStatement { module, .. } => Some(module.as_str()),
         Operation::ClassValue { class, .. }
         | Operation::SourceBegin { class, .. }
+        | Operation::ClassCall { class, .. }
+        | Operation::ClassCallStatement { class, .. }
         | Operation::ClassFieldRead { class, .. }
         | Operation::ClassFieldBegin { class, .. } => {
             class.rsplit_once('.').map(|(owner, _)| owner)
@@ -2919,10 +2932,12 @@ impl CompilationUnit {
                     Operation::ObjectCall { arguments, .. }
                     | Operation::GlobalCall { arguments, .. }
                     | Operation::ModuleCall { arguments, .. }
+                    | Operation::ClassCall { arguments, .. }
                     | Operation::SelfCall { arguments, .. } => (arguments, true),
                     Operation::ObjectCallStatement { arguments, .. }
                     | Operation::GlobalCallStatement { arguments, .. }
                     | Operation::ModuleCallStatement { arguments, .. }
+                    | Operation::ClassCallStatement { arguments, .. }
                     | Operation::SelfCallStatement { arguments, .. }
                     | Operation::SourceNew { arguments, .. } => (arguments, false),
                     _ => continue,
@@ -3012,6 +3027,23 @@ impl CompilationUnit {
                     None
                 };
                 let mut joined_result = None;
+                if let Operation::ClassCall { class, member, .. }
+                | Operation::ClassCallStatement { class, member, .. } = &located.operation
+                {
+                    if !self
+                        .classes
+                        .iter()
+                        .find(|c| c.name == *class)
+                        .and_then(|c| c.methods.iter().find(|f| f.name() == member))
+                        .is_some_and(|f| f.is_static_method())
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "class calls require a declared static method".into(),
+                        ));
+                    }
+                }
                 for key in source_callees(owner, &located.operation) {
                     if field_initializer(key.1) || key.1.starts_with("__ciq_initialize_shared_") {
                         return Err(fail(
@@ -3168,6 +3200,7 @@ impl CompilationUnit {
                 let expected_result = match &located.operation {
                     Operation::GlobalCall { result_type, .. }
                     | Operation::ModuleCall { result_type, .. }
+                    | Operation::ClassCall { result_type, .. }
                     | Operation::ObjectCall { result_type, .. }
                     | Operation::SelfCall { result_type, .. } => Some(result_type),
                     _ => None,

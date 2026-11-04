@@ -2107,8 +2107,19 @@ actual hidden receiver and requires `receiver=static`. Unit validation anchors
 CLASS to the enclosing declaration. It produces the opaque `module-value`
 view: identity and storage are preserved, but no ordinary Object inheritance or
 source-instance evidence is implied. An instance call supplies the instance;
-a statics initializer supplies static storage. These views must not be replaced
+a statics initializer or class-qualified call supplies static storage. These
+views must not be replaced
 with a class-definition value or a forged `.self class=...` operation.
+
+`ClassCall` / `.call-class %result CLASS MEMBER [result=TYPE] %arguments...`
+invokes a declared static method through the canonical class. `ClassCallStatement`
+/ `.call-class-discard CLASS MEMBER %arguments...` discards its result, including
+Void. Unit validation requires that static declaration and checks its arity,
+argument and result contracts. Instance dispatch remains a separate operation.
+Class calls accept `capture=&builder` from `.begin-call`, with the same private
+lifetime and completion rules as module/global calls. Class lookup activates
+static storage before argument effects, at the capture when present. Neither
+`lookup=lexical` nor `via=` is valid on these canonical class calls.
 
 Methods remain in `ClassDeclaration.methods`; `Function::is_static_method`
 controls metadata placement. Typed clients can construct the same model through

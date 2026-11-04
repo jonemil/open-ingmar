@@ -210,9 +210,23 @@ helper through the statics record's parent. These cases require existing member
 lookup/invocation and `getself`, not a new opcode or DATA record kind.
 
 The [frontend contract](../specs/frontend/README.md#static-methods) defines the
-checked member scope. Direct class-call lowering and broader static-self
-annotation/cast contracts remain in the plan; the matched specimen does not
-establish Object inheritance for every possible static receiver.
+checked member scope. The matched specimen does not establish Object inheritance
+for every possible static receiver.
+
+The [class-call specimen](../../examples/compiler-class-calls/README.md) matches
+all 17 SDK/generated lines with structured reconstruction under the same profile.
+`Cold.add(Trace.mark(3))` first initializes static storage (trace `2`), then
+runs the argument (trace `23`); captures preserve this order across conditional
+and constructed arguments. Aliases/root paths reach the same static declarations.
+Direct `owner()` equals the hook's stored receiver, but differs from the class
+definition; calling through an instance instead returns that instance.
+
+Separate authored probes returned static `self` with Object and source-class
+annotations, both implicitly and via explicit casts. SDK compilation and
+execution succeed. On direct class calls, `instanceof` the annotated type is
+false; through instances it is true. Thus accepted annotations do not prove
+physical instance identity. Our compiler accepts explicit unchecked casts;
+implicit annotations still require origin-aware typing.
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md

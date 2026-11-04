@@ -241,7 +241,7 @@ fn emit(
             return Err(Diagnostic::at(
                 source,
                 expression.span.start,
-                "capture requires a user module/global call",
+                "capture requires a user module/global/class call",
             ));
         }
         return Ok(value);
@@ -1183,6 +1183,38 @@ fn emit_call(
                 arguments,
             }
         }
+    } else {
+        named_call(result, module, member, arguments, path, lexical, calls)
+    })
+}
+
+/// Build a resolved namespace call after its arguments have been emitted.
+/// Keep operation construction off the recursive receiver-emission stack.
+fn named_call(
+    result: ValueId,
+    module: Option<String>,
+    member: String,
+    arguments: Vec<ValueId>,
+    path: Vec<String>,
+    lexical: bool,
+    calls: &CallContext,
+) -> Operation {
+    if module
+        .as_ref()
+        .is_some_and(|m| m != "self" && calls.class_bases.contains_key(m))
+    {
+        let class = module.unwrap();
+        Operation::ClassCall {
+            capture: None,
+            result,
+            result_type: calls
+                .get(&(class.clone(), member.clone()))
+                .map(|s| s.result.clone())
+                .unwrap_or(crate::ReturnType::Integer),
+            class,
+            member,
+            arguments,
+        }
     } else if let Some(module) = module.as_deref().and_then(native_module_path) {
         Operation::NativeModuleCall {
             result,
@@ -1226,7 +1258,7 @@ fn emit_call(
             member,
             arguments,
         }
-    })
+    }
 }
 
 /// Resolved break destination and optional loop latch for a structured construct.
@@ -2637,12 +2669,14 @@ impl Builder<'_> {
                 )
             }
             E::OwnerCall { target, arguments } => {
-                let capture =
-                    if target.module != "self" && native_module_path(&target.module).is_none() {
-                        self.capture_before_arguments(&arguments, locals, span)?
-                    } else {
-                        None
-                    };
+                let capture = if target.module != "self"
+                    && (self.calls.class_bases.contains_key(&target.module)
+                        || native_module_path(&target.module).is_none())
+                {
+                    self.capture_before_arguments(&arguments, locals, span)?
+                } else {
+                    None
+                };
                 let expected = self.call_argument_context(&target.module, &target.member);
                 let arguments = self.snapshot_arguments(arguments, locals, &expected)?;
                 captured_expression(capture, E::OwnerCall { target, arguments }, span)
@@ -2832,10 +2866,18 @@ impl Builder<'_> {
         locals: &BTreeMap<String, LocalId>,
         span: Span,
     ) -> Result<(), Diagnostic> {
+        let named = parser::Expression {
+            kind: parser::ExpressionKind::Local(module.clone()),
+            span,
+        };
         if self
             .calls
-            .module_name(&module, locals, &self.parameters)
+            .declared_class_value(&named, locals, &self.parameters)
             .is_some()
+            || self
+                .calls
+                .module_name(&module, locals, &self.parameters)
+                .is_some()
             || module == "Lang"
             || self
                 .calls
@@ -2939,6 +2981,21 @@ impl Builder<'_> {
                 .operations
                 .last_mut()
                 .expect("call emitted an operation");
+            if let Operation::ClassCall {
+                class,
+                member,
+                arguments,
+                ..
+            } = &last.operation
+            {
+                last.operation = Operation::ClassCallStatement {
+                    capture: last.operation.call_capture(),
+                    class: class.clone(),
+                    member: member.clone(),
+                    arguments: arguments.clone(),
+                };
+                return Ok(());
+            }
             if let Operation::SelfCall {
                 member, arguments, ..
             } = &last.operation
@@ -4589,6 +4646,21 @@ impl CallContext {
         }?;
         Some(E::ClassValue(class))
     }
+    fn declared_class_value(
+        &self,
+        expression: &parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        parameters: &BTreeMap<String, usize>,
+    ) -> Option<String> {
+        match self.namespace_value(expression, locals, parameters)? {
+            parser::ExpressionKind::ClassValue(class)
+                if self.class_bases.contains_key(&class) && class != "self" =>
+            {
+                Some(class)
+            }
+            _ => None,
+        }
+    }
     fn shared_target(
         &self,
         expression: &parser::Expression,
@@ -4634,6 +4706,23 @@ impl CallContext {
             } => (crate::constants::path(receiver)?, member, arguments),
             _ => return None,
         };
+        let named = parser::Expression {
+            kind: E::Local(path.clone()),
+            span: expression.span,
+        };
+        let receiver = match &expression.kind {
+            E::ValueCall { receiver, .. } => receiver.as_ref(),
+            _ => &named,
+        };
+        if let Some(class) = self.declared_class_value(receiver, locals, parameters) {
+            return Some(parser::owner_call(
+                class,
+                member.clone(),
+                arguments.clone(),
+                false,
+                Vec::new(),
+            ));
+        }
         if path == "$" {
             return Some(E::GlobalCall {
                 lexical: false,

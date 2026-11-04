@@ -299,6 +299,11 @@ impl Origins {
                 result_type,
                 ..
             }
+            | Operation::ClassCall {
+                result,
+                result_type,
+                ..
+            }
             | Operation::SelfCall {
                 result,
                 result_type,

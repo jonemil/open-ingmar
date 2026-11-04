@@ -206,6 +206,7 @@ pub(crate) fn lower_owned<'a>(
             | Operation::LocalTake { result, .. }
             | Operation::GlobalCall { result, .. }
             | Operation::ModuleCall { result, .. }
+            | Operation::ClassCall { result, .. }
             | Operation::NativeModuleCall { result, .. }
             | Operation::SelfCall { result, .. }
             | Operation::ObjectCall { result, .. }
@@ -299,7 +300,7 @@ pub(crate) fn lower_owned<'a>(
                     .expect("validated capture")
                     .operation;
                 let owner = uncaptured_owner(call);
-                call_receiver(owner, &mut items);
+                call_receiver(owner, definitions.owner, &mut items);
                 items.push(call_target(owner, call_member(call), definitions.owner));
                 items.push(instruction(Opcode::Frpush, vec![]));
                 items.push(instruction(
@@ -782,6 +783,29 @@ pub(crate) fn lower_owned<'a>(
             }
             Operation::ReturnVoid => {
                 items.push(instruction(Opcode::Return, vec![]));
+                continue;
+            }
+            Operation::ClassCallStatement {
+                ref class,
+                ref member,
+                ref arguments,
+                ..
+            } => {
+                let owner = located
+                    .operation
+                    .call_capture()
+                    .map_or(CallOwner::Class(class), |b| {
+                        CallOwner::Captured(builders[&b])
+                    });
+                statement_call(
+                    owner,
+                    member,
+                    arguments,
+                    &definitions,
+                    (&slots, &builders, &function.value_types),
+                    &literal_aliases,
+                    &mut items,
+                );
                 continue;
             }
             Operation::ModuleCallStatement {
@@ -1274,7 +1298,10 @@ fn expression(
                         ],
                     )
                 }
-                Operation::ModuleCall {
+                Operation::ClassCall {
+                    member, arguments, ..
+                }
+                | Operation::ModuleCall {
                     member, arguments, ..
                 }
                 | Operation::SelfCall {
@@ -1300,6 +1327,7 @@ fn expression(
                     } else {
                         match definitions[&value] {
                             Operation::ModuleCall { module, .. } => CallOwner::Module(module),
+                            Operation::ClassCall { class, .. } => CallOwner::Class(class),
                             Operation::GlobalCall { .. } => CallOwner::Global,
                             _ => CallOwner::Instance,
                         }
@@ -1528,6 +1556,7 @@ enum CallOwner<'a> {
     Lexical,
     Global,
     Module(&'a str),
+    Class(&'a str),
     Instance,
 }
 
@@ -1551,11 +1580,14 @@ fn call_target(owner: CallOwner<'_>, member: &str, current: Option<Option<&str>>
         ),
         CallOwner::Lexical | CallOwner::Instance => instruction(Opcode::Getselfv, vec![member]),
         CallOwner::Captured(_) => unreachable!("captured setup loads both saved values"),
-        CallOwner::Path(_) => instruction(Opcode::Getsv, vec![member]),
+        CallOwner::Path(_) | CallOwner::Class(_) => instruction(Opcode::Getsv, vec![member]),
     }
 }
 /// Resolve owner-relative namespace selectors before the final callable and its arguments.
-fn call_receiver(owner: CallOwner<'_>, items: &mut Vec<Item>) {
+fn call_receiver(owner: CallOwner<'_>, current: Option<Option<&str>>, items: &mut Vec<Item>) {
+    if let CallOwner::Class(class) = owner {
+        items.push(class_lookup(class, current));
+    }
     if let CallOwner::Path(path) = owner {
         for (index, part) in path.iter().enumerate() {
             items.push(instruction(
@@ -1577,6 +1609,9 @@ fn uncaptured_owner(call: &Operation) -> CallOwner<'_> {
         CallOwner::Lexical
     } else {
         match call {
+            Operation::ClassCall { class, .. } | Operation::ClassCallStatement { class, .. } => {
+                CallOwner::Class(class)
+            }
             Operation::ModuleCall { module, .. }
             | Operation::ModuleCallStatement { module, .. } => CallOwner::Module(module),
             Operation::GlobalCall { .. } | Operation::GlobalCallStatement { .. } => {
@@ -1588,6 +1623,9 @@ fn uncaptured_owner(call: &Operation) -> CallOwner<'_> {
 }
 fn call_member(call: &Operation) -> &str {
     match call {
+        Operation::ClassCall { member, .. } | Operation::ClassCallStatement { member, .. } => {
+            member
+        }
         Operation::ModuleCall { member, .. }
         | Operation::ModuleCallStatement { member, .. }
         | Operation::GlobalCall { member, .. }
@@ -1611,7 +1649,7 @@ fn call_setup(
             items.push(instruction(Opcode::Lputv, vec![Operand::Bits(slot)]));
         }
     } else {
-        call_receiver(owner, items);
+        call_receiver(owner, current, items);
         items.push(call_target(owner, member, current));
         if context {
             items.push(instruction(Opcode::Frpush, vec![]));

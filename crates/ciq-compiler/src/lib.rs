@@ -1917,6 +1917,24 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
+    /// Invoke a declared static method through its canonical class definition.
+    /// Lookup selects static storage before arguments; a capture preserves that
+    /// lookup across control-flow staging.
+    ClassCall {
+        capture: Option<BuilderId>,
+        result: ValueId,
+        result_type: ReturnType,
+        class: String,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
+    /// Invoke a declared static method for effects and discard its VM result.
+    ClassCallStatement {
+        capture: Option<BuilderId>,
+        class: String,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
     /// Invoke a runtime-provided member on an explicit value receiver.
     /// Validation resolves its inherited contract and supported native lowering.
     /// Bind a literal method selector with its resolved fixed signature.
@@ -2021,6 +2039,8 @@ impl Operation {
     pub(crate) fn call_capture(&self) -> Option<BuilderId> {
         match self {
             Self::ModuleCall { capture, .. }
+            | Self::ClassCall { capture, .. }
+            | Self::ClassCallStatement { capture, .. }
             | Self::GlobalCall { capture, .. }
             | Self::ModuleCallStatement { capture, .. }
             | Self::GlobalCallStatement { capture, .. } => *capture,
@@ -2031,6 +2051,8 @@ impl Operation {
     pub(crate) fn set_call_capture(&mut self, builder: BuilderId) -> bool {
         match self {
             Self::ModuleCall { capture, .. }
+            | Self::ClassCall { capture, .. }
+            | Self::ClassCallStatement { capture, .. }
             | Self::GlobalCall { capture, .. }
             | Self::ModuleCallStatement { capture, .. }
             | Self::GlobalCallStatement { capture, .. } => {
@@ -2108,6 +2130,7 @@ impl Operation {
             | Self::ParameterRead { result, .. }
             | Self::GlobalCall { result, .. }
             | Self::ModuleCall { result, .. }
+            | Self::ClassCall { result, .. }
             | Self::BindMethod { result, .. }
             | Self::NativeCall { result, .. }
             | Self::SelfCall { result, .. }
@@ -2139,6 +2162,7 @@ impl Operation {
             | Self::ParameterAssign { .. }
             | Self::GlobalCallStatement { .. }
             | Self::ModuleCallStatement { .. }
+            | Self::ClassCallStatement { .. }
             | Self::SelfCallStatement { .. }
             | Self::LocalVariable { .. }
             | Self::LocalDeclare { .. }
@@ -2600,6 +2624,7 @@ impl Function {
             }
             if let Operation::GlobalCall { result_type, .. }
             | Operation::ModuleCall { result_type, .. }
+            | Operation::ClassCall { result_type, .. }
             | Operation::SelfCall { result_type, .. }
             | Operation::ObjectCall { result_type, .. }
             | Operation::SelfFieldRead { result_type, .. } = &mut located.operation
@@ -4363,7 +4388,19 @@ impl Function {
                     };
                     (result, arguments.clone())
                 }
-                Operation::ModuleCall {
+                Operation::ClassCall {
+                    class: ref module,
+                    ref member,
+                    ref arguments,
+                    ..
+                }
+                | Operation::ClassCallStatement {
+                    class: ref module,
+                    ref member,
+                    ref arguments,
+                    ..
+                }
+                | Operation::ModuleCall {
                     ref module,
                     ref member,
                     ref arguments,
@@ -4387,6 +4424,11 @@ impl Function {
                     validate_call_names(Some(module), member).map_err(fail)?;
                     validate_call_arguments(arguments, &types).map_err(fail)?;
                     let result = if let Operation::ModuleCall {
+                        result,
+                        ref result_type,
+                        ..
+                    }
+                    | Operation::ClassCall {
                         result,
                         ref result_type,
                         ..
@@ -4847,6 +4889,7 @@ impl Function {
                     | Operation::DictionaryNew { .. }
                     | Operation::GlobalCall { .. }
                     | Operation::ModuleCall { .. }
+                    | Operation::ClassCall { .. }
                     | Operation::Binary {
                         kind: BinaryOp::Divide | BinaryOp::Remainder,
                         ..
@@ -4889,6 +4932,7 @@ impl Function {
                     | Operation::NativeModuleCallStatement { .. }
                     | Operation::GlobalCallStatement { .. }
                     | Operation::ModuleCallStatement { .. }
+                    | Operation::ClassCallStatement { .. }
                     | Operation::SelfCall { .. }
                     | Operation::SelfCallStatement { .. }
                     | Operation::Println { .. }
@@ -4977,6 +5021,7 @@ impl Function {
                         .collect(),
                     Operation::GlobalCallStatement { arguments, .. }
                     | Operation::ModuleCallStatement { arguments, .. }
+                    | Operation::ClassCallStatement { arguments, .. }
                     | Operation::NativeModuleCallStatement { arguments, .. }
                     | Operation::SelfCallStatement { arguments, .. } => arguments.clone(),
                     Operation::Block { .. }
@@ -5077,6 +5122,7 @@ impl Function {
                                 | Operation::SourceNew { arguments, .. }
                                 | Operation::GlobalCall { arguments, .. }
                                 | Operation::ModuleCall { arguments, .. }
+                                | Operation::ClassCall { arguments, .. }
                                 | Operation::NativeModuleCall { arguments, .. }
                                 | Operation::SelfCall { arguments, .. } => tasks.extend(
                                     arguments.iter().rev().map(|value| Task::Value(*value)),
@@ -5790,6 +5836,36 @@ impl Function {
                         ".call-native %{} %{} {member}{arguments}",
                         result.0, receiver.0
                     )
+                }
+                Operation::ClassCall {
+                    result,
+                    ref result_type,
+                    ref class,
+                    ref member,
+                    ref arguments,
+                    ..
+                } => {
+                    let args = arguments
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>();
+                    format!(
+                        ".call-class %{} {class} {member}{}{args}",
+                        result.0,
+                        call_type_text(result_type)
+                    )
+                }
+                Operation::ClassCallStatement {
+                    ref class,
+                    ref member,
+                    ref arguments,
+                    ..
+                } => {
+                    let args = arguments
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>();
+                    format!(".call-class-discard {class} {member}{args}")
                 }
                 Operation::ModuleCall {
                     result,

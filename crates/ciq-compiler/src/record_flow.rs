@@ -365,6 +365,7 @@ impl State {
                     | Operation::MemberRead { .. }
                     | Operation::GlobalCall { .. }
                     | Operation::ModuleCall { .. }
+                    | Operation::ClassCall { .. }
                     | Operation::SelfCall { .. }
                     | Operation::ObjectCall { .. }
             )
@@ -575,6 +576,11 @@ impl State {
                 result_type,
                 ..
             }
+            | Operation::ClassCall {
+                result: r,
+                result_type,
+                ..
+            }
             | Operation::SelfCall {
                 result: r,
                 result_type,
@@ -600,6 +606,7 @@ impl State {
             | Operation::CallBegin { .. }
             | Operation::GlobalCallStatement { .. }
             | Operation::ModuleCallStatement { .. }
+            | Operation::ClassCallStatement { .. }
             | Operation::SelfCallStatement { .. }
             | Operation::ObjectCallStatement { .. } => self.invalidate(),
             Operation::NativeCall { .. }
@@ -615,6 +622,7 @@ impl State {
                 if let Some(ty) = types.get(&value).cloned().or_else(|| match op {
                     Operation::GlobalCall { result_type, .. }
                     | Operation::ModuleCall { result_type, .. }
+                    | Operation::ClassCall { result_type, .. }
                     | Operation::SelfCall { result_type, .. }
                     | Operation::ObjectCall { result_type, .. } => Some(result_type.api_type()),
                     _ => None,
@@ -789,6 +797,7 @@ pub(crate) fn needed(ops: &[LocatedOperation], parameters: &[ParameterType]) -> 
             Operation::Cast { target, .. } => includes(target),
             Operation::GlobalCall { result_type, .. }
             | Operation::ModuleCall { result_type, .. }
+            | Operation::ClassCall { result_type, .. }
             | Operation::SelfCall { result_type, .. }
             | Operation::ObjectCall { result_type, .. }
             | Operation::SelfFieldRead { result_type, .. } => includes(&result_type.api_type()),

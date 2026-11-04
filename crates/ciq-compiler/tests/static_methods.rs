@@ -84,7 +84,6 @@ fn static_bodies_cannot_claim_instance_state_or_native_callbacks() {
         "class C{static function f(){return method(:f);}}",
         "class C{static function f(n as Toybox.Lang.Number){}}function g(){var c=new C();c.f(\"bad\");}",
         "class C{static var S as Toybox.Lang.String=read();static function read() as Toybox.Lang.String{return S;}}",
-        "class C{static function f(){}}function g(){C.f();}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }

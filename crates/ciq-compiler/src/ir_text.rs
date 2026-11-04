@@ -40,6 +40,8 @@ enum Directive {
     AssignParameter,
     ReturnVoid,
     CallDiscard,
+    ClassCall,
+    ClassCallDiscard,
     CallGlobal,
     CallGlobalDiscard,
     CallSelf,
@@ -180,7 +182,12 @@ pub(crate) fn parse_function_ir_context(
     for (at, fields) in &mut rows {
         if !matches!(
             fields[0].as_str(),
-            ".call" | ".call-discard" | ".call-global" | ".call-global-discard"
+            ".call"
+                | ".call-discard"
+                | ".call-global"
+                | ".call-global-discard"
+                | ".call-class"
+                | ".call-class-discard"
         ) {
             continue;
         }
@@ -336,6 +343,8 @@ pub(crate) fn parse_function_ir_context(
         let call_width =
             || fields.len() - usize::from(fields.last().is_some_and(|f| f.starts_with("span=")));
         let (directive, width) = match fields.first().map(String::as_str) {
+            Some(".call-class") => (Directive::ClassCall, call_width()),
+            Some(".call-class-discard") => (Directive::ClassCallDiscard, call_width()),
             Some(".call-global") => (Directive::CallGlobal, call_width()),
             Some(".call-global-discard") => (Directive::CallGlobalDiscard, call_width()),
             Some(".call-self") => (Directive::CallSelf, call_width()),
@@ -505,8 +514,11 @@ pub(crate) fn parse_function_ir_context(
                 return Err(fail(*at, "unknown IR directive"));
             }
         };
-        if ((directive == Directive::Call && width < 4)
-            || (directive == Directive::CallDiscard && width < 3)
+        if ((matches!(directive, Directive::Call | Directive::ClassCall) && width < 4)
+            || (matches!(
+                directive,
+                Directive::CallDiscard | Directive::ClassCallDiscard
+            ) && width < 3)
             || (matches!(directive, Directive::CallSelf | Directive::CallGlobal) && width < 3)
             || (matches!(
                 directive,
@@ -1264,6 +1276,15 @@ pub(crate) fn parse_function_ir_context(
                         .collect::<Result<_, _>>()?,
                 },
                 Directive::ReturnVoid => Operation::ReturnVoid,
+                Directive::ClassCallDiscard => Operation::ClassCallStatement {
+                    capture: None,
+                    class: fields[1].clone(),
+                    member: fields[2].clone(),
+                    arguments: fields[3..width]
+                        .iter()
+                        .map(|f| parse_value(f))
+                        .collect::<Result<_, _>>()?,
+                },
                 Directive::CallDiscard => Operation::ModuleCallStatement {
                     capture: None,
                     path: Vec::new(),
@@ -1496,6 +1517,20 @@ pub(crate) fn parse_function_ir_context(
                         Operation::LocalTake { result, local }
                     } else {
                         Operation::LocalRead { result, local }
+                    }
+                }
+                Directive::ClassCall => {
+                    let (result_type, arguments_at) = call_contract(fields, 4, *at, source)?;
+                    Operation::ClassCall {
+                        capture: None,
+                        result: parse_value(&fields[1])?,
+                        result_type,
+                        class: fields[2].clone(),
+                        member: fields[3].clone(),
+                        arguments: fields[arguments_at..width]
+                            .iter()
+                            .map(|f| parse_value(f))
+                            .collect::<Result<_, _>>()?,
                     }
                 }
                 Directive::Call => {

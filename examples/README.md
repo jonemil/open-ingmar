@@ -119,8 +119,10 @@ and future Rust toolchain experiments.
   storage, assignment order, compound captures, and reference replacement.
 - [compiler-static-methods](compiler-static-methods/README.md): static declarations,
   instance dispatch/binding, static helpers, and receiver identity.
+- [compiler-class-calls](compiler-class-calls/README.md): direct static calls,
+  callable capture, aliases/root paths, and static receiver casts.
 - [static-members](static-members/README.md): SDK reference for static storage,
-  lazy initialization, and static receivers; direct class calls remain pending.
+  lazy initialization, and static receivers.
 - [compiler-method-construction](compiler-method-construction/README.md): explicit
   receiver/selector construction, argument order, and retained receiver lifetime.
 - [compiler-callbacks](compiler-callbacks/README.md): fixed Method signatures,

@@ -544,7 +544,19 @@ fn inspect(
                     boundaries.extend(parameters.iter().cloned().zip(arguments.iter().copied()));
                 }
             }
-            Operation::ModuleCall {
+            Operation::ClassCall {
+                class: module,
+                member,
+                arguments,
+                ..
+            }
+            | Operation::ClassCallStatement {
+                class: module,
+                member,
+                arguments,
+                ..
+            }
+            | Operation::ModuleCall {
                 module,
                 member,
                 arguments,

@@ -1024,18 +1024,28 @@ receivers.
 Source instances can call static methods and bind them with `method(Symbol)`.
 Known instance bindings retain checked callback signatures. Explicit
 `new Lang.Method(receiver, selector)` remains erased. A static body can capture
-its `self` that way, and static fields can store that receiver view. Direct
-`Class.method(...)` calls remain unsupported by the compiler.
+its `self` that way, and static fields can store that receiver view.
+
+`Class.method(...)` calls require a declared static target and retain its ordinary
+argument/result contracts. Root qualification and module aliases resolve to the
+canonical class. Lookup selects the callable and static context before argument
+effects; private captures preserve both across branches and constructed
+arguments. Instance methods cannot be called through a class definition. See the
+[class-call specimen](../../../examples/compiler-class-calls/README.md).
 
 Static `self`/`me` reads the actual invocation receiver. When called through an
 instance, it is that instance; the statics initializer receives the class's
-static storage. The SDK's direct class calls use static storage too. The
+static storage. Direct class calls also use static storage. The
 compiler preserves this identity without claiming instance-member access:
 static `self` has the existing opaque `module-value` view in IR. That view
 describes permitted operations, not a guarantee that the physical value is a
 module. It provides identity/`has` and storage, without Object inheritance,
 source-class identity, or callable-signature proofs. Static bodies cannot use
 ordinary instance members even when an instance supplied their receiver.
+Explicit casts can assert Object/source-class contracts without runtime checks;
+a class-call receiver can still fail the corresponding `instanceof` test.
+Implicit Object/source-class return annotations on bare static `self` are
+currently rejected, although the SDK accepts them.
 
 The statics initializer uses the same static scope. Helper calls are checked
 for reads/writes of incomplete slots and shutdown effects; static receiver
@@ -1290,8 +1300,8 @@ qualifier checks still reject runtime locals/parameters shadowing the path's
 first named component; lexical type assertions use the type namespace. Native
 superclass declarations retain their existing spelling. Namespace values follow
 the rules below. Class-qualified field access supports enum members and static
-constants/variables. Unbound function values and direct class-qualified static
-calls remain unsupported.
+constants/variables and declared static method calls. Unbound function values
+remain unsupported.
 
 Root qualifiers disappear during source resolution. Shared storage, class-shared
 reads, source construction, native operations, and global/module calls retain

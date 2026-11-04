@@ -494,7 +494,12 @@ The hook itself is not a callable user method.
 `StaticSelf` emits `getself`; it does not load or synthesize the class's statics
 object. Instance dispatch and binding reuse existing member lookup/invocation,
 preserving the supplied receiver. Self calls reuse `getselfv` and ordinary
-invocation. No VM opcode or DATA record kind is added.
+invocation. Class-qualified calls select the canonical class with the existing
+class lookup, then use `getsv` to obtain the static callable/context. Zero-argument
+calls use `invokemz`; argument calls retain the context with `frpush` and use
+`invokem`. `.begin-call` saves callable and context in two private slots before
+staged arguments and releases them on completion, just as for module/global
+calls. No VM opcode or DATA record kind is added.
 
 Class-qualified mutable stores select the class with the ordinary class lookup
 and save it in a private slot at `.begin-class`. Selection accesses no field.

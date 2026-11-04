@@ -18,4 +18,4 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-static-methods/gene
 
 SDK reference: 9.2.0, `fr265`, minimum API 3.0.0, `-O 0`.
 Use the [minimal console scaffold](../minimal-console/README.md) with this source.
-Direct class-qualified static calls remain a separate implementation step.
+See [class calls](../compiler-class-calls/README.md) for direct static dispatch.

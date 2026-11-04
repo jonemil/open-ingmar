@@ -190,8 +190,8 @@ and before any span. It is mutually exclusive with `lexical-lookup`. Its path
 contains one to 64 simple namespace components; the call's module operand still
 names the canonical declaration. See [receiver lookup](README.md#lexical-module-lookup).
 
-`call-capture` is permitted only on `.call`, `.call-discard`, `.call-global`, and
-`.call-global-discard`. It follows operands and precedes lookup metadata and any
+`call-capture` is permitted only on `.call`, `.call-discard`, `.call-global`,
+`.call-global-discard`, `.call-class`, and `.call-class-discard`. It follows operands and precedes lookup metadata and any
 span. `.begin-call` declares the private capture consumed by that invocation;
 [its lifetime contract](README.md#lexical-module-lookup) also applies across CFG
 joins. The invocation retains the target identity, lookup mode, and signature.
@@ -275,6 +275,9 @@ call-operation = ".begin-call" builder-id
                | ".call-discard" module-name identifier value-id*
                | ".call-global" value-id identifier call-result-metadata? value-id*
                | ".call-global-discard" identifier value-id*
+               | ".call-class" value-id class-path identifier
+                 call-result-metadata? value-id*
+               | ".call-class-discard" class-path identifier value-id*
                | ".call-self" value-id identifier call-result-metadata? value-id*
                | ".call-self-discard" identifier value-id*
                | ".call-object" value-id value-id class-set identifier
