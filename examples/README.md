@@ -115,8 +115,10 @@ and future Rust toolchain experiments.
   contracts, dynamic methods, mutable fields, snapshots, and evaluation order.
 - [compiler-static-constants](compiler-static-constants/README.md): readonly
   class storage, once-only initialization, nested owners, and shared references.
+- [compiler-static-fields](compiler-static-fields/README.md): mutable static
+  storage, assignment order, compound captures, and reference replacement.
 - [static-members](static-members/README.md): SDK reference for static storage,
-  lazy initialization, and static receivers; source compiler support is pending.
+  lazy initialization, and static receivers; static method support is pending.
 - [compiler-method-construction](compiler-method-construction/README.md): explicit
   receiver/selector construction, argument order, and retained receiver lifetime.
 - [compiler-callbacks](compiler-callbacks/README.md): fixed Method signatures,

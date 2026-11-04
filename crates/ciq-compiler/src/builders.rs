@@ -91,16 +91,24 @@ pub(crate) fn validate(
         }
     }
     for (index, op) in operations.iter().enumerate() {
-        if let Operation::SharedBegin {
-            builder,
-            module,
-            field,
-            ..
-        } = &op.operation
-        {
-            crate::validate_call_names(module.as_deref(), field).map_err(|e| fail(index, e))?;
+        let target = match &op.operation {
+            Operation::SharedBegin {
+                builder,
+                module,
+                field,
+                ..
+            } => Some((*builder, module.as_deref(), field)),
+            Operation::ClassFieldBegin {
+                builder,
+                class,
+                field,
+            } => Some((*builder, Some(class.as_str()), field)),
+            _ => None,
+        };
+        if let Some((builder, module, field)) = target {
+            crate::validate_call_names(module, field).map_err(|e| fail(index, e))?;
             if declarations
-                .insert(*builder, (Contract::Shared, 0))
+                .insert(builder, (Contract::Shared, 0))
                 .is_some()
             {
                 return Err(fail(index, "duplicate shared store builder"));
@@ -256,6 +264,7 @@ pub(crate) fn validate(
                 | Operation::CallBegin { builder }
                 | Operation::SourceBegin { builder, .. }
                 | Operation::SharedBegin { builder, .. }
+                | Operation::ClassFieldBegin { builder, .. }
                 | Operation::DictionaryBegin { builder, .. }
                 | Operation::RecordBegin { builder, .. }
                 | Operation::ArrayBegin { builder, .. }

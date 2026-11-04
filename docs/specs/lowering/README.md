@@ -258,8 +258,9 @@ class's short name. Intermediate containing modules are not activated by class
 selection. Class method CODE labels use that same path key after their `c` owner
 prefix, keeping identical short names in different modules disjoint.
 
-Static constants and class enums occupy the class's separate statics DATA
-record. Readonly fields use key low byte `0x50`; direct Number defaults use
+Static constants, variables, and class enums occupy the class's separate statics
+DATA record. Readonly fields use key low byte `0x50`, and mutable static fields
+use `0x40`. Direct Number defaults use
 type `0x01`, and other static constants start as Null and receive checked
 initializer writes. The statics record's parent is the containing module's
 runtime identity, or globals for global classes. Its hidden initializer targets
@@ -482,6 +483,15 @@ Reads and writes use ordinary field operations; runtime initializer expressions
 retain their original value construction even when the slot contract is Any.
 
 ### Shared storage
+
+Class-qualified mutable stores select the class with the ordinary class lookup
+and save it in a private slot at `.begin-class`. Selection accesses no field.
+The generic `.write-shared` completion loads that capture, pushes the field
+Symbol, evaluates its staged value, emits `putv`, then clears the private slot.
+The VM resolves the mutable static field at `putv`, so first-access static
+initialization follows RHS evaluation. A compound operation's earlier `getsv`
+captures the old value and can initialize statics before the RHS. These stores
+use existing instructions and DATA records, with no VM encoding extension.
 
 A shared read uses `getselfv` in its declared owner and `getmv` from another
 owner. Module lookup triggers lazy initialization; same-owner reads avoid

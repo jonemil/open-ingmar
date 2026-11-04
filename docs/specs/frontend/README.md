@@ -974,6 +974,41 @@ initialization rules. See the [specimen](../../../examples/compiler-static-const
 [IR contract](../ir/README.md#static-constants), and
 [SDK evidence](../../investigations/compiler-root-objects.md#static-constants).
 
+### Mutable static fields
+
+Class `static var` declarations use the shared class storage and once-only
+initialization described under [static constants](#static-constants), with
+mutable slots. Each binding has its own optional annotation and initializer.
+An omitted annotation declares Any independently of its initial value; an
+omitted initializer produces Null and must satisfy any explicit annotation.
+Supported field value contracts include source references, containers, and
+Methods. Replacing a reference releases the slot's ownership of its old value.
+
+Class-qualified, root-qualified, module-aliased, instance, and self/bare member
+reads and writes resolve against the same declaration. Ordinary lexical
+shadowing still applies. Static fields support assignment, numeric updates,
+and the existing compound operators under their ordinary operand contracts.
+Arbitrary class-valued variables do not acquire checked field dispatch.
+
+A class-qualified assignment selects and retains the class definition before
+evaluating its RHS once. Selection does not access the field: if this is the
+first static access, initialization runs at the store, after RHS effects. A
+compound assignment reads and captures the old value before RHS effects; that
+read can activate statics first. RHS mutation of the same field does not change
+the captured old value. Branching RHS expressions use private captures and
+ordinary CFG staging. Source-instance member access retains its existing
+single-receiver evaluation rules.
+
+Writes check the declared contract and gradual-checking policy. Direct or
+call-mediated mutation of still-unwritten slots is rejected during static
+initialization. Class captures/shared writes and member writes invalidate
+field guards that may have become stale through shared storage or aliases;
+this is conservative across unrelated fields. Static `self` exposure and
+static method declarations remain unsupported. See the
+[SDK/generated specimen](../../../examples/compiler-static-fields/README.md),
+[IR contract](../ir/README.md#mutable-static-fields), and
+[runtime evidence](../../investigations/compiler-root-objects.md#mutable-static-fields).
+
 ### Shared variables
 
 Global and module `var` declarations create shared mutable bindings. Each name
@@ -1218,9 +1253,9 @@ identities without imports or enclosing type lookup. Constructor and runtime-tes
 qualifier checks still reject runtime locals/parameters shadowing the path's
 first named component; lexical type assertions use the type namespace. Native
 superclass declarations retain their existing spelling. Namespace values follow
-the rules below. Class-qualified reads support enum members and static
-constants. Unbound function values, mutable static fields, and static methods
-remain unsupported.
+the rules below. Class-qualified field access supports enum members and static
+constants/variables. Unbound function values and static methods remain
+unsupported.
 
 Root qualifiers disappear during source resolution. Shared storage, class-shared
 reads, source construction, native operations, and global/module calls retain
@@ -1275,8 +1310,9 @@ instance. Reading a namespace does not copy it.
 Known declaration-qualified calls and field access retain their existing static
 resolution. Reading a namespace value through `self.Child` is not yet supported;
 receiver traversal must not be replaced with direct declaration lookup.
-Arbitrary member dispatch through namespace-valued variables and class/static
-member dispatch are not enabled by this representation. SDK static storage is
+Arbitrary member dispatch through namespace-valued variables and static method
+dispatch are not enabled by this representation. Direct declared class paths
+retain their separate checked field access. SDK static storage is
 distinct from the class-definition value; see the
 [static receiver evidence](../../investigations/compiler-root-objects.md#static-storage-and-receivers).
 Namespace receivers can
@@ -1898,7 +1934,8 @@ Number fields also support all ten arithmetic/bitwise compound operators:
 corresponding Number binary operation, then stores the result. A RHS that
 changes the field does not change the captured old value. Branching RHS
 expressions stage the old read through ordinary typed locals. Non-Number results
-are rejected. Mutable static fields and source-inherited fields remain unsupported. See
+are rejected. Static fields use the same mutable contracts; source-inherited
+fields remain unsupported. See
 [target evidence](../../investigations/compiler-compound-targets.md).
 
 `ClassDeclaration.fields` holds names and FieldKind defaults/contracts. Unit

@@ -8,6 +8,7 @@ enum Directive {
     ClassValue,
     ModuleSelf,
     SharedBegin,
+    ClassFieldBegin,
     CallBegin,
     SharedWrite,
     ClassFieldRead,
@@ -348,6 +349,7 @@ pub(crate) fn parse_function_ir_context(
             Some(".method-finish") => (Directive::MethodFinish, 5),
             Some(".begin-call") => (Directive::CallBegin, 2),
             Some(".begin-shared") => (Directive::SharedBegin, 4),
+            Some(".begin-class") => (Directive::ClassFieldBegin, 4),
             Some(".write-shared") => (Directive::SharedWrite, 3),
             Some(".read-shared") => (Directive::SharedRead, 5),
             Some(".read-class") => (Directive::ClassFieldRead, 5),
@@ -711,6 +713,11 @@ pub(crate) fn parse_function_ir_context(
                     lexical: false,
                     builder: parse_builder(&fields[1])?,
                     module: (fields[2] != "$").then(|| fields[2].clone()),
+                    field: fields[3].clone(),
+                },
+                Directive::ClassFieldBegin => Operation::ClassFieldBegin {
+                    builder: parse_builder(&fields[1])?,
+                    class: fields[2].clone(),
                     field: fields[3].clone(),
                 },
                 Directive::SharedWrite => Operation::SharedWrite {

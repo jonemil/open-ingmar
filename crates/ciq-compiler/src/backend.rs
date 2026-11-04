@@ -70,7 +70,8 @@ pub(crate) fn lower_owned<'a>(
         .operations()
         .iter()
         .filter_map(|o| match &o.operation {
-            Operation::SharedBegin { builder, field, .. } => Some((*builder, field)),
+            Operation::SharedBegin { builder, field, .. }
+            | Operation::ClassFieldBegin { builder, field, .. } => Some((*builder, field)),
             _ => None,
         })
         .collect::<BTreeMap<_, _>>();
@@ -228,6 +229,7 @@ pub(crate) fn lower_owned<'a>(
             }
             Operation::MethodBegin { builder }
             | Operation::SharedBegin { builder, .. }
+            | Operation::ClassFieldBegin { builder, .. }
             | Operation::SourceBegin { builder, .. }
             | Operation::DictionaryBegin { builder, .. }
             | Operation::RecordBegin { builder, .. }
@@ -327,6 +329,16 @@ pub(crate) fn lower_owned<'a>(
                     ));
                     items.push(instruction(Opcode::Getm, vec![]));
                 }
+                items.push(instruction(
+                    Opcode::Lputv,
+                    vec![Operand::Bits(builders[&builder])],
+                ));
+                continue;
+            }
+            Operation::ClassFieldBegin {
+                builder, ref class, ..
+            } => {
+                items.push(class_lookup(class, owner));
                 items.push(instruction(
                     Opcode::Lputv,
                     vec![Operand::Bits(builders[&builder])],

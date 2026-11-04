@@ -37,6 +37,7 @@ declaration = function | module | class | typedef | constant | enumeration
 typedef = "typedef" identifier "as" value-type ";"
 constant = "const" constant-binding ("," constant-binding)* ";"
 static-constant = "static" constant
+static-variable = "static" shared-variable
 constant-binding = identifier ("as" value-type)? ("=" expression)?
 shared-variable = "var" constant-binding ("," constant-binding)* ";"
 enumeration = "enum" identifier? "{" enum-member ("," enum-member)* ","? "}"
@@ -44,7 +45,7 @@ enum-member = identifier ("=" expression)?
 module = "module" identifier "{" namespace-declaration*
          (module | class | function | typedef | constant | enumeration | shared-variable)* "}"
 class = "class" identifier ("extends" native-base)?
-        "{" namespace-declaration* (field | function | typedef | constant | static-constant | enumeration)* "}"
+        "{" namespace-declaration* (field | function | typedef | constant | static-constant | static-variable | enumeration)* "}"
 namespace-declaration = "using" namespace-path ("as" identifier)? ";"
                       | "import" namespace-path ";"
 namespace-path = native-module | source-module
@@ -72,9 +73,11 @@ rules below; each binding must satisfy the
 not function statements. Evaluation restrictions do not create a second
 expression grammar.
 
-`static-constant` is restricted to class scope. Its bindings share storage across
-instances and initialize once under the [static constant rules](README.md#static-constants).
-Static `var` and static functions remain unsupported.
+`static-constant` and `static-variable` are restricted to class scope. They share
+storage across instances and initialize once under the
+[static constant](README.md#static-constants) and
+[mutable static field](README.md#mutable-static-fields) rules.
+Static functions remain unsupported.
 
 `shared-variable` reuses the binding-list syntax at global/module scope.
 An omitted initializer produces Null; an omitted annotation gives the mutable

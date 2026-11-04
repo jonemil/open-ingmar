@@ -3382,6 +3382,15 @@ impl Builder<'_> {
     ) -> Result<(), Diagnostic> {
         use parser::{Expression, ExpressionKind as E};
         let target_span = target.span;
+        if let Some(parser::Expression {
+            kind: E::ClassField { class, field },
+            ..
+        }) = self
+            .calls
+            .field_expression(&target, locals, &self.parameters)
+        {
+            return self.write_class(class, field, change(target), span, locals);
+        }
         if let Some((module, field, lexical)) =
             self.calls.shared_target(&target, locals, &self.parameters)
         {
@@ -3837,6 +3846,34 @@ impl Builder<'_> {
         Ok(())
     }
 
+    /// Capture a class before evaluating one typed static-field RHS.
+    fn write_class(
+        &mut self,
+        class: String,
+        field: String,
+        value: parser::Expression,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<(), Diagnostic> {
+        let expected = self.calls.source_fields[&class][&field].clone();
+        let builder = crate::BuilderId(self.local_id(span)?.0);
+        self.push(
+            Operation::ClassFieldBegin {
+                builder,
+                class,
+                field,
+            },
+            Some(span),
+        );
+        let value = self.value_for_setup_with_context(
+            value,
+            locals,
+            construction_type(&expected.api_type()),
+        )?;
+        self.push(Operation::SharedWrite { builder, value }, Some(span));
+        Ok(())
+    }
+
     fn write_shared(
         &mut self,
         module: Option<String>,
@@ -3979,6 +4016,16 @@ impl Builder<'_> {
             _ => return Ok(false),
         };
         let target = Expression { kind, span };
+        if let Some(Expression {
+            kind: E::ClassField { class, field },
+            ..
+        }) = self
+            .calls
+            .field_expression(&target, locals, &self.parameters)
+        {
+            self.write_class(class, field, value.clone(), span, locals)?;
+            return Ok(true);
+        }
         if let Some(Expression {
             kind: E::SelfField(field),
             ..

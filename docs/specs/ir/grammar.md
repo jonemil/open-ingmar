@@ -73,6 +73,8 @@ field-record = field-body newline
 field-body = ".field-constant" identifier call-result-tag
            | ".field-static-constant" identifier call-result-tag
              (signed-decimal-i32 | "static")
+           | ".field-static-variable" identifier call-result-tag
+             (signed-decimal-i32 | "static")
            | ".field-initialized" identifier call-result-tag
            | ".field-enum" identifier call-result-tag
              (signed-decimal-i32 | "static" | "null")
@@ -221,6 +223,7 @@ storage-operation = ".read-shared" value-id shared-owner identifier
                     "result=" call-result-tag
                   | ".assign-shared" shared-owner identifier value-id
                   | ".begin-shared" builder-id shared-owner identifier
+                  | ".begin-class" builder-id class-path identifier
                   | ".write-shared" builder-id value-id
                   | ".read-class" value-id class-path identifier
                     "result=" call-result-tag

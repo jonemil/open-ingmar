@@ -154,6 +154,31 @@ instruction selection or static-initialization cycle behavior. Current
 contracts and conservative readiness restrictions belong in the
 [frontend spec](../specs/frontend/README.md#static-constants).
 
+## Mutable static fields
+
+**Observed, 2026-11-04:** SDK/simulator 9.2.0, `fr265`, `-O 0`, minimum API
+3.0.0, target 5.2.0. The [mutable-static
+specimen](../../examples/compiler-static-fields/README.md) passes the shared
+SDK/generated console comparison and structured reconstruction. Its
+[expected output](../../examples/compiler-static-fields/expected.txt) captures
+the distinctive ordering and lifetime observations.
+
+`Cold.VALUE = Trace.mark(1)` evaluates the RHS before first static initialization:
+the trace becomes `12`, and the stored value is `1`. In contrast,
+`Warm.VALUE += Trace.mark(7)` initializes/read-captures the old `6` first,
+yielding `13` and trace `1267`. A later compound RHS overwrites `Cold.VALUE`
+with `50`, but the compound result still uses the captured old value and becomes
+`4`. Subsequent instance reads/writes see the same slot. Two allocations append
+their independent `4` markers without rerunning statics. Replacing a static
+Array through a branching assignment expires its old weak reference. An
+unannotated Number-initialized static accepts String replacement; nullable and
+nested-module fields also match the SDK output.
+
+These observations establish the tracked assignment profile, not static-method
+receiver behavior or unrestricted initialization cycles. Current contracts and
+conservative readiness checks belong in the
+[frontend spec](../specs/frontend/README.md#mutable-static-fields).
+
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md
 [check]: ../../scripts/README.md#console-specimen-check

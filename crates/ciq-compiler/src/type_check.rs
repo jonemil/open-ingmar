@@ -481,6 +481,17 @@ fn inspect(
             Operation::JumpValue { target, value } => {
                 boundaries.push((join_contract(&joins[target]), *value));
             }
+            Operation::SharedWrite { value, .. } => {
+                if let Some((class, field)) = crate::unit::class_store(&located.operation, function)
+                {
+                    if let Some(field) = unit
+                        .and_then(|u| u.classes().iter().find(|c| c.name == class))
+                        .and_then(|c| c.fields.iter().find(|f| f.name == field))
+                    {
+                        boundaries.push((field.result_type().api_type(), *value));
+                    }
+                }
+            }
             Operation::SelfFieldAssign { field, value } => {
                 if let Some(field) = unit
                     .and_then(|unit| {

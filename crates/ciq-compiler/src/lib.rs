@@ -1541,6 +1541,13 @@ pub enum Operation {
         builder: BuilderId,
         value: ValueId,
     },
+    /// Capture a class-definition receiver for a later mutable static-field write.
+    /// Selection precedes RHS effects; SharedWrite performs the store and releases it.
+    ClassFieldBegin {
+        builder: BuilderId,
+        class: String,
+        field: String,
+    },
     /// Read the actual current-instance field under a checked result contract.
     /// Unit validation anchors its declaration and initialization; positional
     /// field flow independently verifies any refined result view.
@@ -1552,8 +1559,8 @@ pub enum Operation {
         /// validation anchors it to the class; function validation derives the view.
         declared_type: Option<ReturnType>,
     },
-    /// Read a declared class enum slot without allocating an instance. Its
-    /// runtime value may still be Null before the first allocation write.
+    /// Read declared class-shared storage without allocating an instance.
+    /// Enum allocation expressions retain their separate readiness requirements.
     ClassFieldRead {
         result: ValueId,
         class: String,
@@ -2135,6 +2142,7 @@ impl Operation {
             | Self::ReturnVoid
             | Self::CallBegin { .. }
             | Self::SharedBegin { .. }
+            | Self::ClassFieldBegin { .. }
             | Self::SharedWrite { .. }
             | Self::MethodBegin { .. }
             | Self::SourceBegin { .. } => None,
@@ -2878,6 +2886,7 @@ impl Function {
                 }
                 Operation::CallBegin { .. }
                 | Operation::SharedBegin { .. }
+                | Operation::ClassFieldBegin { .. }
                 | Operation::DictionaryBegin { .. }
                 | Operation::ArrayBegin { .. } => (None, vec![]),
                 Operation::DictionaryFill {
@@ -4812,6 +4821,7 @@ impl Function {
                     | Operation::SourceBegin { .. }
                     | Operation::CallBegin { .. }
                     | Operation::SharedBegin { .. }
+                    | Operation::ClassFieldBegin { .. }
                     | Operation::SourceNew { .. }
                     | Operation::NativeCallStatement { .. }
                     | Operation::NativeCall { .. }
@@ -4870,6 +4880,7 @@ impl Function {
                     | Operation::SourceBegin { .. }
                     | Operation::CallBegin { .. }
                     | Operation::SharedBegin { .. }
+                    | Operation::ClassFieldBegin { .. }
                     | Operation::DictionaryBegin { .. }
                     | Operation::RecordBegin { .. }
                     | Operation::ArrayBegin { .. }
@@ -5290,6 +5301,11 @@ impl Function {
                     builder.0,
                     module.as_deref().unwrap_or("$")
                 ),
+                Operation::ClassFieldBegin {
+                    builder,
+                    ref class,
+                    ref field,
+                } => format!(".begin-class &{} {class} {field}", builder.0),
                 Operation::SharedWrite { builder, value } => {
                     format!(".write-shared &{} %{}", builder.0, value.0)
                 }

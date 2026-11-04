@@ -72,6 +72,11 @@ fn storage_field(
     ids: &BTreeMap<String, u32>,
 ) -> FieldDeclaration {
     let (kind, value) = match &declaration.kind {
+        crate::FieldKind::StaticVariable {
+            initial: crate::ClassFieldInitialization::Number(n),
+            ..
+        } => (1, *n as u32),
+        crate::FieldKind::StaticVariable { .. } => (0, 0),
         crate::FieldKind::StaticConstant {
             initial: crate::ClassFieldInitialization::Number(n),
             ..
@@ -108,7 +113,9 @@ fn storage_field(
     };
     field(
         ids[&declaration.name],
-        if declaration.kind.class_shared() {
+        if matches!(declaration.kind, crate::FieldKind::StaticVariable { .. }) {
+            0x40
+        } else if declaration.kind.class_shared() {
             0x50
         } else {
             0

@@ -1,7 +1,10 @@
 # Static member SDK reference
 
-This SDK-only specimen establishes static storage and receiver behavior before
-compiler support is added. Our source compiler currently rejects `static`.
+This SDK-only specimen establishes static storage and receiver behavior.
+Our source compiler supports static fields; this specimen also needs static
+methods, whose implementation is pending. See the executable
+[mutable field](../compiler-static-fields/README.md) and
+[constant](../compiler-static-constants/README.md) compiler examples.
 It reuses the [minimal console](../minimal-console/README.md) manifest/resources;
 all source in [App.mc](source/App.mc) is independently authored.
 

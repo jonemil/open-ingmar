@@ -83,7 +83,10 @@ fn join(a: &ReturnType, b: &ReturnType) -> Option<ReturnType> {
 fn barrier(op: &Operation) -> bool {
     matches!(
         op,
-        Operation::ModuleValue { .. }
+        Operation::ClassFieldBegin { .. }
+            | Operation::SharedWrite { .. }
+            | Operation::MemberWrite { .. }
+            | Operation::ModuleValue { .. }
             | Operation::ClassValue { .. }
             | Operation::CallBegin { .. }
             | Operation::SelfCall { .. }

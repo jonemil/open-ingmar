@@ -645,7 +645,7 @@ pub(crate) struct Declarations<'a> {
     constants: BTreeMap<String, DeclarationText<'a>>,
     mutable: BTreeSet<String>,
     enum_groups: BTreeMap<String, usize>,
-    static_constants: BTreeSet<String>,
+    static_bindings: BTreeSet<String>,
     enum_types: BTreeMap<String, (usize, usize)>,
     enum_backings: RefCell<BTreeMap<String, crate::api::Type>>,
     enum_members: BTreeMap<String, String>,
@@ -827,7 +827,7 @@ impl<'a> Parser<'a> {
             enum_type: None,
             enumeration: false,
             mutable: false,
-            static_constant: false,
+            static_binding: false,
             has_initializer,
             initializer,
             literal_default,
@@ -892,7 +892,7 @@ impl<'a> Parser<'a> {
             enum_type,
             enumeration: true,
             mutable: false,
-            static_constant: false,
+            static_binding: false,
             has_initializer: true,
             initializer,
             literal_default,
@@ -1149,7 +1149,7 @@ pub(crate) fn collect_declarations<'a>(
         let result = (|| {
             parser.imports()?;
             let mut outer_names = Vec::new();
-            let mut static_constant = false;
+            let mut static_binding = false;
             while parser.peek()? != Kind::End {
                 match parser.peek()? {
                     Kind::Word("static") => {
@@ -1158,19 +1158,20 @@ pub(crate) fn collect_declarations<'a>(
                             .owner
                             .as_ref()
                             .is_some_and(|owner| aliases.classes.contains(owner))
-                            || parser.peek()? != Kind::Word("const")
+                            || !matches!(parser.peek()?, Kind::Word("const" | "var"))
                         {
                             return Err(parser.error(
                                 parser.offset,
-                                "only class static const declarations are supported",
+                                "only class static const/var declarations are supported",
                             ));
                         }
-                        // The normal const arm records every member in this list
+                        // The normal binding arm records every member in this list
                         // and consumes its type/initializer on the next iteration.
-                        static_constant = true;
+                        static_binding = true;
                     }
                     Kind::Word("const" | "enum" | "var")
                         if parser.peek()? != Kind::Word("var")
+                            || static_binding
                             || parser
                                 .owner
                                 .as_ref()
@@ -1340,8 +1341,8 @@ pub(crate) fn collect_declarations<'a>(
                                     format!("duplicate constant {key:?}"),
                                 ));
                             }
-                            if static_constant {
-                                aliases.static_constants.insert(key.clone());
+                            if static_binding {
+                                aliases.static_bindings.insert(key.clone());
                             }
                             if mutable {
                                 aliases.mutable.insert(key.clone());
@@ -1353,7 +1354,7 @@ pub(crate) fn collect_declarations<'a>(
                                 aliases.enum_groups.insert(key, group);
                             }
                             if !more {
-                                static_constant = false;
+                                static_binding = false;
                                 break;
                             }
                             if enumeration && parser.peek()? == Kind::Punctuation('}') {
@@ -1578,7 +1579,7 @@ pub(crate) fn collect_declarations<'a>(
             {
                 return Err(parser.error(declaration.name_at, "invalid constant declaration"));
             }
-            if !aliases.static_constants.contains(key)
+            if !aliases.static_bindings.contains(key)
                 && !aliases.mutable.contains(key)
                 && !constant.enumeration
                 && constant.annotation.is_none()
@@ -4385,7 +4386,7 @@ pub(crate) struct ParsedBinding {
     pub enum_type: Option<Box<crate::EnumType>>,
     pub enumeration: bool,
     pub mutable: bool,
-    pub static_constant: bool,
+    pub static_binding: bool,
     pub has_initializer: bool,
     pub initializer: Expression,
     /// Preserve source-dependent default eligibility before enum grouping is lost.
@@ -4510,15 +4511,18 @@ pub(crate) fn declarations<'a>(
             while parser.peek()? != Kind::Punctuation('}') {
                 if parser.peek()? == Kind::Word("static") {
                     parser.token()?;
-                    if parser.peek()? != Kind::Word("const") {
+                    if !matches!(parser.peek()?, Kind::Word("const" | "var")) {
                         return Err(parser.error(
                             parser.offset,
-                            "only class static const declarations are supported",
+                            "only class static const/var declarations are supported",
                         ));
                     }
                     bindings.extend(parser.constant_declarations()?.into_iter().map(
                         |mut binding| {
-                            binding.static_constant = true;
+                            binding.static_binding = true;
+                            if binding.mutable && binding.annotation.is_none() {
+                                binding.annotation = Some(crate::ReturnType::Any);
+                            }
                             binding
                         },
                     ));

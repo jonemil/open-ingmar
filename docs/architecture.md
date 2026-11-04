@@ -146,12 +146,17 @@ initializer; constants are readonly and initialized variables permit later store
 Their per-field CFG assignment/readiness proofs reuse the global/module
 initialization checker. Class enums reuse that runtime
 initializer but retain shared slots, literal metadata defaults, and class-qualified
-read operations. Static constants reuse that shared storage and a reserved
-statics body that initializes their expressions and class enum defaults once,
+read operations. Static constants and mutable static fields reuse that storage
+and a reserved statics body that initializes their expressions and class enum defaults once,
 independently of allocation. Application generation gives each statics record
 its containing module as lexical parent and places shared slots there,
 leaving ordinary fields in instance metadata. Source construction uses private allocation/completion
 builders to preserve allocation before user argument effects.
+
+Class-qualified writes capture a class definition before RHS effects and reuse
+the shared-store completion. Unit validation checks the actual storage owner,
+mutability, value contract, and initialization requirements; field-flow guards
+are invalidated by writes that can affect aliases or shared slots.
 Mutable unannotated fields retain Any independently of initializer evidence.
 Dynamic Number/Symbol field kinds preserve metadata defaults without claiming
 fixed read/write types. Explicit annotations retain field and structural-witness

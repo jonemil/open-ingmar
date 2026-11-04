@@ -85,6 +85,11 @@ fn activation_callees<'a>(
     bodies: &[(Owner<'a>, &'a Function)],
 ) -> Vec<(Owner<'a>, &'a str)> {
     let mut calls = effect_callees(owner, operation);
+    if let Some((class, _)) = class_store(operation, function) {
+        if owner != Owner::Class(class) {
+            calls.push((Owner::Class(class), STATIC_INITIALIZER));
+        }
+    }
     let operation = if let Operation::CallBegin { builder } = operation {
         &function
             .operations()
@@ -116,7 +121,10 @@ fn activation_callees<'a>(
         | Operation::ModuleCallStatement { module, .. } => Some(module.as_str()),
         Operation::ClassValue { class, .. }
         | Operation::SourceBegin { class, .. }
-        | Operation::ClassFieldRead { class, .. } => class.rsplit_once('.').map(|(owner, _)| owner),
+        | Operation::ClassFieldRead { class, .. }
+        | Operation::ClassFieldBegin { class, .. } => {
+            class.rsplit_once('.').map(|(owner, _)| owner)
+        }
         Operation::SourceInstanceOf { class, .. } => {
             class.name.rsplit_once('.').map(|(owner, _)| owner)
         }
@@ -602,6 +610,12 @@ impl ScalarFieldType {
 /// A supported field's default and initialization requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldKind {
+    /// A mutable class-shared slot with a checked declared or dynamic contract.
+    /// Its default and statics initializer run independently of instance allocation.
+    StaticVariable {
+        value_type: ReturnType,
+        initial: crate::ClassFieldInitialization,
+    },
     /// A readonly class slot initialized once on first static-member access.
     /// Number defaults live in metadata; other values require the statics initializer.
     /// Unit validation rejects the allocation initialization mode for this kind.
@@ -679,7 +693,10 @@ pub enum FieldKind {
 impl FieldKind {
     /// Whether this member is stored in the class statics record rather than instances.
     pub(crate) fn class_shared(&self) -> bool {
-        matches!(self, Self::Enum { .. } | Self::StaticConstant { .. })
+        matches!(
+            self,
+            Self::Enum { .. } | Self::StaticConstant { .. } | Self::StaticVariable { .. }
+        )
     }
     fn static_write(&self) -> bool {
         matches!(
@@ -690,11 +707,17 @@ impl FieldKind {
             } | Self::StaticConstant {
                 initial: crate::ClassFieldInitialization::Static,
                 ..
+            } | Self::StaticVariable {
+                initial: crate::ClassFieldInitialization::Static,
+                ..
             }
         )
     }
     fn readonly(&self) -> bool {
-        matches!(self, Self::Constant { .. }) || self.class_shared()
+        matches!(
+            self,
+            Self::Constant { .. } | Self::StaticConstant { .. } | Self::Enum { .. }
+        )
     }
     fn allocation_write(&self) -> bool {
         matches!(
@@ -844,7 +867,8 @@ pub struct InstanceField {
 impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
-            FieldKind::StaticConstant { value_type, .. }
+            FieldKind::StaticVariable { value_type, .. }
+            | FieldKind::StaticConstant { value_type, .. }
             | FieldKind::Enum { value_type, .. }
             | FieldKind::Constant { value_type }
             | FieldKind::Initialized { value_type }
@@ -961,10 +985,10 @@ struct SharedReads {
     owners: BTreeSet<Option<String>>,
 }
 
-/// Summarize class-shared reads across source calls and lazy owner activation.
+/// Summarize class-shared accesses across source calls and lazy owner activation.
 /// Statics initializers use these requirements to reject reentrant reads of
-/// still-unwritten constants, including reads hidden behind another initializer.
-fn class_shared_reads<'a>(
+/// still-unwritten slots, including accesses hidden behind another initializer.
+fn class_shared_requirements<'a>(
     bodies: &[(Owner<'a>, &'a Function)],
     classes: &[ClassDeclaration],
 ) -> BTreeMap<(Owner<'a>, &'a str), BTreeSet<(String, String)>> {
@@ -983,6 +1007,22 @@ fn class_shared_reads<'a>(
                 .filter_map(|op| match &op.operation {
                     Operation::ClassFieldRead { class, field, .. } => {
                         Some((class.clone(), field.clone()))
+                    }
+                    Operation::SharedWrite { .. } => {
+                        class_store(&op.operation, body).map(|(c, f)| (c.into(), f.into()))
+                    }
+                    Operation::SelfFieldAssign { field, .. }
+                        if body.name() != STATIC_INITIALIZER =>
+                    {
+                        let Owner::Class(class) = owner else {
+                            return None;
+                        };
+                        classes
+                            .iter()
+                            .find(|c| c.name == *class)
+                            .and_then(|c| c.fields.iter().find(|f| f.name == *field))
+                            .filter(|f| matches!(f.kind, FieldKind::StaticVariable { .. }))
+                            .map(|_| ((*class).to_owned(), field.clone()))
                     }
                     Operation::SelfFieldRead { field, .. } => {
                         let Owner::Class(class) = owner else {
@@ -1213,6 +1253,10 @@ impl CompilationUnit {
                 | FieldKind::StaticConstant {
                     value_type,
                     initial,
+                }
+                | FieldKind::StaticVariable {
+                    value_type,
+                    initial,
                 } = &field.kind
                 {
                     if matches!(
@@ -1220,12 +1264,15 @@ impl CompilationUnit {
                         FieldKind::StaticConstant {
                             initial: crate::ClassFieldInitialization::Allocation,
                             ..
+                        } | FieldKind::StaticVariable {
+                            initial: crate::ClassFieldInitialization::Allocation,
+                            ..
                         }
                     ) {
                         return Err(UnitError {
                             declaration: None,
                             operation: None,
-                            message: "static constants cannot use allocation initialization".into(),
+                            message: "static fields cannot use allocation initialization".into(),
                         });
                     }
                     if matches!(initial, crate::ClassFieldInitialization::Number(_))
@@ -1591,7 +1638,7 @@ impl CompilationUnit {
         }
         let mut signatures = BTreeMap::new();
         let exit_callers = exit_callers(&bodies);
-        let class_reads = class_shared_reads(&bodies, &self.classes);
+        let class_requirements = class_shared_requirements(&bodies, &self.classes);
         self.validate_shared(&bodies, context, &exit_callers)?;
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let mut source_classes = Vec::new();
@@ -1865,6 +1912,9 @@ impl CompilationUnit {
                             ));
                         }
                         let mut required = BTreeSet::new();
+                        if let Some((class, field)) = class_store(&located.operation, function) {
+                            required.insert((class.to_owned(), field.to_owned()));
+                        }
                         if let Operation::ClassFieldRead { class, field, .. } = &located.operation {
                             required.insert((class.clone(), field.clone()));
                         }
@@ -1881,7 +1931,7 @@ impl CompilationUnit {
                             if callee == (owner, STATIC_INITIALIZER) {
                                 continue;
                             }
-                            if let Some(reads) = class_reads.get(&callee) {
+                            if let Some(reads) = class_requirements.get(&callee) {
                                 required.extend(reads.iter().cloned());
                             }
                         }
@@ -2170,6 +2220,47 @@ impl CompilationUnit {
                         context,
                     )
                     .map_err(|e| fail(Some(index), Some(operation), e))?;
+                }
+                if let Operation::ClassFieldBegin { class, field, .. } = &located.operation {
+                    if !self
+                        .classes
+                        .iter()
+                        .find(|c| c.name == *class)
+                        .and_then(|c| c.fields.iter().find(|f| f.name == *field))
+                        .is_some_and(|f| matches!(f.kind, FieldKind::StaticVariable { .. }))
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "class stores require a declared mutable static field".into(),
+                        ));
+                    }
+                }
+                if let (Operation::SharedWrite { value, .. }, Some((class, field))) = (
+                    &located.operation,
+                    class_store(&located.operation, function),
+                ) {
+                    let declaration = self
+                        .classes
+                        .iter()
+                        .find(|c| c.name == class)
+                        .and_then(|c| c.fields.iter().find(|f| f.name == field))
+                        .filter(|f| matches!(f.kind, FieldKind::StaticVariable { .. }))
+                        .ok_or_else(|| {
+                            fail(
+                                Some(index),
+                                Some(operation),
+                                "class stores require a declared mutable static field".into(),
+                            )
+                        })?;
+                    self.check_value_contract(
+                        function,
+                        &origins,
+                        *value,
+                        &declaration.result_type(),
+                        context,
+                    )
+                    .map_err(|message| fail(Some(index), Some(operation), message))?;
                 }
                 if let Operation::ClassFieldRead {
                     class,
@@ -3297,8 +3388,11 @@ impl CompilationUnit {
                             Operation::SharedRead { .. }
                                 | Operation::SharedAssign { .. }
                                 | Operation::SharedBegin { .. }
-                                | Operation::SharedWrite { .. }
                         )
+                    })
+                    || function.operations().iter().any(|op| {
+                        matches!(op.operation, Operation::SharedWrite { .. })
+                            && class_store(&op.operation, function).is_none()
                     })
                 {
                     return Err(fail(
@@ -3675,7 +3769,9 @@ impl CompilationUnit {
                         }
                     }
                     Operation::SharedWrite { builder, value } => {
-                        let (module, field) = stores[builder];
+                        let Some((module, field)) = stores.get(builder).copied() else {
+                            continue;
+                        };
                         let target = module.as_deref().map_or(Owner::Global, Owner::Module);
                         let binding = fields.get(&(target, field.as_str())).ok_or_else(|| {
                             fail(
@@ -3925,6 +4021,15 @@ impl CompilationUnit {
             text.push_str(&format!(".class {} {}\n", class.name, class.base.text()));
             for field in &class.fields {
                 text.push_str(&match &field.kind {
+                    FieldKind::StaticVariable {
+                        value_type,
+                        initial,
+                    } => format!(
+                        ".field-static-variable {} {} {}\n",
+                        field.name,
+                        crate::type_text::result_tag(value_type),
+                        initial.text()
+                    ),
                     FieldKind::StaticConstant {
                         value_type,
                         initial,
@@ -4224,7 +4329,17 @@ pub(crate) fn compile_sources_mapped(
                 let result = calls.source_fields[&class.name][&declaration.name].clone();
                 class.fields.push(InstanceField {
                     name: declaration.name.clone(),
-                    kind: if declaration.static_constant {
+                    kind: if declaration.static_binding && declaration.mutable {
+                        FieldKind::StaticVariable {
+                            value_type: result,
+                            initial: match crate::constants::literal(&declaration.initializer) {
+                                Some(crate::constants::Immediate::Number(n)) => {
+                                    crate::ClassFieldInitialization::Number(n)
+                                }
+                                _ => crate::ClassFieldInitialization::Static,
+                            },
+                        }
+                    } else if declaration.static_binding {
                         FieldKind::StaticConstant {
                             value_type: result,
                             initial: match crate::constants::literal(&declaration.initializer) {
@@ -4257,7 +4372,7 @@ pub(crate) fn compile_sources_mapped(
             }
             for index in order {
                 let declaration = &class.bindings[index];
-                let target = if declaration.static_constant
+                let target = if declaration.static_binding
                     || (declaration.enumeration && declaration.literal_default)
                 {
                     if matches!(
@@ -4604,7 +4719,7 @@ fn prepare_sources<'a>(
     for parsed in &parsed_sources {
         for class in &parsed.classes {
             for declaration in &class.bindings {
-                if declaration.enumeration || declaration.static_constant {
+                if declaration.enumeration || declaration.static_binding {
                     calls
                         .class_shared
                         .insert((class.name.clone(), declaration.name.clone()));
@@ -5051,6 +5166,7 @@ fn parse_unit_ir_context(
                                 | ".field-reference"
                                 | ".field-interface"
                                 | ".field-static-constant"
+                                | ".field-static-variable"
                                 | ".field-symbol"
                                 | ".field-method"
                                 | ".field-weak-reference"
@@ -5060,7 +5176,10 @@ fn parse_unit_ir_context(
                         if (parts.len() != 3
                             && !(matches!(
                                 parts[0].as_str(),
-                                ".field-symbol" | ".field-enum" | ".field-static-constant"
+                                ".field-symbol"
+                                    | ".field-enum"
+                                    | ".field-static-constant"
+                                    | ".field-static-variable"
                             ) && parts.len() == 4))
                             || !methods.is_empty()
                             || instance_fields.len() >= 256
@@ -5073,7 +5192,7 @@ fn parse_unit_ir_context(
                         }
                         let kind = if matches!(
                             parts[0].as_str(),
-                            ".field-enum" | ".field-static-constant"
+                            ".field-enum" | ".field-static-constant" | ".field-static-variable"
                         ) {
                             if parts.len() != 4 {
                                 return Err(Diagnostic::at(
@@ -5092,7 +5211,12 @@ fn parse_unit_ir_context(
                                         "invalid enum initialization mode",
                                     )
                                 })?;
-                            if parts[0] == ".field-static-constant" {
+                            if parts[0] == ".field-static-variable" {
+                                FieldKind::StaticVariable {
+                                    value_type,
+                                    initial,
+                                }
+                            } else if parts[0] == ".field-static-constant" {
                                 FieldKind::StaticConstant {
                                     value_type,
                                     initial,
@@ -5404,6 +5528,28 @@ fn module_names(
         .flat_map(crate::names::scopes)
         .map(str::to_owned)
         .collect()
+}
+
+/// Resolve the class and member captured by a generic shared-write completion.
+/// Function validation has already checked the capture's lifetime and identity.
+pub(crate) fn class_store<'a>(
+    operation: &Operation,
+    function: &'a Function,
+) -> Option<(&'a str, &'a str)> {
+    let Operation::SharedWrite { builder, .. } = operation else {
+        return None;
+    };
+    function
+        .operations()
+        .iter()
+        .find_map(|op| match &op.operation {
+            Operation::ClassFieldBegin {
+                builder: begin,
+                class,
+                field,
+            } if begin == builder => Some((class.as_str(), field.as_str())),
+            _ => None,
+        })
 }
 
 /// Find a lexical store's declared binding when its completion performs lookup.

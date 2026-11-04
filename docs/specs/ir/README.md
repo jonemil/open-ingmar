@@ -2381,6 +2381,35 @@ statics initializer are rejected, including class-qualified reads and
 cross-owner reentry. See [source semantics](../frontend/README.md#static-constants).
 Class reads and construction include statics-default bodies in effect analysis.
 
+### Mutable static fields
+
+`FieldKind::StaticVariable { value_type, initial }` is saved as
+`.field-static-variable NAME TAG MODE`. It shares the static constant contract
+and `ClassFieldInitialization` modes, while allowing stores after initialization.
+Number defaults must satisfy the declared contract; `static` requires a
+designated initialization write. Allocation mode is rejected. Any declarations
+retain Any after initialization; the initial payload does not narrow the slot.
+Read operations retain the declared field contract independently of its value.
+
+`ClassFieldBegin { builder, class, field }` / `.begin-class &b CLASS FIELD`
+captures a class-definition receiver before RHS effects. It uses the existing
+private shared-store contract and completes with
+`SharedWrite { builder, value }` / `.write-shared &b %value`. Function validation
+requires matching capture/completion on each continuing path and reserves one
+frame slot. Unit validation requires a declared mutable static field and checks
+the stored value against its contract, including source/interface witnesses.
+Unknown classes, instance fields, readonly fields, and stale or duplicate
+captures are rejected. Both kinds of shared capture retain their original
+global/module or class identity; they do not share owner lookup semantics.
+
+Class selection precedes the RHS; field lookup and possible statics activation
+occur at completion. Compound statements emit the checked old-value read before
+RHS effects. Captures do not expose an SSA receiver and release their frame slot
+after the write. Initialization analysis follows class writes through source
+calls and lazy owner activation and rejects access to unwritten active slots.
+Field flow discards potentially stale proofs after captured shared stores or
+aliased member writes. See [source semantics](../frontend/README.md#mutable-static-fields).
+
 `FieldKind::Value { value_type: ReturnType }` carries field contracts without an
 existing specialized storage form, including general unions and nullable
 container references. `.field-value name tag` uses the ordinary saved value tag.
