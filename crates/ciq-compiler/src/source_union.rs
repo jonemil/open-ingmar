@@ -4,7 +4,7 @@ use crate::{JoinType, ParameterType, ReturnType, SourceClass, api::Type};
 /// A normalized union containing exact source classes and optional native/Null
 /// alternatives. Native alternatives do not establish exact source identities.
 /// Classes retain their native bases; compilation-unit validation resolves each
-/// identity against its declaration. This contract does not express inheritance.
+/// identity against its declaration. Ancestry is retained in each identity for nominal assignability.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceUnion {
     pub(crate) classes: Vec<SourceClass>,
@@ -78,7 +78,10 @@ fn matches_step(
                         matches_in(&expected.native_type(), ty, source, native, comparison)
                     })
                     && actual.classes().iter().all(|class| {
-                        expected.classes().contains(class)
+                        expected
+                            .classes()
+                            .iter()
+                            .any(|expected| expected.accepts(class))
                             || expected.native().iter().any(|ty| class_matches(ty, class))
                     })
             }
@@ -118,6 +121,9 @@ impl SourceUnion {
     ) -> Result<Self, &'static str> {
         classes.sort();
         classes.dedup();
+        if classes.windows(2).any(|pair| pair[0].name == pair[1].name) {
+            return Err("conflicting ancestry for one source identity");
+        }
         if classes.is_empty() {
             return Err("class-containing union requires an exact source alternative");
         }
@@ -257,7 +263,7 @@ impl SourceUnion {
                 .iter()
                 .all(|ty| native(&self.native_type(), ty))
             && actual.classes.iter().all(|c| {
-                self.classes.contains(c)
+                self.classes.iter().any(|expected| expected.accepts(c))
                     || self
                         .native
                         .iter()
@@ -279,7 +285,7 @@ impl SourceUnion {
                 .iter()
                 .any(|ty| crate::native::accepts_boundary(&self.native_type(), ty))
             || actual.classes.iter().any(|class| {
-                self.classes.contains(class)
+                self.classes.iter().any(|expected| expected.accepts(class))
                     || self.native.iter().any(|ty| {
                         crate::native::accepts(ty, &Type::named(class.base.api_name()))
                             || witness(class, ty)
@@ -365,15 +371,16 @@ impl SourceUnion {
                         .native
                         .iter()
                         .any(|ty| crate::native::accepts(ty, &base));
-                    refined.classes.retain(|c| c == class);
-                    if opaque_match && !refined.classes.contains(class) {
+                    let narrowed = refined.classes.iter().any(|c| c.accepts(class));
+                    refined.classes.retain(|c| class.accepts(c));
+                    if (opaque_match || narrowed) && !refined.classes.contains(class) {
                         refined.classes.push(class.clone());
                     }
                     refined.native.clear();
                     refined.nullable = false;
                 }
                 Fact::NotClass(at, ClassTarget::Source(class)) if *at == place => {
-                    refined.classes.retain(|c| c != class)
+                    refined.classes.retain(|c| !class.accepts(c))
                 }
                 Fact::Class(at, ClassTarget::Native(class)) if *at == place => {
                     refined.classes.retain(|c| {

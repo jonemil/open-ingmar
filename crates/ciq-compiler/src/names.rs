@@ -177,11 +177,6 @@ impl Names {
         })
     }
 
-    /// Resolve the Object base through the shared imported/qualified type names.
-    pub fn object(&self, path: &str) -> bool {
-        self.type_name(path).ok().flatten().as_deref() == Some("Toybox.Lang.Object")
-    }
-
     /// Resolve the supported AppBase superclass through the shared type names.
     pub fn app_base(&self, path: &str) -> bool {
         self.type_name(path).ok().flatten().as_deref() == Some("Toybox.Application.AppBase")

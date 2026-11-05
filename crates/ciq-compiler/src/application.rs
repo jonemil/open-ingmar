@@ -803,7 +803,19 @@ pub fn build_console_application(
         };
         let mut fields = vec![
             method(INIT, 0x30, &ctor_label),
-            field(base_symbol, 0x70, 7, Reference::Raw(import_word)),
+            if let Some(parent) = &source_class.superclass {
+                field(
+                    ids[parent.rsplit('.').next().unwrap()],
+                    0x70,
+                    7,
+                    Reference::Class(format!(
+                        "__ciq_data_class_{}",
+                        crate::names::module_key(parent)
+                    )),
+                )
+            } else {
+                field(base_symbol, 0x70, 7, Reference::Raw(import_word))
+            },
         ];
         fields.extend(
             source_class
@@ -835,7 +847,15 @@ pub fn build_console_application(
                 crate::names::module_key(&source_class.name)
             ),
             [
-                Some(Reference::Raw(import_word)),
+                Some(source_class.superclass.as_ref().map_or(
+                    Reference::Raw(import_word),
+                    |parent| {
+                        Reference::Class(format!(
+                            "__ciq_data_class_{}",
+                            crate::names::module_key(parent)
+                        ))
+                    },
+                )),
                 class_statics
                     .get(&source_class.name)
                     .map(|id| Reference::Raw(*id)),

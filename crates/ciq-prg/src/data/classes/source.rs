@@ -229,10 +229,12 @@ impl Declaration {
         }
         for (i, r) in self.references.iter().enumerate() {
             if r.as_ref().is_some_and(|r| {
-                !matches!(r, Reference::Raw(_)) && !(i >= 2 && matches!(r, Reference::Symbol(_)))
+                !matches!(r, Reference::Raw(_))
+                    && !(i >= 2 && matches!(r, Reference::Symbol(_)))
+                    && !(i == 0 && matches!(r, Reference::Class(_)))
             }) {
                 return Err(Error(
-                    "only parent/module headers accept symbol references".into(),
+                    "extends accepts a class reference; parent/module accept symbol references; statics stays raw".into(),
                 ));
             }
         }

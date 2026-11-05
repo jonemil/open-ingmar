@@ -15,6 +15,7 @@ fn retained_references_and_constructor_arguments_preserve_complete_pipelines() {
     assert_eq!(
         unit.classes()[0].fields[0].kind,
         FieldKind::SourceObject(ciq_compiler::SourceClass {
+            ancestors: Vec::new(),
             name: "ViewController".into(),
             base: ciq_compiler::ClassBase::WatchUiView
         })

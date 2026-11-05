@@ -223,9 +223,13 @@ Null defaults retain type `0x00` and value zero. See
 values and other unclassified types stay numeric.
 
 Parent/module header values receive symbol names when the PRG's own symbol table
-resolves them. Extends/statics stay raw: in the specimens, `extends=0x40000119`
-does not resolve as an ordinary symbol ID and agrees with an API-class field
-value. Header references must not universally be classified as symbol IDs.
+resolves them. Native `extends` words such as `0x40000119` remain raw and
+agree with API-class field values, rather than ordinary symbol IDs. Source
+superclass headers instead contain the DATA address of the parent class record.
+They accept `%class` references for relocation. Export names a source superclass
+when the target is a known class boundary and a matching class-valued superclass
+field verifies the role; ambiguous words remain numeric. `statics` remains raw.
+Header references must not universally be classified as symbol IDs.
 
 ### Commands and preservation
 

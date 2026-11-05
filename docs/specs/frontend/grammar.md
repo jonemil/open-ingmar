@@ -42,8 +42,9 @@ enumeration = "enum" identifier? "{" enum-member ("," enum-member)* ","? "}"
 enum-member = identifier ("=" expression)?
 module = "module" identifier "{" namespace-declaration*
          declaration* "}"
-class = "class" identifier ("extends" native-base)?
+class = "class" identifier ("extends" superclass)?
         "{" namespace-declaration* class-member* "}"
+superclass = type-path
 class-member = visibility? (field | function | constant | enumeration)
              | static-modifiers (function | constant | shared-variable)
              | "public"? typedef

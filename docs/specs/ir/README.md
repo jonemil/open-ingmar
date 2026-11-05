@@ -1083,9 +1083,9 @@ responsibility and source precedence.
 [Directive syntax](grammar.md#operation-syntax) is defined in the grammar.
 
 `SourceInstanceOf` and `SourceCast` carry a typed `SourceClass` target with
-separate name and base fields. Function validation checks target syntax, native
+separate name, ancestry, and terminal native-base fields. Function validation checks target syntax, native
 projection, and API requirements. Unit validation resolves the declaration and
-requires both identity and base to match. Forward and cross-file targets work.
+requires the full ancestry and native projection to match. Forward and cross-file targets work.
 Standalone parsing retains that unit obligation; text cannot provide trusted
 branch facts or bypass declaration/base checks.
 
@@ -2105,7 +2105,7 @@ late records are rejected. Function fragments carry no class access records.
 enum represents public, protected, and private access. Ownership, rather than
 source filenames, governs checked field operations, class/instance calls, and
 construction. Known alternatives must agree on their bound private selector;
-source inheritance retains its separate unsupported status. Non-public members
+inherited member access retains its separate unsupported status. Non-public members
 cannot supply public interface witnesses or checked runtime Method bindings.
 Dynamic lookup remains subject to the generated runtime metadata.
 
@@ -2265,6 +2265,22 @@ clear/setColor/drawText profile uses this form.
 
 ### Source construction and native constants
 
+Class headers retain a terminal native base and optional `parent=SourceClass`.
+Unit validation rebuilds the graph from those declarations and rejects cycles,
+unknown parents, inconsistent projections, and ancestry claims that disagree.
+`SourceClass.ancestors` lists direct source parent first; `SourceClass::accepts`
+checks nominal upcasts without treating a common native base as a source proof.
+
+Source tags use `Class>Parent>Root@Native.Base`, with no `>` when there are no
+source ancestors. `.new-source` carries that same source chain before its
+separate native-base operand; `.begin-source` selects only the named class.
+Allocation, self, casts/tests, signatures, fields, joins, and nested container
+contracts are checked against the same graph. Native/text paths preserve the
+same ancestry. An Object-rooted source subclass can currently allocate only
+through stateless ancestors with public empty zero-argument initializers;
+inherited instance state/effects and member overrides remain rejected.
+
+
 Source instance calls use:
 
 [Directive syntax](grammar.md#operation-syntax) is defined in the grammar.
@@ -2297,18 +2313,19 @@ declaration-resolution obligations; it does not authorize arbitrary receiver
 casts. See the [source-call
 contract](../frontend/README.md#calls-on-constructed-source-objects).
 
-`source(ClassName@Native.Base)` is an exact non-null source-class contract in
+`source(Class>Parent>Root@Native.Base)` is a non-null nominal source contract in
 `parameter-types=...` and function/call `result=...` fields. It occupies one
 parameter-list entry without a colon inside the tag. Source function results
 always serialize this tag; omission erases the exact class at the return
-boundary. Class names must be valid identifiers; native bases are `Lang.Object`,
-`WatchUi.View`, or `WatchUi.BehaviorDelegate`. Unit validation checks both
-against the actual source declaration. Return provenance and call
+boundary. Class and ancestor names are canonical source paths; native projections are
+`Lang.Object`, `Application.AppBase`, `WatchUi.View`, or
+`WatchUi.BehaviorDelegate`. Unit validation checks the complete ancestry
+against the actual source declaration graph. Return provenance and call
 arguments/results are checked through the [source signature
 rules](../frontend/README.md#source-class-signatures); the tag does not cast an
 erased native reference.
 
-`nullable-source(ClassName@Native.Base)` carries the same exact class requirement
+`nullable-source(ClassName@Native.Base)` carries the same nominal class requirement
 while admitting Null. It is valid in parameter and function/call result metadata.
 Null branches refine fresh parameter/local reads without erasing source
 identity. Fixed storage preserves its class/nullability contract on assignment;

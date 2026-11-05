@@ -2365,6 +2365,12 @@ impl Builder<'_> {
             Operation::SourceNew {
                 result,
                 builder,
+                ancestors: self
+                    .calls
+                    .class_ancestors
+                    .get(&class)
+                    .cloned()
+                    .unwrap_or_default(),
                 class,
                 base,
                 arguments,
@@ -4583,6 +4589,7 @@ pub(crate) struct CallContext {
     pub(crate) unchecked: bool,
     signatures: BTreeMap<(String, String), CallSignature>,
     pub(crate) class_bases: BTreeMap<String, crate::ClassBase>,
+    pub(crate) class_ancestors: BTreeMap<String, Vec<String>>,
     parameter_types: Vec<crate::ParameterType>,
     pub(crate) field_types: BTreeMap<String, crate::ReturnType>,
     pub(crate) source_fields: BTreeMap<String, BTreeMap<String, crate::ReturnType>>,
@@ -5228,6 +5235,7 @@ impl CallContext {
             .ok_or_else(|| format!("unresolved or unsupported source type {name}"))?;
         Ok(crate::SourceClass {
             name: name.into(),
+            ancestors: self.class_ancestors.get(name).cloned().unwrap_or_default(),
             base,
         })
     }

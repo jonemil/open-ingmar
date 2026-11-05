@@ -365,6 +365,18 @@ impl Source {
             if let Some(at) = c.at {
                 c.alias = aliases.get(&at).cloned();
             }
+            if let Some(Reference::Raw(target)) = c.references[0] {
+                // A matching superclass slot verifies the DATA-address role.
+                // Do not reinterpret legacy zero/sentinel words by coincidence.
+                let superclass = c.fields.iter().any(|field| {
+                    field.kind == 7
+                        && matches!(field.key, Key::Raw(key) if key & 0xf0 == 0x70)
+                        && field.value == Reference::Raw(target)
+                });
+                if let Some(alias) = aliases.get(&target).filter(|_| superclass) {
+                    c.references[0] = Some(Reference::Class(alias.clone()));
+                }
+            }
             if named_symbols {
                 for reference in &mut c.references[2..] {
                     if let Some(Reference::Raw(id)) = reference {
@@ -851,6 +863,88 @@ mod named_class_tests {
             Source::parse(&format!(
                 ".class a {}\n.endclass",
                 HEADER.replace("extends=none", "extends=@child")
+            ))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn source_superclass_headers_follow_class_relocation_and_leave_statics_raw() {
+        use classes::source::{FieldDeclaration, Key, Reference};
+        let header = "version=0x02 extends=none statics=none parent=none module=none app_flags=0x0";
+        let original = Source::parse(&format!(
+                ".class base {header}\n.endclass\n.class child {}\n.field key=0x70 type=0x07 value=%base\n.endclass\n",
+            header
+                .replace("extends=none", "extends=%base")
+                .replace("statics=none", "statics=0x0")
+        ))
+        .unwrap()
+        .encode()
+        .unwrap()
+        .0;
+        let mut source = Source::from_records(&original).unwrap();
+        source.name_classes(None, false).unwrap();
+        let Fragment::Class(child) = &source.fragments[1] else {
+            panic!()
+        };
+        assert!(matches!(child.references[0], Some(Reference::Class(_))));
+        assert_eq!(child.references[1], Some(Reference::Raw(0)));
+        for fragment in &mut source.fragments {
+            if let Fragment::Class(c) = fragment {
+                c.at = None;
+            }
+        }
+        // Grow the parent so the child's own position moves, then move the parent
+        // by placing a supported string record before it.
+        let Fragment::Class(parent) = &mut source.fragments[0] else {
+            panic!()
+        };
+        parent.fields.push(FieldDeclaration {
+            key: Key::Raw(0),
+            kind: 1,
+            value: Reference::Raw(7),
+        });
+        source.fragments.insert(
+            0,
+            Fragment::String(StringDeclaration {
+                alias: "prefix".into(),
+                at: None,
+                value: "prefix".into(),
+            }),
+        );
+        let encoded = source.encode().unwrap().0;
+        let parsed = classes::records(&encoded).unwrap();
+        let classes = parsed
+            .iter()
+            .filter_map(|r| {
+                if let classes::Record::Class(c) = r {
+                    Some(c)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        assert!(classes[0].offset > 0);
+        assert_eq!(classes[1].extends, Some(classes[0].offset as u32));
+        assert_eq!(classes[1].statics, Some(0));
+        let raw = Source::parse(&format!(
+            ".class base {}\n.endclass\n",
+            header.replace("extends=none", "extends=0x0")
+        ))
+        .unwrap()
+        .encode()
+        .unwrap()
+        .0;
+        let mut ambiguous = Source::from_records(&raw).unwrap();
+        ambiguous.name_classes(None, false).unwrap();
+        let Fragment::Class(record) = &ambiguous.fragments[0] else {
+            panic!()
+        };
+        assert_eq!(record.references[0], Some(Reference::Raw(0)));
+        assert!(
+            Source::parse(&format!(
+                ".class base {}\n.endclass",
+                header.replace("statics=none", "statics=%base")
             ))
             .is_err()
         );

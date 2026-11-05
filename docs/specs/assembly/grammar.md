@@ -184,11 +184,12 @@ restrictions and resolution.
 class-declaration = class-header newline (class-field newline)*
                     ".endclass" newline
 class-header = ".class" identifier? placement? "version=" hex-integer
-               "extends=" raw-header-reference "statics=" raw-header-reference
+               "extends=" class-header-reference "statics=" raw-header-reference
                "parent=" symbol-header-reference "module=" symbol-header-reference
                "app_flags=" hex-integer
 raw-header-reference = "none" | hex-integer
 symbol-header-reference = raw-header-reference | symbol-reference
+class-header-reference = raw-header-reference | class-reference
 class-field = ".field" field-key "type=" hex-integer "value=" field-value
 field-key = "key=" hex-integer | "symbol=" symbol-reference "bits=" hex-integer
 field-value = hex-integer | class-reference | literal-reference | code-reference
@@ -257,8 +258,8 @@ symbol/string identifier rules but use a separate class namespace.
 
 `symbol=@alias bits=0xNN` replaces `key=0x...`: the resolved ID must fit 24
 bits; the low-byte `bits` is preserved independently. Both key syntaxes work for
-v1 and v2. Header `parent` and `module` accept `@symbol` or raw integers; other
-header roles remain raw. Field `value=%class` is accepted only for type 7;
+v1 and v2. Header `parent` and `module` accept `@symbol` or raw integers.
+`extends` also accepts `%class` for a source superclass; `statics` remains raw. Field `value=%class` is accepted only for type 7;
 `value=&string` only for type 3. Raw values remain valid for all types.
 Undefined/mismatched references are errors.
 

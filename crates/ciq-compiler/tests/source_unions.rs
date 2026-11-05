@@ -89,6 +89,7 @@ fn typed_and_saved_singleton_sets_use_the_same_canonical_contract() {
         ClassBase, Function, ParameterType, ReturnType, SourceClass, SourceUnion, parse_function_ir,
     };
     let class = SourceClass {
+        ancestors: Vec::new(),
         name: "A".into(),
         base: ClassBase::LangObject,
     };
@@ -118,6 +119,7 @@ fn typed_and_saved_singleton_sets_use_the_same_canonical_contract() {
     assert!(
         SourceUnion::new(
             vec![SourceClass {
+                ancestors: Vec::new(),
                 name: "bad..name".into(),
                 base: ClassBase::LangObject
             }],

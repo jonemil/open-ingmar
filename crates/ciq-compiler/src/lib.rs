@@ -58,6 +58,7 @@ pub use type_check::{
     CompileError, CompileOptions, CompileOutput, Severity, TypeCheckLevel, TypeDiagnostic,
     TypeDiagnosticKind, compile_function_with_options, compile_sources_with_options,
 };
+mod inheritance;
 mod unions;
 mod unit;
 mod visibility;
@@ -621,14 +622,16 @@ pub use dictionary::DictionaryScalar as ArrayConstantValue;
 
 pub use tuples::TupleType;
 
-/// An exact source-class identity and its native API projection.
-/// Unit validation checks both fields against the class declaration; a native
+/// A nominal source-class identity, its ancestry, and native API projection.
+/// Unit validation checks the full contract against declarations; a native
 /// base alone cannot establish source-class assignability.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SourceClass {
     /// Canonical source identity, including its containing module path.
     pub name: String,
-    /// Native base used for API checking, independently of exact identity.
+    /// Direct source parent first, ending with the source class at the native root.
+    pub ancestors: Vec<String>,
+    /// Terminal native base used for API checking.
     pub base: ClassBase,
 }
 
@@ -638,11 +641,20 @@ impl SourceClass {
         &self.name
     }
 
-    /// Parse the saved reference contract `Class@Native.Base`.
+    /// Parse `Class>Parent>Root@Native.Base`, with zero or more source ancestors.
     /// Reject malformed names and unsupported source-reference bases.
     pub(crate) fn parse(text: &str) -> Option<Self> {
-        let (name, base) = text.split_once('@')?;
-        validate_call_names(Some(name), "class").ok()?;
+        let (path, base) = text.split_once('@')?;
+        let mut names = path.split('>');
+        let name = names.next()?;
+        let ancestors = names.map(str::to_owned).collect::<Vec<_>>();
+        let mut seen = std::collections::BTreeSet::new();
+        for name in std::iter::once(name).chain(ancestors.iter().map(String::as_str)) {
+            validate_call_names(Some(name), "class").ok()?;
+            if !seen.insert(name) || seen.len() > 64 {
+                return None;
+            }
+        }
         let base = match base {
             "Application.AppBase" => ClassBase::ApplicationAppBase,
             "Lang.Object" => ClassBase::LangObject,
@@ -652,14 +664,32 @@ impl SourceClass {
         };
         Some(Self {
             name: name.into(),
+            ancestors,
             base,
         })
+    }
+    /// Report proven nominal assignability from an instance of `actual`.
+    /// An equal native projection alone does not establish source ancestry.
+    pub fn accepts(&self, actual: &Self) -> bool {
+        self == actual
+            || (self.base == actual.base
+                && actual
+                    .ancestors
+                    .iter()
+                    .position(|n| n == &self.name)
+                    .is_some_and(|at| actual.ancestors[at + 1..] == self.ancestors))
+    }
+    pub(crate) fn path_text(&self) -> String {
+        std::iter::once(self.name.as_str())
+            .chain(self.ancestors.iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join(">")
     }
 }
 
 impl fmt::Display for SourceClass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{}", self.name, self.base.text())
+        write!(f, "{}@{}", self.path_text(), self.base.text())
     }
 }
 
@@ -1634,6 +1664,7 @@ pub enum Operation {
         result: ValueId,
         builder: BuilderId,
         class: String,
+        ancestors: Vec<String>,
         /// Native base projection; unit validation checks the class declaration.
         base: ClassBase,
         arguments: Vec<ValueId>,
@@ -3751,11 +3782,21 @@ impl Function {
                 Operation::SourceNew {
                     result,
                     ref class,
+                    ref ancestors,
                     base,
                     ref arguments,
                     ..
                 } => {
                     validate_call_names(Some(class), "class").map_err(fail)?;
+                    let identity = SourceClass {
+                        name: class.clone(),
+                        ancestors: ancestors.clone(),
+                        base,
+                    };
+                    if SourceClass::parse(&identity.to_string()).as_ref() != Some(&identity) {
+                        return Err(fail("invalid allocation ancestry"));
+                    }
+
                     let ty = base.constructed_type().ok_or_else(|| {
                         fail("native base has no supported source construction profile")
                     })?;
@@ -5537,6 +5578,7 @@ impl Function {
                     result,
                     builder,
                     ref class,
+                    ref ancestors,
                     base,
                     ref arguments,
                 } => {
@@ -5545,8 +5587,14 @@ impl Function {
                         .map(|value| format!(" %{}", value.0))
                         .collect::<String>();
                     format!(
-                        ".new-source %{} {class} {} &{}{args}",
+                        ".new-source %{} {} {} &{}{args}",
                         result.0,
+                        SourceClass {
+                            name: class.clone(),
+                            ancestors: ancestors.clone(),
+                            base
+                        }
+                        .path_text(),
                         base.text(),
                         builder.0
                     )

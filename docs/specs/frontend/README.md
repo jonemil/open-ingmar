@@ -1532,7 +1532,8 @@ and onStart use the
 [native lifecycle contracts](../sdk/README.md#source-startup-callback).
 Null literals and opaque nullable callback-state locals support equality checks;
 [object/field contracts](#instance-fields) apply alongside the supported core Lang
-profiles. Source inheritance and unrestricted native calls remain unsupported.
+profiles. Source superclass identities follow the [bounded hierarchy
+profile](#source-superclasses); unrestricted native calls remain unsupported.
 See [runtime evidence](../../investigations/compiler-class.md).
 
 ### Compilation units
@@ -1586,7 +1587,7 @@ field contract.
 
 Calls on constructed source references resolve to their proven classes' declared
 methods. Function validation preserves exact constructor identity through local
-copies and same-class assignment; unit validation checks ordinary method
+copies and compatible assignments; unit validation checks ordinary method
 contracts and prohibits native callback invocation through any receiver. See the
 [instance-call profile](#calls-on-constructed-source-objects).
 
@@ -1597,7 +1598,7 @@ authorizing source construction. Contracts retain those exact names, while
 boundary operands
 retain their actual alternatives under the [checking policy](#type-checking-policy).
 Native base signatures carry only their native contract. Function and call text preserve these contracts
-with `source(ClassName@Native.Base)` tags; see the
+with `source(Class>Parent>Root@Native.Base)` tags (the parent chain may be empty); see the
 [source signature profile](#source-class-signatures).
 
 AppBase.getInitialView has a [one-view positional
@@ -1648,14 +1649,14 @@ evidence](../../investigations/compiler-class.md).
 
 [Accepted declaration syntax](grammar.md#declarations) is defined in the grammar.
 
-Classes may be global or module declarations. The base is a recognized native
-identity,
-resolved through the [native name profile](#namespace-declarations). It
-accepts canonical/qualified, aliased, and imported Object/AppBase/View/
-BehaviorDelegate spellings. An omitted base selects Lang.Object. Supported
-[field contracts](#instance-fields) are defined separately. Static methods use
-the [restricted dispatch profile](#static-methods). Annotations, source
-superclass lookup, and nested classes are unsupported.
+Classes may be global or module declarations. The base can be a supported native
+identity or a source class resolved through the declaration/type namespace.
+Native bases accept canonical, qualified, aliased, and imported Object/AppBase/
+View/BehaviorDelegate spellings. An omitted base selects Lang.Object. The
+[source hierarchy profile](#source-superclasses) limits inherited construction
+and member behavior. Supported [field contracts](#instance-fields) and
+[static method dispatch](#static-methods) remain separate. Nested classes are
+unsupported.
 Object-rooted classes may be empty; other classes require at least one method.
 Class identities must be unique within their containing namespace; classes
 cannot be reopened. Reject class/module/function/shared-binding collisions in
@@ -1813,6 +1814,32 @@ binding; no native Object allocation/initialization hook is invoked. See the
 [example](../../../examples/compiler-root-objects/README.md) and
 [evidence](../../investigations/compiler-root-objects.md).
 
+### Source superclasses
+
+`extends` resolves source classes across input files, forward declarations,
+module scopes, source aliases/imports, and explicit root paths. Nearer source
+types take precedence over imported native names. The superclass graph rejects
+missing/non-class parents, cycles, and chains longer than 64 classes. Each class
+retains its direct source parent and terminal native projection.
+
+Nominal contracts carry the ordered source ancestry. A subclass satisfies a
+superclass value contract; the converse requires an explicit assertion or a
+runtime guard. Reference identity is unchanged, and mutable container domains
+remain invariant. A contextual Array literal can accept subtype elements under
+its declared base-element contract. Runtime class tests use the actual class;
+a positive subclass test narrows a superclass-bound value, while a superclass
+test preserves a known more-derived bound.
+
+Source construction currently accepts Object-rooted chains only when every
+source ancestor has no instance fields and an empty public zero-argument
+initializer. The allocated class can have its own fields/initializer.
+Inherited initialization that needs state, arguments, or effects is rejected;
+source-based View/AppBase/delegate construction remains outside this profile.
+Inherited-member lookup and redeclaration/overrides are not implemented;
+redeclarations other than initializers and internal hooks are rejected. The
+[plan](../../plan.md#1-source-inheritance-and-construction) owns these remaining
+steps. See the [SDK/generated specimen](../../../examples/compiler-inheritance-identities/README.md).
+
 ### Source-class signatures
 
 Ordinary functions and instance methods may annotate parameters and results with
@@ -1907,18 +1934,19 @@ their declared alternatives. Native callbacks keep their inherited
 signatures; source annotations cannot replace those contracts. No runtime cast
 is emitted.
 
-Source contracts carry exact names and native bases separately; the
+Source contracts carry canonical names, ordered source ancestry, and terminal
+native bases separately; the
 [IR model](../ir/README.md#source-construction-and-native-constants) owns their representations. Source declaration collection resolves both across all input files
-before checking bodies. API checking projects to that base; exact source
+before checking bodies. API checking projects to that base; nominal source
 assignability is checked separately. Function validation checks names and return
-provenance, while unit validation checks both class identity and native base
+provenance, while unit validation checks identity, ancestry, and native base
 against declarations, call arguments, and result claims. Standalone
 typed/function IR retains its class/callee resolution obligations.
 Single-function source compilation rejects source-class annotations because it
 has no declarations from which to resolve their native bases.
 
 Saved parameter tags and function/call result tags use
-`source(ClassName@Native.Base)`, `nullable-source(ClassName@Native.Base)`, or
+`source(Class>Parent>Root@Native.Base)`, its `nullable-source(...)` form, or
 `source-union(source(A@Native.Base)|source(B@Native.Base)|null)`.
 Result contracts must be explicit in saved
 function text to retain the source identity. See the [signature

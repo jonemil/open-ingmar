@@ -19,6 +19,7 @@ fn exact_source_contracts_survive_function_calls_and_complete_text_pipelines() {
     assert_eq!(
         pass.function.parameter_types(),
         &[ParameterType::SourceObject(ciq_compiler::SourceClass {
+            ancestors: Vec::new(),
             name: "HelloView".into(),
             base: ciq_compiler::ClassBase::WatchUiView
         })]
@@ -26,6 +27,7 @@ fn exact_source_contracts_survive_function_calls_and_complete_text_pipelines() {
     assert_eq!(
         pass.function.return_type(),
         ReturnType::SourceObject(ciq_compiler::SourceClass {
+            ancestors: Vec::new(),
             name: "HelloView".into(),
             base: ciq_compiler::ClassBase::WatchUiView
         })

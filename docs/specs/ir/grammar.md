@@ -43,7 +43,8 @@ shared-variable-record = ".shared-variable" shared-owner identifier
                          call-result-tag newline
 shared-owner = "$" | module-name
 owner = ".owner" "global" | ".owner" "module" module-name
-class-record = ".class" class-path native-base newline
+class-record = ".class" class-path native-base source-parent? newline
+source-parent = "parent=" class-path
                visibility-record* field-record* function-document+ ".end-class" newline
 visibility-record = ".visibility" identifier visibility newline
 visibility = "public" | "private" | "protected" | "hidden"
@@ -299,7 +300,7 @@ source-field-metadata = "field=" call-result-tag
 member-read-metadata = source-field-metadata | "view=" call-result-tag
 object-operation = ".new-native" value-id class-path
                  | ".begin-source" builder-id class-path native-base
-                 | ".new-source" value-id class-path native-base builder-id value-id*
+                 | ".new-source" value-id source-chain native-base builder-id value-id*
                  | ".base-initialize" native-base
                  | ".tuple-new" value-id value-id*
                  | ".tuple-write" value-id value-id value-id value-id
@@ -438,7 +439,8 @@ source-union-tag = "source-union(" source-union-atom ("|" source-union-atom)+ ")
 source-union-atom = source-tag | native-parameter-tag
 source-tag = "source(" source-identity ")"
 nullable-source-tag = "nullable-source(" source-identity ")"
-source-identity = class-path "@" source-base
+source-identity = source-chain "@" source-base
+source-chain = class-path (">" class-path)*
 source-base = "Lang.Object" | "Application.AppBase" | "WatchUi.View"
             | "WatchUi.BehaviorDelegate"
 element-tag = "any" | "null" | "number" | "nullable-number" | other-scalar-tag

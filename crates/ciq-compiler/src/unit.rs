@@ -947,13 +947,15 @@ impl InstanceField {
     }
 }
 
-/// A named native-derived class with checked instance fields and method bodies.
-/// Source inheritance and native method bodies are not supported yet.
+/// A named class with a terminal native projection and optional source parent.
+/// The unit checks ancestry and the supported member/construction profile.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassDeclaration {
+    /// Direct source superclass; base retains the terminal native projection.
+    pub superclass: Option<String>,
     /// Canonical class identity, including the containing module path.
     pub name: String,
-    /// Native superclass identity resolved by application generation.
+    /// Terminal native superclass identity used for API checking and imports.
     pub base: ClassBase,
     /// Member storage in declaration order, including instance and class-shared slots.
     pub fields: Vec<InstanceField>,
@@ -1412,6 +1414,12 @@ impl CompilationUnit {
 
     fn validate_context(&self, context: Option<crate::api::ApiContext>) -> Result<(), UnitError> {
         crate::enums::validate_unit(self)?;
+        let hierarchy =
+            crate::inheritance::for_classes(&self.classes).map_err(|message| UnitError {
+                declaration: None,
+                operation: None,
+                message,
+            })?;
         if self.classes.iter().any(|c| {
             c.fields
                 .iter()
@@ -1670,9 +1678,7 @@ impl CompilationUnit {
                 .unwrap();
             }
             for target in &references {
-                if !self.classes.iter().any(|declaration| {
-                    declaration.name == target.name && declaration.base == target.base
-                }) {
+                if hierarchy.get(&target.name) != Some(target) {
                     return Err(fail(
                         Some(at),
                         None,
@@ -1741,10 +1747,37 @@ impl CompilationUnit {
                 "compilation unit requires 1..=256 functions".into(),
             ));
         }
+        for class in &self.classes {
+            for ancestor in &hierarchy[&class.name].ancestors {
+                let parent = self.classes.iter().find(|c| c.name == *ancestor).unwrap();
+                for member in class
+                    .fields
+                    .iter()
+                    .map(|f| f.name.as_str())
+                    .chain(class.methods.iter().map(Function::name))
+                {
+                    if member == "initialize" || field_initializer(member) {
+                        continue;
+                    }
+                    if parent.fields.iter().any(|f| f.name == member)
+                        || parent.methods.iter().any(|f| f.name() == member)
+                    {
+                        return Err(fail(
+                            None,
+                            None,
+                            format!(
+                                "inherited member redeclaration {}.{member} requires override/layout support",
+                                class.name
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
         let mut signatures = BTreeMap::new();
         let exit_callers = exit_callers(&bodies);
         let class_requirements = class_shared_requirements(&bodies, &self.classes);
-        self.validate_shared(&bodies, context, &exit_callers)?;
+        self.validate_shared(&bodies, context, &exit_callers, &hierarchy)?;
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let mut source_classes = Vec::new();
             let mut collect = |class: &mut crate::SourceClass| {
@@ -1791,11 +1824,7 @@ impl CompilationUnit {
                     .map_err(|message| fail(Some(index), None, message))?;
             }
             for name in source_classes {
-                if !self
-                    .classes
-                    .iter()
-                    .any(|class| class.name == name.name && class.base == name.base)
-                {
+                if hierarchy.get(&name.name) != Some(&name) {
                     return Err(fail(
                         Some(index),
                         None,
@@ -2598,7 +2627,7 @@ impl CompilationUnit {
                         _ => None,
                     };
                     if !actual.is_some_and(|class| {
-                        class.name == claimed.name && class.base == claimed.base
+                        class.name == claimed.name && hierarchy.get(&claimed.name) == Some(claimed)
                     }) {
                         return Err(fail(
                             Some(index),
@@ -3044,9 +3073,7 @@ impl CompilationUnit {
                     ..
                 } = &located.operation
                 {
-                    if !self.classes.iter().any(|declaration| {
-                        declaration.name == class.name && declaration.base == class.base
-                    }) {
+                    if hierarchy.get(&class.name) != Some(class) {
                         return Err(fail(
                             Some(index),
                             Some(operation),
@@ -3061,12 +3088,58 @@ impl CompilationUnit {
                 {
                     if let Some(contract) = value_type.source_contract() {
                         for class in contract.classes() {
-                            if !self
-                                .classes
-                                .iter()
-                                .any(|d| d.name == class.name && d.base == class.base)
-                            {
+                            if hierarchy.get(&class.name) != Some(class) {
                                 return Err(fail(Some(index), Some(operation), "source union class and native base must match a unit declaration".into()));
+                            }
+                        }
+                    }
+                }
+                if let Operation::SourceNew {
+                    class,
+                    ancestors,
+                    base,
+                    ..
+                } = &located.operation
+                {
+                    if hierarchy.get(class)
+                        != Some(&crate::SourceClass {
+                            name: class.clone(),
+                            ancestors: ancestors.clone(),
+                            base: *base,
+                        })
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "allocation ancestry disagrees with class declarations".into(),
+                        ));
+                    }
+                }
+                if let Operation::SourceBegin { class, .. } | Operation::SourceNew { class, .. } =
+                    &located.operation
+                {
+                    if let Some(identity) = hierarchy.get(class).filter(|c| !c.ancestors.is_empty())
+                    {
+                        if identity.base != ClassBase::LangObject {
+                            return Err(fail(Some(index),Some(operation),"source subclass construction currently requires an Object-rooted chain".into()));
+                        }
+                        for ancestor in &identity.ancestors {
+                            let parent = self.classes.iter().find(|c| c.name == *ancestor).unwrap();
+                            if self.member_visibility(&parent.name, "initialize")
+                                != crate::Visibility::Public
+                                || parent.fields.iter().any(|f| !f.kind.class_shared())
+                                || !parent
+                                    .methods
+                                    .iter()
+                                    .find(|f| f.name() == "initialize")
+                                    .is_some_and(|f| {
+                                        f.parameter_count() == 0
+                                            && f.operations().iter().all(|op| {
+                                                matches!(op.operation, Operation::ReturnVoid)
+                                            })
+                                    })
+                            {
+                                return Err(fail(Some(index),Some(operation),"inherited fields and initializer effects require superclass initialization support".into()));
                             }
                         }
                     }
@@ -3658,6 +3731,7 @@ impl CompilationUnit {
         bodies: &[(Owner<'_>, &Function)],
         context: Option<crate::api::ApiContext>,
         exits: &BTreeSet<(Owner<'_>, &str)>,
+        hierarchy: &BTreeMap<String, crate::SourceClass>,
     ) -> Result<(), UnitError> {
         let fail = |declaration, operation, message: &str| UnitError {
             declaration,
@@ -3717,11 +3791,7 @@ impl CompilationUnit {
             }
             let mut retained = constant.value_type.clone();
             crate::structural::resolve_result(&mut retained, &mut |class| {
-                if self
-                    .classes
-                    .iter()
-                    .any(|c| c.name == class.name && c.base == class.base)
-                {
+                if hierarchy.get(&class.name) == Some(class) {
                     Ok(())
                 } else {
                     Err(fail(
@@ -4331,7 +4401,15 @@ impl CompilationUnit {
             text.push_str(&d.function.to_ir_text());
         }
         for class in &self.classes {
-            text.push_str(&format!(".class {} {}\n", class.name, class.base.text()));
+            text.push_str(&format!(
+                ".class {} {}{}\n",
+                class.name,
+                class.base.text(),
+                class
+                    .superclass
+                    .as_ref()
+                    .map_or(String::new(), |p| format!(" parent={p}"))
+            ));
             for ((owner, member), access) in &self.visibility {
                 if owner == &class.name {
                     text.push_str(&format!(".visibility {member} {}\n", access.text()));
@@ -4790,6 +4868,11 @@ pub(crate) fn compile_sources_mapped(
                 .map(|(owner, _)| owner.to_owned());
             method_calls.current_class = Some(crate::SourceClass {
                 name: class.name.clone(),
+                ancestors: calls
+                    .class_ancestors
+                    .get(&class.name)
+                    .cloned()
+                    .unwrap_or_default(),
                 base: class.base,
             });
             method_calls.field_names = class
@@ -4824,6 +4907,7 @@ pub(crate) fn compile_sources_mapped(
                 );
             }
             classes.push(ClassDeclaration {
+                superclass: class.superclass,
                 name: class.name,
                 base: class.base,
                 fields: class.fields,
@@ -4940,6 +5024,11 @@ fn prepare_sources<'a>(
     aliases.validate_constant_members(&bases)?;
     for (index, parsed) in parsed_sources.iter_mut().enumerate() {
         let mut resolve = |reference: &mut crate::SourceClass| -> Result<(), SourceDiagnostic> {
+            reference.ancestors = aliases
+                .class_types
+                .get(&reference.name)
+                .map(|c| c.ancestors.clone())
+                .unwrap_or_default();
             reference.base =
                 bases
                     .get(&reference.name)
@@ -4998,6 +5087,11 @@ fn prepare_sources<'a>(
         }
     }
     let mut calls = source_ir::CallContext::new();
+    calls.class_ancestors = aliases
+        .class_types
+        .iter()
+        .map(|(n, c)| (n.clone(), c.ancestors.clone()))
+        .collect();
     calls.modules = parsed_sources
         .iter()
         .flat_map(|unit| unit.modules.iter().cloned())
@@ -5174,6 +5268,11 @@ fn infer_stored_constants(
                         class.rsplit_once('.').map(|(owner, _)| owner.to_owned());
                     owner_calls.current_class = Some(crate::SourceClass {
                         name: class.into(),
+                        ancestors: calls
+                            .class_ancestors
+                            .get(class)
+                            .cloned()
+                            .unwrap_or_default(),
                         base,
                     });
                     if declaration.static_binding {
@@ -5461,7 +5560,17 @@ fn parse_unit_ir_context(
                 | "WatchUi.View"
                 | "WatchUi.BehaviorDelegate"
                 | "Lang.Object"),
-            ] => {
+                tail @ ..,
+            ] if tail.len() <= 1 => {
+                let superclass = tail
+                    .first()
+                    .map(|p| {
+                        p.strip_prefix("parent=")
+                            .filter(|n| crate::names::module_path(n))
+                            .map(str::to_owned)
+                            .ok_or_else(|| Diagnostic::at(text, at, "invalid source parent"))
+                    })
+                    .transpose()?;
                 let base = if *base == "Lang.Object" {
                     ClassBase::LangObject
                 } else if *base == "Application.AppBase" {
@@ -5827,6 +5936,7 @@ fn parse_unit_ir_context(
                     return Err(Diagnostic::at(text, at, "expected .end-class"));
                 }
                 classes.push(ClassDeclaration {
+                    superclass,
                     name,
                     base,
                     fields: instance_fields,

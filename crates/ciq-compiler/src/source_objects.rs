@@ -335,6 +335,7 @@ impl Origins {
                 result,
                 class,
                 base,
+                ancestors,
                 ..
             } => {
                 self.values.insert(
@@ -342,6 +343,7 @@ impl Origins {
                     Contract::single(
                         crate::SourceClass {
                             name: class.clone(),
+                            ancestors: ancestors.clone(),
                             base: *base,
                         },
                         false,

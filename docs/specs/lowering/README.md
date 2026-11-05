@@ -678,6 +678,15 @@ unit lowering does not merge literals across functions.
 
 ### Class bodies
 
+A source subclass's `extends` header and superclass-valued field refer to the
+direct parent's DATA class alias, with ordinary class relocation. Its terminal
+native projection still governs API checks/imports. VM class tests retain the
+runtime inheritance chain; subtype annotations emit no conversion. Source
+construction is limited to the stateless Object-rooted ancestor profile in the
+[frontend contract](../frontend/README.md#source-superclasses), so no parent
+initialization effects or member layouts are silently omitted.
+
+
 Global/module bodies precede class bodies; each group preserves declaration
 order, and methods retain class order. Class labels are
 `__ciq_fn_c_<class-length>_<class>_<member-length>_<member>` with decimal byte

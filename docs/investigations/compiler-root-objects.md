@@ -266,6 +266,28 @@ contract is class-level access. Our source/IR tests allow same-class explicit
 receivers; the SDK failure leaves that combined variant without runtime
 comparison. Source-subclass access/override rules remain in the inheritance plan.
 
+## Source superclass identities
+
+**Observed, 2026-11-05:** SDK/simulator 9.2.0, `fr265`, minimum API 3.0.0,
+target 5.2.0, `-O 0`. The [superclass specimen](../../examples/compiler-inheritance-identities/README.md)
+matches all eight SDK/generated output lines after structured reconstruction.
+Leaf precedes Middle and Root in source. Upcast arguments/results retain the
+same object; runtime tests recognize all three source classes and Lang.Object.
+A Leaf guard on a Root parameter permits Leaf's own field read. Contextual
+Array<Root> literals accept a Leaf element without adding a conversion.
+
+The SDK DATA records place Root at `0x0a19`, Leaf at `0x0a45`, and Middle at
+`0x0a7a`. Leaf's `extends=0x00000a7a` agrees with its `Middle` class field
+(key bits `0x70`, type 7); Middle's `extends=0x00000a19` agrees with its Root
+field. Root instead uses a native import word `0x40000082`. Thus a source
+superclass is a relocatable DATA class address, distinct from native imports
+and Symbol-valued header roles. No new VM opcode or DATA record kind is needed.
+
+This specimen has no inherited instance state or parent initializer effects.
+It does not establish their order, default forwarding, protected subclass
+access, or override compatibility. Those remain explicit construction/member
+restrictions and work in the inheritance plan.
+
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

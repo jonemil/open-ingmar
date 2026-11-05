@@ -35,8 +35,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Resolve source superclass chains and reject cycles; retain assignable
-  superclass/subclass identities in source and saved IR.
 - [ ] Lay out inherited fields, resolve inherited methods, and dispatch overrides
   using the actual instance's class.
 - [ ] Apply protected/hidden access through source superclass chains, retaining

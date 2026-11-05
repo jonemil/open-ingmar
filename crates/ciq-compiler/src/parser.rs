@@ -645,6 +645,8 @@ struct DeclarationText<'a> {
 
 #[derive(Default)]
 pub(crate) struct Declarations<'a> {
+    pub(crate) class_types: BTreeMap<String, crate::SourceClass>,
+    pub(crate) class_parents: BTreeMap<String, crate::inheritance::Parent>,
     constants: BTreeMap<String, DeclarationText<'a>>,
     mutable: BTreeSet<String>,
     enum_groups: BTreeMap<String, usize>,
@@ -1171,12 +1173,22 @@ impl<'a> Parser<'a> {
 }
 
 /// Collect typedefs and scalar constants before parsing annotations and bodies.
+struct SuperclassText {
+    class: String,
+    source_index: usize,
+    at: usize,
+    path: String,
+    names: crate::names::Names,
+    owner: Option<String>,
+}
+
 /// Capture declaration environments, reject duplicates and invalid dependencies,
 /// and validate unused declarations. Function bodies are parsed only by the ordinary parser.
 pub(crate) fn collect_declarations<'a>(
     sources: &[&'a str],
 ) -> Result<Rc<Declarations<'a>>, crate::SourceDiagnostic> {
     let mut aliases = Declarations::default();
+    let mut raw_parents = Vec::new();
     let mut enum_group_count = 0usize;
     for (source_index, source) in sources.iter().enumerate() {
         let mut parser = Parser::new(source, Rc::default());
@@ -1473,6 +1485,7 @@ pub(crate) fn collect_declarations<'a>(
                     {
                         let class = parser.token()?.kind == Kind::Word("class");
                         let name = parser.identifier()?;
+                        let name_at = name.span.start;
                         let Kind::Word(name) = name.kind else {
                             unreachable!()
                         };
@@ -1487,7 +1500,23 @@ pub(crate) fn collect_declarations<'a>(
                         }
                         aliases.owners.insert(path.clone());
                         if class {
-                            aliases.classes.insert(path.clone());
+                            if !aliases.classes.insert(path.clone()) {
+                                return Err(parser.error(name_at, "duplicate source class"));
+                            }
+                            let parent = if parser.peek()? == Kind::Word("extends") {
+                                parser.token()?;
+                                parser.type_path()?
+                            } else {
+                                "$.Toybox.Lang.Object".into()
+                            };
+                            raw_parents.push(SuperclassText {
+                                class: path.clone(),
+                                source_index,
+                                at: name_at,
+                                path: parent,
+                                names: parser.names.clone(),
+                                owner: parser.owner.clone(),
+                            });
                         }
                         while parser.peek()? != Kind::Punctuation('{') {
                             if parser.token()?.kind == Kind::End {
@@ -1564,7 +1593,45 @@ pub(crate) fn collect_declarations<'a>(
             });
         }
     }
-    let aliases = Rc::new(aliases);
+    let mut aliases = Rc::new(aliases);
+    let mut parents = BTreeMap::new();
+    for text in &raw_parents {
+        let mut parser = Parser::new(sources[text.source_index], aliases.clone());
+        parser.names = text.names.clone();
+        parser.owner = text.owner.clone();
+        let path = parser
+            .type_name(&text.path, text.at)
+            .map_err(|diagnostic| crate::SourceDiagnostic {
+                source: text.source_index,
+                diagnostic,
+            })?;
+        let native = match path.as_str() {
+            "Toybox.Lang.Object" => Some(crate::ClassBase::LangObject),
+            "Toybox.Application.AppBase" => Some(crate::ClassBase::ApplicationAppBase),
+            "Toybox.WatchUi.View" => Some(crate::ClassBase::WatchUiView),
+            "Toybox.WatchUi.BehaviorDelegate" => Some(crate::ClassBase::WatchUiBehaviorDelegate),
+            _ => None,
+        };
+        parents.insert(
+            text.class.clone(),
+            native.map_or(
+                crate::inheritance::Parent::Source(path),
+                crate::inheritance::Parent::Native,
+            ),
+        );
+    }
+    let class_types = crate::inheritance::resolve(&parents).map_err(|(class, message)| {
+        let text = raw_parents.iter().find(|t| t.class == class).unwrap();
+        crate::SourceDiagnostic {
+            source: text.source_index,
+            diagnostic: Diagnostic::at(sources[text.source_index], text.at, message),
+        }
+    })?;
+    let declarations =
+        Rc::get_mut(&mut aliases).expect("superclass resolution retains no parser borrows");
+    declarations.class_types = class_types;
+    declarations.class_parents = parents;
+
     for (key, alias) in &aliases.aliases {
         let mut parser = Parser::new(alias.source, aliases.clone());
         parser.source_index = alias.source_index;
@@ -4259,6 +4326,7 @@ impl Parser<'_> {
                 ) =>
             {
                 crate::ParameterType::SourceObject(crate::SourceClass {
+                    ancestors: Vec::new(),
                     name: name.into(),
                     base: crate::ClassBase::LangObject,
                 })
@@ -4439,6 +4507,7 @@ pub(crate) struct ParsedBinding {
     pub span: Span,
 }
 pub(crate) struct ParsedClass {
+    pub superclass: Option<String>,
     pub visibility: Vec<(String, crate::Visibility)>,
     pub bindings: Vec<ParsedBinding>,
     pub name: String,
@@ -4529,33 +4598,19 @@ pub(crate) fn declarations<'a>(
             let name = outer_owner
                 .as_ref()
                 .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
-            let base = if parser.peek()? == Kind::Word("extends") {
+            if parser.peek()? == Kind::Word("extends") {
                 parser.token()?;
-                parser.path()?
-            } else {
-                "Toybox.Lang.Object".into()
-            };
-            let class_base = if parser.names.object(&base) {
-                Some(crate::ClassBase::LangObject)
-            } else if parser.names.app_base(&base) {
-                Some(crate::ClassBase::ApplicationAppBase)
-            } else if parser.names.view(&base) {
-                Some(crate::ClassBase::WatchUiView)
-            } else if parser.names.behavior_delegate(&base) {
-                Some(crate::ClassBase::WatchUiBehaviorDelegate)
-            } else {
-                None
-            };
-            if class_base.is_none() {
-                return Err(parser.error(
-                    token.span.start,
-                    format!("unsupported or unresolved native superclass {base:?}"),
-                ));
+                parser.type_path()?;
             }
+            let class_base = parser.declarations.class_types[&name].base;
+            let superclass = match &parser.declarations.class_parents[&name] {
+                crate::inheritance::Parent::Source(parent) => Some(parent.clone()),
+                _ => None,
+            };
             parser.expect(Kind::Punctuation('{'), "'{'")?;
             let outer_names = parser.names.clone();
             parser.owner = Some(name.clone());
-            parser.native_base = class_base;
+            parser.native_base = Some(class_base);
             parser.imports()?;
             parser.validate_source_imports()?;
             let mut methods = Vec::new();
@@ -4719,18 +4774,19 @@ pub(crate) fn declarations<'a>(
                 .keys()
                 .any(|key| key.starts_with(&format!("{name}.")));
             if methods.is_empty()
-                && class_base != Some(crate::ClassBase::LangObject)
+                && class_base != crate::ClassBase::LangObject
                 && !has_aliases
                 && !has_constants
             {
                 return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
             }
             unit.classes.push(ParsedClass {
+                superclass,
                 visibility,
                 bindings,
                 name,
                 name_span: token.span,
-                base: class_base.unwrap(),
+                base: class_base,
                 fields,
                 methods,
             });

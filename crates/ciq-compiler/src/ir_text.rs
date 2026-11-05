@@ -779,10 +779,14 @@ pub(crate) fn parse_function_ir_context(
                             "expected .new-source result class base builder [arguments]",
                         ));
                     }
+                    let identity =
+                        crate::SourceClass::parse(&format!("{}@{}", fields[2], fields[3]))
+                            .ok_or_else(|| fail(*at, "invalid source allocation identity"))?;
                     Operation::SourceNew {
+                        ancestors: identity.ancestors,
                         result: parse_value(&fields[1])?,
                         builder: parse_builder(&fields[4])?,
-                        class: fields[2].clone(),
+                        class: identity.name,
                         base: match fields[3].as_str() {
                             "Lang.Object" => crate::ClassBase::LangObject,
                             "WatchUi.View" => crate::ClassBase::WatchUiView,

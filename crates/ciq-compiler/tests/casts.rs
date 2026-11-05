@@ -184,6 +184,7 @@ fn typed_single_source_assertions_normalize_to_the_existing_source_operation() {
         Function, LocatedOperation, Operation, SourceClass, SourceUnion, ValueId, api::Type,
     };
     let class = SourceClass {
+        ancestors: Vec::new(),
         name: "C".into(),
         base: ciq_compiler::ClassBase::LangObject,
     };
