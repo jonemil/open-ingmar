@@ -482,6 +482,23 @@ member selection, without changing field storage or adding conversion code.
 Reads and writes use ordinary field operations; runtime initializer expressions
 retain their original value construction even when the slot contract is Any.
 
+### Member access binding
+
+Semantic validation resolves class-member visibility before VM instruction
+selection. Private fields/methods receive selectors of the form
+`__ciq_private_LENGTH_CLASSKEY_MEMBER`, where CLASSKEY is the existing escaped
+canonical class key. Unit-local lowering binds each access using its exact
+receiver class; source operation names and CODE labels remain unchanged.
+Private constructors use the same binding for their `initialize` lookup.
+Ordinary Symbol literals and reflection retain their ordinary selector IDs.
+No binding pass or origin replay is needed for a class without private members.
+
+Protected/hidden members OR `0x20` into their DATA key low byte. Private members
+use distinct Symbol IDs with ordinary field/method flags. Instance readonly
+constants retain `0x10`; class-shared readonly values retain `0x50`. These flags
+combine with storage/visibility rather than replacing them. All access forms
+reuse existing VM lookup/invocation instructions and DATA records.
+
 ### Shared storage
 
 Static method CODE uses the ordinary hidden context and argument convention.

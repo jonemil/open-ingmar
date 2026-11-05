@@ -2092,6 +2092,28 @@ native Object inheritance, method signature, or static dispatch can be inferred
 from either value kind. [Source semantics](../frontend/README.md#namespace-reference-values)
 define supported storage and use.
 
+### Member visibility
+
+Class-local `.visibility MEMBER ACCESS` records preserve access independently of
+storage kinds and method bodies. Omitted access is public; `hidden` normalizes
+to protected. Canonical output emits only private/protected records, ordered by
+member name before all fields/methods. Unknown members, duplicate records, and
+late records are rejected. Function fragments carry no class access records.
+
+`CompilationUnit::with_visibility` applies records and revalidates uses;
+`member_visibility` exposes the checked declaration contract. The `Visibility`
+enum represents public, protected, and private access. Ownership, rather than
+source filenames, governs checked field operations, class/instance calls, and
+construction. Known alternatives must agree on their bound private selector;
+source inheritance retains its separate unsupported status. Non-public members
+cannot supply public interface witnesses or checked runtime Method bindings.
+Dynamic lookup remains subject to the generated runtime metadata.
+
+Semantic operation names stay source-level. The unit's lowering pass binds
+private selectors after validation, leaving signatures, receiver identities,
+Symbol literals, and CODE labels intact. Saved IR and in-memory construction
+therefore pass the same access checks and produce the same PRG.
+
 ### Static receivers
 
 `receiver=static` marks a class body with static member rules, independently of

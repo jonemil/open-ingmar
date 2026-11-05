@@ -123,7 +123,7 @@ Isolated source variants delimit the contract:
 remain distinct receiver contexts. A static declaration must not acquire
 instance-field proofs, and a class-definition Method binding must not be given
 a proven static callable signature merely because the selector exists.
-The [plan](../plan.md#1-declarations-namespaces-and-member-storage) owns the
+The [plan](../plan.md#core-language-worklist) owns the
 remaining source/IR/lowering work. This specimen does not establish inheritance,
 cross-class static cycles, or access-control behavior.
 
@@ -230,6 +230,43 @@ local receiver alias and the stored `OWNER` constant. Returning stored `OWNER`
 fails `instanceof Cold` for both class and instance dispatch, while returning the
 current `self` passes for instance dispatch only. Origin-aware opaque contracts
 allow these annotations without treating an unannotated alias as an instance.
+
+## Member visibility
+
+**Officially documented, reviewed 2026-11-04:** the [Monkey C reference][hiding]
+restricts hiding to class members. Default/explicit public access is unrestricted;
+private access belongs to the declaring class; protected includes subclasses,
+and hidden is its synonym. Modules and classes themselves remain public.
+
+**Observed:** SDK/simulator 9.2.0, `fr265`, minimum API 3.0.0, target 5.2.0,
+`-O 0`. The [visibility specimen](../../examples/compiler-visibility/README.md)
+matches all nine SDK/generated output lines after structured reconstruction.
+Private instance/static fields and methods, protected/hidden direct calls,
+public callbacks, and private construction from a same-class factory work.
+Outside reads/calls and outside construction with private/protected initializers
+are rejected by the SDK compiler. Module-private declarations are syntax errors.
+
+Protected/hidden field keys add `0x20`; method keys are `0x30`. Private selectors
+are mangled, for example `<globals/Vault/<>VALUE>` and
+`<globals/Vault/<statics>/<>STATIC>`, with ordinary low flags `0x00`/`0x40`.
+Private methods use `0x10`/`0x50`; private instance constant K uses `0x10`.
+Our generated selectors use an independent reserved identifier namespace.
+
+Reflection is narrower than direct access. In an own-class method, `self has
+:VALUE` and `self has :secret` are false for private members. SDK compilation
+accepts `method(:secret)` but invocation fails with Invalid Value. Binding a
+protected method also compiles, but its invocation fails with Symbol Not Found.
+These probes justify public-only checked bindings; erased runtime lookup remains
+separate.
+
+An SDK variant combining `other.VALUE + other.secret()` inside
+`read(other as Vault)` crashes compiler code generation with a critical-error
+report. This does not establish an object-only privacy rule: the documented
+contract is class-level access. Our source/IR tests allow same-class explicit
+receivers; the SDK failure leaves that combined variant without runtime
+comparison. Source-subclass access/override rules remain in the inheritance plan.
+
+[hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md

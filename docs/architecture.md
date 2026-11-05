@@ -16,7 +16,7 @@ owning files for the definition to read or change.
 | Source → IR candidates | [source_ir.rs], [source_types.rs], [unchecked.rs] | [Source semantics] |
 | Source ambiguity reporting | [type_check.rs] | [Checking policy] |
 | IR model and body checks | [lib.rs] | [IR validation] |
-| Declarations and unit checks | [unit.rs], [source_fields.rs] | [Declarations] |
+| Declarations and unit checks | [unit.rs], [source_fields.rs], [visibility.rs] | [Declarations] |
 | CFG and frame flow | [control_flow.rs], [local_flow.rs], [type_flow.rs] | [IR control flow] |
 | Field views | [field_flow.rs] | [Storage] |
 | Record identities and views | [records.rs], [record_flow.rs] | [Records] |
@@ -294,6 +294,7 @@ library.
 [source_types.rs]: ../crates/ciq-compiler/src/source_types.rs
 [lib.rs]: ../crates/ciq-compiler/src/lib.rs
 [unit.rs]: ../crates/ciq-compiler/src/unit.rs
+[visibility.rs]: ../crates/ciq-compiler/src/visibility.rs
 [source_fields.rs]: ../crates/ciq-compiler/src/source_fields.rs
 [control_flow.rs]: ../crates/ciq-compiler/src/control_flow.rs
 [local_flow.rs]: ../crates/ciq-compiler/src/local_flow.rs

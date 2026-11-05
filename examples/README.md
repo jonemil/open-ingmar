@@ -117,6 +117,8 @@ and future Rust toolchain experiments.
   class storage, once-only initialization, nested owners, and shared references.
 - [compiler-static-fields](compiler-static-fields/README.md): mutable static
   storage, assignment order, compound captures, and reference replacement.
+- [compiler-visibility](compiler-visibility/README.md): class-member access,
+  private selectors/constructors, protected flags, and reflection limits.
 - [compiler-static-methods](compiler-static-methods/README.md): static declarations,
   instance dispatch/binding, static helpers, and receiver identity.
 - [compiler-class-calls](compiler-class-calls/README.md): direct static calls,

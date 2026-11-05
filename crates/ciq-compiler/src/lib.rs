@@ -60,6 +60,7 @@ pub use type_check::{
 };
 mod unions;
 mod unit;
+mod visibility;
 pub use ir_text::{parse_function_ir, parse_function_ir_with_api};
 pub use joins::JoinType;
 pub use unit::{
@@ -67,6 +68,7 @@ pub use unit::{
     NumericAlias, ScalarFieldType, SharedBinding, SourceDiagnostic, UnitError, compile_sources,
     compile_sources_with_api, parse_unit_ir, parse_unit_ir_with_api,
 };
+pub use visibility::Visibility;
 
 use std::fmt;
 

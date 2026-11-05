@@ -44,14 +44,19 @@ shared-variable-record = ".shared-variable" shared-owner identifier
 shared-owner = "$" | module-name
 owner = ".owner" "global" | ".owner" "module" module-name
 class-record = ".class" class-path native-base newline
-               field-record* function-document+ ".end-class" newline
+               visibility-record* field-record* function-document+ ".end-class" newline
+visibility-record = ".visibility" identifier visibility newline
+visibility = "public" | "private" | "protected" | "hidden"
 native-base = "Lang.Object" | "Application.AppBase" | "WatchUi.View"
             | "WatchUi.BehaviorDelegate"
 ```
 
 The `ciq-unit` header is the first physical line; blank/comment lines may follow
 it. Function documents use the `function-header` and `operation` rules in the
-next sections. Class records use `field-record` below before their methods.
+next sections. Class visibility records precede fields and methods. Member names
+must exist and cannot repeat; hidden normalizes to protected, and canonical
+output omits public records. Class records use `field-record` below before their
+methods.
 
 An owner applies to exactly one following function document. There is no unit
 end directive. Class field records precede all methods; class methods require

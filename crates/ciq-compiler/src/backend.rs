@@ -20,6 +20,7 @@ enum LiteralKey {
 struct Definitions<'a> {
     values: BTreeMap<ValueId, &'a Operation>,
     owner: Option<Option<&'a str>>,
+    initializers: &'a BTreeMap<String, String>,
 }
 impl<'a> std::ops::Deref for Definitions<'a> {
     type Target = BTreeMap<ValueId, &'a Operation>;
@@ -57,9 +58,21 @@ pub(crate) fn lower_owned<'a>(
     label: &str,
     owner: Option<Option<&'a str>>,
 ) -> Program {
+    lower_bound(function, label, owner, &BTreeMap::new())
+}
+
+/// Apply a unit's class-private constructor selectors during VM lowering.
+/// Other member selectors have already been bound by the unit's access pass.
+pub(crate) fn lower_bound<'a>(
+    function: &'a Function,
+    label: &str,
+    owner: Option<Option<&'a str>>,
+    initializers: &'a BTreeMap<String, String>,
+) -> Program {
     let mut definitions = Definitions {
         values: BTreeMap::new(),
         owner,
+        initializers,
     };
     let mut literal_aliases = BTreeMap::new();
     let mut literals = Vec::new();
@@ -996,7 +1009,10 @@ fn expression(
                     continue;
                 }
                 Operation::SourceNew {
-                    builder, arguments, ..
+                    builder,
+                    class,
+                    arguments,
+                    ..
                 } => {
                     items.extend([
                         instruction(Opcode::Lgetv, vec![Operand::Bits(builders[builder])]),
@@ -1005,7 +1021,12 @@ fn expression(
                         instruction(Opcode::Dup, vec![Operand::Bits(0)]),
                         instruction(
                             Opcode::Getsv,
-                            vec![Operand::Symbol("__ciq_native_initialize".into())],
+                            vec![Operand::Symbol(
+                                definitions.initializers.get(class).map_or_else(
+                                    || "__ciq_native_initialize".into(),
+                                    |member| format!("__ciq_member_{member}"),
+                                ),
+                            )],
                         ),
                         instruction(Opcode::Dup, vec![Operand::Bits(1)]),
                     ]);

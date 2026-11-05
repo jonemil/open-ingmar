@@ -726,7 +726,7 @@ impl FieldKind {
             }
         )
     }
-    fn readonly(&self) -> bool {
+    pub(crate) fn readonly(&self) -> bool {
         matches!(
             self,
             Self::Constant { .. } | Self::StaticConstant { .. } | Self::Enum { .. }
@@ -1115,6 +1115,7 @@ impl SharedBinding {
 /// CODE lowering leaves symbol/DATA bindings and application metadata external.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationUnit {
+    visibility: crate::visibility::Members,
     modules: BTreeSet<String>,
     declarations: Vec<FunctionDeclaration>,
     classes: Vec<ClassDeclaration>,
@@ -1123,6 +1124,64 @@ pub struct CompilationUnit {
 }
 
 impl CompilationUnit {
+    /// Apply class-member access declarations and recheck all uses. Duplicate
+    /// entries and names without a declared field/method are rejected.
+    pub fn with_visibility(
+        mut self,
+        members: Vec<(String, String, crate::Visibility)>,
+    ) -> Result<Self, UnitError> {
+        if members.is_empty() {
+            return Ok(self);
+        }
+        for (class, member, access) in members {
+            let key = (class.clone(), member.clone());
+            if self.visibility.insert(key, access).is_some() {
+                return Err(UnitError {
+                    declaration: None,
+                    operation: None,
+                    message: "duplicate member visibility".into(),
+                });
+            }
+        }
+        self.validate()?;
+        self.visibility
+            .retain(|_, access| *access != crate::Visibility::Public);
+        Ok(self)
+    }
+    /// Return the declared access of a class member; omitted access is public.
+    pub fn member_visibility(&self, class: &str, member: &str) -> crate::Visibility {
+        self.visibility
+            .get(&(class.into(), member.into()))
+            .copied()
+            .unwrap_or_default()
+    }
+    pub(crate) fn has_private_members(&self, class: &str) -> bool {
+        self.visibility
+            .iter()
+            .any(|((owner, _), access)| owner == class && *access == crate::Visibility::Private)
+    }
+    pub(crate) fn member_symbol(&self, class: &str, member: &str) -> String {
+        if self.member_visibility(class, member) == crate::Visibility::Private {
+            crate::visibility::private_symbol(class, member)
+        } else {
+            member.into()
+        }
+    }
+    fn check_member_access(
+        &self,
+        owner: Owner<'_>,
+        class: &str,
+        member: &str,
+    ) -> Result<(), String> {
+        if self.member_visibility(class, member) != crate::Visibility::Public
+            && owner != Owner::Class(class)
+        {
+            return Err(format!(
+                "{class}.{member} is not accessible from this declaration"
+            ));
+        }
+        Ok(())
+    }
     /// Check known native bases, field types, and unguarded API references.
     /// Errors retain the unit's flattened body indexes. The context is external
     /// to semantic IR; this does not validate a device or application profile.
@@ -1336,6 +1395,7 @@ impl CompilationUnit {
             }
         }
         let unit = Self {
+            visibility: Default::default(),
             modules,
             declarations,
             classes,
@@ -1352,6 +1412,34 @@ impl CompilationUnit {
 
     fn validate_context(&self, context: Option<crate::api::ApiContext>) -> Result<(), UnitError> {
         crate::enums::validate_unit(self)?;
+        if self.classes.iter().any(|c| {
+            c.fields
+                .iter()
+                .any(|f| f.name.starts_with("__ciq_private_"))
+                || c.methods
+                    .iter()
+                    .any(|f| f.name().starts_with("__ciq_private_"))
+        }) {
+            return Err(UnitError {
+                declaration: None,
+                operation: None,
+                message: "class members use a reserved private-selector prefix".into(),
+            });
+        }
+        for (class, member) in self.visibility.keys() {
+            if !self.classes.iter().any(|c| {
+                c.name == *class
+                    && (c.fields.iter().any(|f| f.name == *member)
+                        || c.methods.iter().any(|f| f.name() == member))
+            }) {
+                return Err(UnitError {
+                    declaration: None,
+                    operation: None,
+                    message: format!("visibility target {class}.{member} is not declared"),
+                });
+            }
+        }
+
         let fail = |declaration, operation, message| UnitError {
             declaration,
             operation,
@@ -2216,6 +2304,79 @@ impl CompilationUnit {
                 .collect::<BTreeMap<_, _>>();
             let origins = crate::source_objects::Origins::for_function(function)
                 .map_err(|message| fail(Some(index), None, message.into()))?;
+            for (operation, located) in function.operations().iter().enumerate() {
+                let op = &located.operation;
+                for (target, member) in source_callees(owner, op) {
+                    if let Owner::Class(class) = target {
+                        self.check_member_access(owner, class, member)
+                            .map_err(|m| fail(Some(index), Some(operation), m))?;
+                    }
+                }
+                let receiver_classes = match op {
+                    Operation::ObjectCall { classes, .. }
+                    | Operation::ObjectCallStatement { classes, .. } => classes.clone(),
+                    Operation::MemberRead { receiver, .. }
+                    | Operation::MemberWrite { receiver, .. } => origins
+                        .contract(*receiver)
+                        .map(|c| c.classes().iter().map(|c| c.name.clone()).collect())
+                        .unwrap_or_default(),
+                    _ => Vec::new(),
+                };
+                let member = match op {
+                    Operation::ObjectCall { member, .. }
+                    | Operation::ObjectCallStatement { member, .. }
+                    | Operation::MemberRead { member, .. }
+                    | Operation::MemberWrite { member, .. } => Some(member),
+                    _ => None,
+                };
+                if let Some(member) = member {
+                    let selectors = receiver_classes
+                        .iter()
+                        .map(|c| self.member_symbol(c, member))
+                        .collect::<BTreeSet<_>>();
+                    if selectors.len() > 1 {
+                        return Err(fail(Some(index),Some(operation),"receiver alternatives require different private member selectors; narrow the receiver first".into()));
+                    }
+                }
+                match op {
+                    Operation::ClassFieldRead { class, field, .. }
+                    | Operation::ClassFieldBegin { class, field, .. } => {
+                        self.check_member_access(owner, class, field)
+                            .map_err(|m| fail(Some(index), Some(operation), m))?;
+                    }
+                    Operation::MemberRead {
+                        receiver, member, ..
+                    }
+                    | Operation::MemberWrite {
+                        receiver, member, ..
+                    } => {
+                        if let Some(contract) = origins.contract(*receiver) {
+                            for class in contract.classes() {
+                                self.check_member_access(owner, &class.name, member)
+                                    .map_err(|m| fail(Some(index), Some(operation), m))?;
+                            }
+                        }
+                    }
+                    Operation::BindMethod {
+                        receiver, selector, ..
+                    } => {
+                        if let (Some(contract), Some(member)) =
+                            (origins.contract(*receiver), origins.symbol(*selector))
+                        {
+                            for class in contract.classes() {
+                                if self.member_visibility(&class.name, member)
+                                    != crate::Visibility::Public
+                                {
+                                    return Err(fail(Some(index),Some(operation),"non-public methods cannot supply a checked runtime binding".into()));
+                                }
+                                self.check_member_access(owner, &class.name, member)
+                                    .map_err(|m| fail(Some(index), Some(operation), m))?;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
             let source_locals = function
                 .operations()
                 .iter()
@@ -3977,6 +4138,9 @@ impl CompilationUnit {
             .find(|c| c.name == class)
             .ok_or("unknown structural implementation class")?;
         for (name, expected) in &shape.fields {
+            if self.member_visibility(class, name) != crate::Visibility::Public {
+                return Err(format!("{class}.{name} is not a public interface field"));
+            }
             let field = declaration
                 .fields
                 .iter()
@@ -3994,6 +4158,9 @@ impl CompilationUnit {
             }
         }
         for (name, required) in &shape.methods {
+            if self.member_visibility(class, name) != crate::Visibility::Public {
+                return Err(format!("{class}.{name} is not a public interface method"));
+            }
             let actual = if let Some(method) = declaration.methods.iter().find(|m| m.name() == name)
             {
                 crate::StructuralMethod {
@@ -4031,6 +4198,12 @@ impl CompilationUnit {
             .interface(interface)
             .ok_or_else(|| format!("unknown structural interface {interface}"))?;
         for required in &interface.methods {
+            if self.member_visibility(class, &required.name) != crate::Visibility::Public {
+                return Err(format!(
+                    "{class}.{} is not a public interface method",
+                    required.name
+                ));
+            }
             let implementation = declaration
                 .methods
                 .iter()
@@ -4073,19 +4246,35 @@ impl CompilationUnit {
     /// follows input files and declarations; layout is shared across all bodies.
     /// Encoding still requires explicit symbol and literal placements.
     pub fn lower(&self) -> Program {
+        let initializers = self
+            .classes
+            .iter()
+            .filter(|c| self.member_visibility(&c.name, "initialize") == crate::Visibility::Private)
+            .map(|c| (c.name.clone(), self.member_symbol(&c.name, "initialize")))
+            .collect();
         let items = self
             .declarations
             .iter()
             .flat_map(|d| {
-                backend::lower_owned(&d.function, &d.code_label(), Some(d.module.as_deref()))
-                    .items()
-                    .to_vec()
+                backend::lower_bound(
+                    &crate::visibility::bind_body(self, None, &d.function),
+                    &d.code_label(),
+                    Some(d.module.as_deref()),
+                    &initializers,
+                )
+                .items()
+                .to_vec()
             })
             .chain(self.classes.iter().flat_map(|c| {
                 c.methods.iter().flat_map(|f| {
-                    backend::lower_named(f, &c.code_label(f.name()))
-                        .items()
-                        .to_vec()
+                    backend::lower_bound(
+                        &crate::visibility::bind_body(self, Some(&c.name), f),
+                        &c.code_label(f.name()),
+                        None,
+                        &initializers,
+                    )
+                    .items()
+                    .to_vec()
                 })
             }))
             .collect();
@@ -4143,6 +4332,11 @@ impl CompilationUnit {
         }
         for class in &self.classes {
             text.push_str(&format!(".class {} {}\n", class.name, class.base.text()));
+            for ((owner, member), access) in &self.visibility {
+                if owner == &class.name {
+                    text.push_str(&format!(".visibility {member} {}\n", access.text()));
+                }
+            }
             for field in &class.fields {
                 text.push_str(&match &field.kind {
                     FieldKind::StaticVariable {
@@ -4543,6 +4737,16 @@ pub(crate) fn compile_sources_mapped(
         .iter()
         .flat_map(|parsed| parsed.modules.iter().cloned())
         .collect::<Vec<_>>();
+    let visibility = parsed_sources
+        .iter()
+        .flat_map(|p| &p.classes)
+        .flat_map(|c| {
+            c.visibility
+                .iter()
+                .filter(|(_, v)| *v != crate::Visibility::Public)
+                .map(|(m, v)| ((c.name.clone(), m.clone()), *v))
+        })
+        .collect();
     for (source_index, parsed) in parsed_sources.into_iter().enumerate() {
         let source = sources[source_index];
         let diagnostic = |diagnostic| SourceDiagnostic {
@@ -4630,6 +4834,7 @@ pub(crate) fn compile_sources_mapped(
     origins.extend(class_origins);
     let modules = module_names(modules, &declarations, &shared);
     let unit = CompilationUnit {
+        visibility,
         modules,
         declarations,
         classes,
@@ -5177,6 +5382,7 @@ fn parse_unit_ir_context(
     if header != ["ciq-unit"] {
         return Err(Diagnostic::at(text, 0, "expected ciq-unit header"));
     }
+    let mut visibility = Vec::new();
     let mut i = 1;
     let mut declarations = Vec::new();
     let mut classes = Vec::new();
@@ -5277,6 +5483,20 @@ fn parse_unit_ir_context(
                 while let Some(&(method_at, line)) = rows.get(i) {
                     let parts = fields(line);
                     if parts.is_empty() {
+                        i += 1;
+                        continue;
+                    }
+                    if parts.first().is_some_and(|p| p == ".visibility") {
+                        if !methods.is_empty() || !instance_fields.is_empty() || parts.len() != 3 {
+                            return Err(Diagnostic::at(
+                                text,
+                                method_at,
+                                "visibility records must precede fields and methods",
+                            ));
+                        }
+                        let access = crate::Visibility::parse(&parts[2])
+                            .ok_or_else(|| Diagnostic::at(text, method_at, "invalid visibility"))?;
+                        visibility.push((name.clone(), parts[1].clone(), access));
                         i += 1;
                         continue;
                     }
@@ -5633,6 +5853,7 @@ fn parse_unit_ir_context(
     }
     locations.extend(class_locations);
     CompilationUnit::with_modules(declarations, classes, shared, enums, modules)
+        .and_then(|unit| unit.with_visibility(visibility))
         .and_then(|unit| {
             if let Some(context) = context {
                 unit.validate_declaration_api(context)?;

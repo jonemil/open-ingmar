@@ -182,8 +182,8 @@ these field widths are fixed.
 
 A field's symbol ID is `key >> 8`. The complete key remains available, and the
 listing prints its lower byte as `key_bits`. Version 1's type is `key & 0x0f`;
-version 2 stores the type separately. Flag-bit semantics and the app-flags
-bitmask remain uninterpreted. Repeated field IDs and fields sharing method
+version 2 stores the type separately. The app-flags bitmask and flag bits
+without the observations below remain uninterpreted. Repeated field IDs and fields sharing method
 targets are retained.
 
 The SDK 9.2.0 static-member specimen places static variables/methods in a
@@ -192,6 +192,13 @@ Observed key low bytes are `0x40` for static variables and `0x50` for static
 methods, with `0x10` on instance methods and `0x30` on hidden initializers.
 These are scoped observations, not a complete flag-bit interpretation; readers
 and writers retain all bits. See the [static receiver evidence](../../investigations/compiler-root-objects.md#static-storage-and-receivers).
+
+The SDK 9.2.0 visibility specimen adds `0x20` for protected/hidden fields and
+methods: Number fields use `0x20`, methods `0x30`. Private members instead have
+class-specific mangled Symbol names and retain ordinary low bytes. An instance
+readonly Number constant uses `0x10`. These observations constrain generated
+metadata; they do not define every possible flag combination. See the
+[visibility evidence](../../investigations/compiler-root-objects.md#member-visibility).
 
 Type `0x06` identifies a method. An observed value with high byte `0x10`
 identifies ordinary CODE, with its lower 24 bits as the code offset. When the

@@ -1061,6 +1061,38 @@ the same receiver contracts. See the
 [IR contract](../ir/README.md#static-receivers), and
 [SDK evidence](../../investigations/compiler-root-objects.md#static-method-contexts).
 
+### Member visibility
+
+Class fields, constants, enum members, and methods support `public`, `private`,
+`protected`, and `hidden`. Public is the default. Hidden normalizes to protected;
+modifiers apply to every binding in a multi-binding declaration. A class member
+can place visibility before or after `static`. Duplicate/conflicting modifiers
+are rejected. Modules and class declarations remain public; non-public modifiers
+outside class-member scope are rejected.
+
+Private members belong to their declaring class. Protected members belong to
+that class and its subclasses; source superclass chains are not implemented yet,
+so current checked uses require the declaring class for both access levels.
+Source files do not create access scopes. Reads, writes, calls, and construction
+check the caller's class against every known receiver alternative. An instance
+of the same class can be used explicitly. Multi-class alternatives that need
+different private selectors require narrowing before dispatch. Non-public
+members cannot satisfy public structural/interface contracts.
+
+Private declarations get distinct runtime Symbol identities. Ordinary Symbol
+literals keep their original names, so `has :name` cannot discover a private
+member. Checked `method(:name)` bindings require public targets, including
+inside the declaring class: SDK probes compile non-public bindings but their
+invocations fail. Erased/dynamic reflection retains runtime lookup and does not
+bypass VM access checks. These rules do not make visibility a security boundary.
+
+Semantic IR retains source member names and separate access records; lowering
+binds private selectors, while protected metadata retains the VM's access bit.
+The `__ciq_private_` prefix is reserved for generated selectors. See the
+[example](../../../examples/compiler-visibility/README.md),
+[IR contract](../ir/README.md#member-visibility), and
+[SDK evidence](../../investigations/compiler-root-objects.md#member-visibility).
+
 ### Shared variables
 
 Global and module `var` declarations create shared mutable bindings. Each name

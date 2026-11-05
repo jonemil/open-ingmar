@@ -70,6 +70,8 @@ fn field(id: u32, flags: u8, kind: u8, value: Reference) -> FieldDeclaration {
 fn storage_field(
     declaration: &crate::InstanceField,
     ids: &BTreeMap<String, u32>,
+    unit: &CompilationUnit,
+    class: &str,
 ) -> FieldDeclaration {
     let (kind, value) = match &declaration.kind {
         crate::FieldKind::StaticVariable {
@@ -112,14 +114,16 @@ fn storage_field(
         | crate::FieldKind::Interface { .. } => (0, 0),
     };
     field(
-        ids[&declaration.name],
+        ids[&unit.member_symbol(class, &declaration.name)],
         if matches!(declaration.kind, crate::FieldKind::StaticVariable { .. }) {
             0x40
         } else if declaration.kind.class_shared() {
             0x50
+        } else if declaration.kind.readonly() {
+            0x10
         } else {
             0
-        },
+        } | unit.member_visibility(class, &declaration.name).flags(),
         kind,
         Reference::Raw(value),
     )
@@ -370,6 +374,18 @@ pub fn build_console_application(
                 .iter()
                 .flat_map(|c| c.methods.iter().map(|f| f.name().to_owned())),
         )
+        .chain(unit.classes().iter().flat_map(|class| {
+            class
+                .fields
+                .iter()
+                .map(|f| unit.member_symbol(&class.name, &f.name))
+                .chain(
+                    class
+                        .methods
+                        .iter()
+                        .map(|f| unit.member_symbol(&class.name, f.name())),
+                )
+        }))
         .chain(unit.shared_bindings().iter().map(|c| c.name.clone()))
         .chain(
             modules
@@ -475,6 +491,8 @@ pub fn build_console_application(
         );
         for field in &class.fields {
             bindings.insert(format!("__ciq_field_{}", field.name), ids[&field.name]);
+            let symbol = unit.member_symbol(&class.name, &field.name);
+            bindings.insert(format!("__ciq_field_{symbol}"), ids[&symbol]);
         }
     }
     for constant in unit.shared_bindings() {
@@ -712,7 +730,7 @@ pub fn build_console_application(
                 .fields
                 .iter()
                 .filter(|f| !f.kind.class_shared())
-                .map(|declaration| storage_field(declaration, &ids)),
+                .map(|declaration| storage_field(declaration, &ids, unit, &source_class.name)),
         );
         if source_class
             .methods
@@ -742,7 +760,13 @@ pub fn build_console_application(
                 .methods
                 .iter()
                 .filter(|f| !f.is_static_method())
-                .map(|f| method(ids[f.name()], 0x10, &source_class.code_label(f.name()))),
+                .map(|f| {
+                    method(
+                        ids[&unit.member_symbol(&source_class.name, f.name())],
+                        0x10 | unit.member_visibility(&source_class.name, f.name()).flags(),
+                        &source_class.code_label(f.name()),
+                    )
+                }),
         );
         application.fields.sort_by_key(|f| match f.key {
             Key::Raw(key) => key,
@@ -786,14 +810,20 @@ pub fn build_console_application(
                 .fields
                 .iter()
                 .filter(|f| !f.kind.class_shared())
-                .map(|declaration| storage_field(declaration, &ids)),
+                .map(|declaration| storage_field(declaration, &ids, unit, &source_class.name)),
         );
         fields.extend(
             source_class
                 .methods
                 .iter()
                 .filter(|f| !f.is_static_method())
-                .map(|f| method(ids[f.name()], 0x10, &source_class.code_label(f.name()))),
+                .map(|f| {
+                    method(
+                        ids[&unit.member_symbol(&source_class.name, f.name())],
+                        0x10 | unit.member_visibility(&source_class.name, f.name()).flags(),
+                        &source_class.code_label(f.name()),
+                    )
+                }),
         );
         fields.sort_by_key(|field| match field.key {
             Key::Raw(key) => key,
@@ -845,7 +875,7 @@ pub fn build_console_application(
                 .fields
                 .iter()
                 .filter(|f| f.kind.class_shared())
-                .map(|f| storage_field(f, &ids))
+                .map(|f| storage_field(f, &ids, unit, &source_class.name))
                 .chain(
                     source_class
                         .methods
@@ -853,7 +883,13 @@ pub fn build_console_application(
                         .filter(|f| {
                             f.is_static_method() && !crate::unit::field_initializer(f.name())
                         })
-                        .map(|f| method(ids[f.name()], 0x50, &source_class.code_label(f.name()))),
+                        .map(|f| {
+                            method(
+                                ids[&unit.member_symbol(&source_class.name, f.name())],
+                                0x50 | unit.member_visibility(&source_class.name, f.name()).flags(),
+                                &source_class.code_label(f.name()),
+                            )
+                        }),
                 )
                 .chain(std::iter::once(method(
                     INIT,

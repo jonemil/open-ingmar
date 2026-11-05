@@ -1,7 +1,9 @@
 /// Classify source keywords independently of the implemented grammar subset.
 /// IR/assembly identifiers have their own rules and do not use this restriction.
 fn reserved_word(name: &str) -> bool {
-    (crate::unit::field_initializer(name) || name.starts_with("__ciq_initialize_shared_"))
+    (crate::unit::field_initializer(name)
+        || name.starts_with("__ciq_initialize_shared_")
+        || name.starts_with("__ciq_private_"))
         || matches!(
             name,
             "alias"
@@ -782,6 +784,38 @@ impl Declarations<'_> {
 }
 
 impl<'a> Parser<'a> {
+    /// Consume class/member modifiers once, rejecting duplicate access levels
+    /// and static modifiers. The declaration parser checks their legal scope.
+    fn modifiers(&mut self) -> Result<(crate::Visibility, bool), Diagnostic> {
+        let mut access = None;
+        let mut is_static = false;
+        loop {
+            match self.peek()? {
+                Kind::Word("static") => {
+                    let token = self.token()?;
+                    if is_static {
+                        return Err(self.error(token.span.start, "duplicate static modifier"));
+                    }
+                    is_static = true;
+                }
+                Kind::Word(name) if crate::Visibility::parse(name).is_some() => {
+                    let token = self.token()?;
+                    if access
+                        .replace(crate::Visibility::parse(name).unwrap())
+                        .is_some()
+                    {
+                        return Err(self.error(
+                            token.span.start,
+                            "duplicate or conflicting visibility modifiers",
+                        ));
+                    }
+                }
+                _ => break,
+            }
+        }
+        Ok((access.unwrap_or_default(), is_static))
+    }
+
     fn new(source: &'a str, declarations: Rc<Declarations<'a>>) -> Self {
         Self {
             source,
@@ -1150,26 +1184,36 @@ pub(crate) fn collect_declarations<'a>(
         let result = (|| {
             parser.imports()?;
             let mut outer_names = Vec::new();
-            let mut static_binding = false;
             while parser.peek()? != Kind::End {
+                let (visibility, is_static) = parser.modifiers()?;
+                let in_class = parser
+                    .owner
+                    .as_ref()
+                    .is_some_and(|owner| aliases.classes.contains(owner));
+                if visibility != crate::Visibility::Public
+                    && (!in_class
+                        || !matches!(
+                            parser.peek()?,
+                            Kind::Word("function" | "var" | "const" | "enum")
+                        ))
+                {
+                    return Err(parser.error(
+                        parser.offset,
+                        "visibility is supported only on class members",
+                    ));
+                }
+                if is_static
+                    && (!in_class
+                        || !matches!(parser.peek()?, Kind::Word("function" | "var" | "const")))
+                {
+                    return Err(parser.error(
+                        parser.offset,
+                        "static requires a class function, const, or var",
+                    ));
+                }
+                let static_binding =
+                    is_static && matches!(parser.peek()?, Kind::Word("const" | "var"));
                 match parser.peek()? {
-                    Kind::Word("static") => {
-                        parser.token()?;
-                        if !parser
-                            .owner
-                            .as_ref()
-                            .is_some_and(|owner| aliases.classes.contains(owner))
-                            || !matches!(parser.peek()?, Kind::Word("const" | "var" | "function"))
-                        {
-                            return Err(parser.error(
-                                parser.offset,
-                                "only class static const/var declarations are supported",
-                            ));
-                        }
-                        // The normal binding arm records every member in this list
-                        // and consumes its type/initializer on the next iteration.
-                        static_binding = matches!(parser.peek()?, Kind::Word("const" | "var"));
-                    }
                     Kind::Word("const" | "enum" | "var")
                         if parser.peek()? != Kind::Word("var")
                             || static_binding
@@ -1355,7 +1399,6 @@ pub(crate) fn collect_declarations<'a>(
                                 aliases.enum_groups.insert(key, group);
                             }
                             if !more {
-                                static_binding = false;
                                 break;
                             }
                             if enumeration && parser.peek()? == Kind::Punctuation('}') {
@@ -4396,6 +4439,7 @@ pub(crate) struct ParsedBinding {
     pub span: Span,
 }
 pub(crate) struct ParsedClass {
+    pub visibility: Vec<(String, crate::Visibility)>,
     pub bindings: Vec<ParsedBinding>,
     pub name: String,
     pub name_span: Span,
@@ -4431,6 +4475,13 @@ pub(crate) fn declarations<'a>(
             parser.owner = owner;
             parser.names = names;
             continue;
+        }
+        let (visibility, is_static) = parser.modifiers()?;
+        if visibility != crate::Visibility::Public || is_static {
+            return Err(parser.error(
+                parser.offset,
+                "non-public/static modifiers require a class member",
+            ));
         }
         if parser.peek()? == Kind::Word("module") {
             parser.token()?;
@@ -4508,14 +4559,23 @@ pub(crate) fn declarations<'a>(
             parser.imports()?;
             parser.validate_source_imports()?;
             let mut methods = Vec::new();
+            let mut visibility = Vec::new();
             let mut fields = Vec::new();
             let mut bindings = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
-                if parser.peek()? == Kind::Word("static") {
-                    parser.token()?;
+                let (access, is_static) = parser.modifiers()?;
+                if !matches!(
+                    parser.peek()?,
+                    Kind::Word("function" | "var" | "const" | "enum")
+                ) && access != crate::Visibility::Public
+                {
+                    return Err(parser.error(parser.offset, "visibility requires a class member"));
+                }
+                if is_static {
                     if parser.peek()? == Kind::Word("function") {
                         let mut method = parser.function()?;
                         method.is_static = true;
+                        visibility.push((method.name.clone(), access));
                         methods.push(method);
                         count += 1;
                         if count > crate::unit::MAX_FUNCTIONS {
@@ -4534,6 +4594,7 @@ pub(crate) fn declarations<'a>(
                     }
                     bindings.extend(parser.constant_declarations()?.into_iter().map(
                         |mut binding| {
+                            visibility.push((binding.name.clone(), access));
                             binding.static_binding = true;
                             if binding.mutable && binding.annotation.is_none() {
                                 binding.annotation = Some(crate::ReturnType::Any);
@@ -4544,7 +4605,9 @@ pub(crate) fn declarations<'a>(
                     continue;
                 }
                 if matches!(parser.peek()?, Kind::Word("const" | "enum")) {
-                    bindings.extend(parser.constant_declarations()?);
+                    let declarations = parser.constant_declarations()?;
+                    visibility.extend(declarations.iter().map(|b| (b.name.clone(), access)));
+                    bindings.extend(declarations);
                     continue;
                 }
                 if parser.peek()? == Kind::Word("typedef") {
@@ -4553,6 +4616,7 @@ pub(crate) fn declarations<'a>(
                 }
                 if parser.peek()? == Kind::Word("var") {
                     for mut binding in parser.constant_declarations()? {
+                        visibility.push((binding.name.clone(), access));
                         let kind = if !binding.has_initializer {
                             Some(
                                 crate::FieldKind::from_result(
@@ -4629,7 +4693,9 @@ pub(crate) fn declarations<'a>(
                     }
                     continue;
                 }
-                methods.push(parser.function()?);
+                let method = parser.function()?;
+                visibility.push((method.name.clone(), access));
+                methods.push(method);
                 count += 1;
                 if count > crate::unit::MAX_FUNCTIONS {
                     return Err(parser.error(
@@ -4660,6 +4726,7 @@ pub(crate) fn declarations<'a>(
                 return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
             }
             unit.classes.push(ParsedClass {
+                visibility,
                 bindings,
                 name,
                 name_span: token.span,
