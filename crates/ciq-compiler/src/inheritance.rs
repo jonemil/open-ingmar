@@ -78,10 +78,60 @@ pub(crate) fn for_classes(
     Ok(types)
 }
 
+/// Storage and access needed to derive lookup without depending on field types.
+pub(crate) struct FieldSpec {
+    pub(crate) name: String,
+    pub(crate) shared: bool,
+    pub(crate) visibility: crate::Visibility,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct FieldViews {
+    pub(crate) lexical: BTreeMap<(String, String), String>,
+    pub(crate) instance: BTreeMap<(String, String), String>,
+}
+
+/// Resolve lexical and instance field owners from the same declarations.
+/// Instance lookup prefers visible instance storage throughout the hierarchy,
+/// falling back to the closest shared declaration only when no instance exists.
+pub(crate) fn field_views(
+    hierarchy: &BTreeMap<String, SourceClass>,
+    declarations: &BTreeMap<String, Vec<FieldSpec>>,
+) -> FieldViews {
+    let mut result = FieldViews::default();
+    for (class, identity) in hierarchy {
+        for owner in identity
+            .ancestors
+            .iter()
+            .rev()
+            .chain(std::iter::once(class))
+        {
+            for field in &declarations[owner] {
+                if owner != class && field.visibility == crate::Visibility::Private {
+                    continue;
+                }
+                let key = (class.clone(), field.name.clone());
+                result.lexical.insert(key.clone(), owner.clone());
+                if !field.shared {
+                    result.instance.insert(key, owner.clone());
+                }
+            }
+        }
+    }
+    for (key, owner) in &result.lexical {
+        result
+            .instance
+            .entry(key.clone())
+            .or_insert_with(|| owner.clone());
+    }
+    result
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MemberIndex {
     pub(crate) methods: BTreeMap<(String, String), (usize, usize)>,
     pub(crate) fields: BTreeMap<(String, String), (usize, usize)>,
+    pub(crate) instance_fields: BTreeMap<(String, String), (usize, usize)>,
     pub(crate) classes: BTreeMap<String, SourceClass>,
 }
 
@@ -98,7 +148,42 @@ pub(crate) fn member_index(
         .map(|(i, c)| (c.name.as_str(), i))
         .collect::<BTreeMap<_, _>>();
     let mut result = BTreeMap::new();
-    let mut fields = BTreeMap::new();
+    let declarations = classes
+        .iter()
+        .map(|c| {
+            (
+                c.name.clone(),
+                c.fields
+                    .iter()
+                    .map(|f| FieldSpec {
+                        name: f.name.clone(),
+                        shared: f.kind.class_shared(),
+                        visibility: visibility
+                            .get(&(c.name.clone(), f.name.clone()))
+                            .copied()
+                            .unwrap_or_default(),
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    let views = field_views(&hierarchy, &declarations);
+    let bind = |owners: BTreeMap<(String, String), String>| {
+        owners
+            .into_iter()
+            .map(|(key, owner)| {
+                let class = indexes[owner.as_str()];
+                let field = classes[class]
+                    .fields
+                    .iter()
+                    .position(|f| f.name == key.1)
+                    .unwrap();
+                (key, (class, field))
+            })
+            .collect()
+    };
+    let fields = bind(views.lexical);
+    let instance_fields = bind(views.instance);
     for class in classes {
         for owner in hierarchy[&class.name]
             .ancestors
@@ -107,19 +192,6 @@ pub(crate) fn member_index(
             .chain(std::iter::once(&class.name))
         {
             let index = indexes[owner.as_str()];
-            for (field, declaration) in classes[index].fields.iter().enumerate() {
-                if owner != &class.name
-                    && visibility.get(&(owner.clone(), declaration.name.clone()))
-                        == Some(&crate::Visibility::Private)
-                {
-                    continue;
-                }
-                fields.insert(
-                    (class.name.clone(), declaration.name.clone()),
-                    (index, field),
-                );
-            }
-
             for (method, body) in classes[index].methods.iter().enumerate() {
                 if owner != &class.name
                     && (body.name() == "initialize"
@@ -136,6 +208,7 @@ pub(crate) fn member_index(
     Ok(MemberIndex {
         methods: result,
         fields,
+        instance_fields,
         classes: hierarchy,
     })
 }

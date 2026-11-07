@@ -179,7 +179,7 @@ fn activation_callees<'a>(
             if let Owner::Class(class) = owner {
                 if !function.is_static_method()
                     && unit
-                        .field(class, field)
+                        .bound_instance_field(class, field, Some(class))
                         .is_some_and(|(_, f)| f.kind.class_shared())
                 {
                     static_targets.extend(unit.static_lookup(class, field, false));
@@ -217,7 +217,14 @@ fn activation_callees<'a>(
                     for target in contract.classes() {
                         if let Some(class) = unit.classes.iter().find(|c| c.name == target.name) {
                             if unit
-                                .field(&class.name, member)
+                                .bound_instance_field(
+                                    &class.name,
+                                    member,
+                                    match owner {
+                                        Owner::Class(c) => Some(c),
+                                        _ => None,
+                                    },
+                                )
                                 .is_some_and(|(_, f)| f.kind.class_shared())
                             {
                                 static_targets.extend(unit.static_lookup(
@@ -1190,9 +1197,13 @@ fn class_shared_requirements<'a>(
                         let Owner::Class(class) = owner else {
                             return None;
                         };
-                        unit.field(class, field)
-                            .filter(|(_, f)| f.kind.class_shared())
-                            .map(|_| unit.static_field_key(class, field))
+                        (if body.is_static_method() {
+                            unit.field(class, field)
+                        } else {
+                            unit.bound_instance_field(class, field, Some(class))
+                        })
+                        .filter(|(_, f)| f.kind.class_shared())
+                        .map(|(owner, _)| (owner.name.clone(), field.clone()))
                     }
                     _ => None,
                 })
@@ -1289,6 +1300,107 @@ impl CompilationUnit {
             .get(&(class.into(), member.into()))?;
         Some((&self.classes[owner], &self.classes[owner].fields[field]))
     }
+    pub(crate) fn instance_field(
+        &self,
+        class: &str,
+        member: &str,
+    ) -> Option<(&ClassDeclaration, &InstanceField)> {
+        let (owner, field) = *self
+            .member_index
+            .instance_fields
+            .get(&(class.into(), member.into()))?;
+        Some((&self.classes[owner], &self.classes[owner].fields[field]))
+    }
+    fn body_field(
+        &self,
+        class: &str,
+        member: &str,
+        static_method: bool,
+    ) -> Option<(&ClassDeclaration, &InstanceField)> {
+        if static_method {
+            self.field(class, member)
+        } else {
+            self.instance_field(class, member)
+        }
+    }
+    fn qualified_field(
+        &self,
+        class: &str,
+        member: &str,
+        owner: Owner<'_>,
+        static_method: bool,
+    ) -> Option<(&ClassDeclaration, &InstanceField)> {
+        let own = owner == Owner::Class(class);
+        if own
+            && !static_method
+            && self
+                .field(class, member)
+                .is_some_and(|(_, f)| !f.kind.class_shared() && f.kind.allocation_write())
+        {
+            return None;
+        }
+        self.body_field(class, member, own && static_method)
+            .filter(|(_, f)| own && !static_method || f.kind.class_shared())
+    }
+    /// Resolve storage for the emitted selector. A private lexical binding can
+    /// differ from the instance contract without merging the two field slots.
+    fn bound_instance_field(
+        &self,
+        class: &str,
+        member: &str,
+        caller: Option<&str>,
+    ) -> Option<(&ClassDeclaration, &InstanceField)> {
+        if let Some((owner, field)) = self.field(class, member) {
+            if caller == Some(owner.name.as_str())
+                && self.visibility.get(&(owner.name.clone(), member.into()))
+                    == Some(&crate::Visibility::Private)
+            {
+                return Some((owner, field));
+            }
+        }
+        self.instance_field(class, member)
+    }
+    pub(crate) fn instance_field_symbol(
+        &self,
+        class: &str,
+        member: &str,
+        caller: Option<&str>,
+    ) -> String {
+        if let Some((owner, _)) = self.bound_instance_field(class, member, caller) {
+            if self.visibility.get(&(owner.name.clone(), member.into()))
+                == Some(&crate::Visibility::Private)
+            {
+                return crate::visibility::private_symbol(&owner.name, member);
+            }
+        }
+        member.into()
+    }
+    fn check_field_access(
+        &self,
+        caller: Owner<'_>,
+        declaring: &str,
+        member: &str,
+    ) -> Result<(), String> {
+        let access = self
+            .visibility
+            .get(&(declaring.into(), member.into()))
+            .copied()
+            .unwrap_or_default();
+        let allowed = match access {
+            crate::Visibility::Public => true,
+            crate::Visibility::Private => caller == Owner::Class(declaring),
+            crate::Visibility::Protected => {
+                matches!(caller, Owner::Class(c) if self.is_subclass(c, declaring))
+            }
+        };
+        if allowed {
+            Ok(())
+        } else {
+            Err(format!(
+                "{declaring}.{member} is not accessible from this declaration"
+            ))
+        }
+    }
     pub(crate) fn method(
         &self,
         class: &str,
@@ -1324,13 +1436,19 @@ impl CompilationUnit {
     /// Report whether this class needs a distinct static receiver, including
     /// inherited static members. Its record contains only its own storage.
     pub(crate) fn has_statics(&self, class: &str) -> bool {
-        self.classes
+        self.member_index
+            .fields
             .iter()
-            .filter(|c| self.is_subclass(class, &c.name))
-            .any(|c| {
-                c.fields.iter().any(|f| f.kind.class_shared())
-                    || c.methods.iter().any(Function::is_static_method)
+            .any(|((bound, _), (owner, field))| {
+                bound == class && self.classes[*owner].fields[*field].kind.class_shared()
             })
+            || self
+                .member_index
+                .methods
+                .iter()
+                .any(|((bound, _), (owner, method))| {
+                    bound == class && self.classes[*owner].methods[*method].is_static_method()
+                })
     }
     fn static_field_key(&self, class: &str, field: &str) -> (String, String) {
         (
@@ -1344,10 +1462,14 @@ impl CompilationUnit {
     /// bodies, same-storage-kind descendant shadows. Static bodies retain their
     /// declaring storage contract; private selectors remain independent.
     fn self_field_readonly(&self, class: &str, member: &str, static_method: bool) -> bool {
-        let Some((owner, field)) = self.field(class, member) else {
+        let Some((owner, field)) = self.body_field(class, member, static_method) else {
             return false;
         };
-        if field.kind.readonly() {
+        if field.kind.readonly()
+            || self
+                .field(class, member)
+                .is_some_and(|(_, f)| f.kind.readonly())
+        {
             return true;
         }
         if (field.kind.class_shared() && static_method)
@@ -2086,21 +2208,15 @@ impl CompilationUnit {
                     }
                     let inherited = parent.fields.iter().find(|f| f.name == member);
                     let declared = class.fields.iter().find(|f| f.name == member);
-                    if let Some(inherited) = inherited.filter(|_| {
-                        self.member_visibility(&parent.name, member) != crate::Visibility::Private
-                    }) {
-                        let Some(declared) = declared else {
+                    if inherited.is_some()
+                        && self.member_visibility(&parent.name, member)
+                            != crate::Visibility::Private
+                    {
+                        if declared.is_none() {
                             return Err(fail(
                                 None,
                                 None,
                                 "field/method shadowing is not implemented".into(),
-                            ));
-                        };
-                        if inherited.kind.class_shared() != declared.kind.class_shared() {
-                            return Err(fail(
-                                None,
-                                None,
-                                "static/instance field shadowing requires separate receiver lookup views".into(),
                             ));
                         }
                         if self.member_visibility(&parent.name, member)
@@ -2770,7 +2886,23 @@ impl CompilationUnit {
                 if let Some(member) = member {
                     let selectors = receiver_classes
                         .iter()
-                        .map(|c| self.member_symbol(c, member))
+                        .map(|c| {
+                            if matches!(
+                                op,
+                                Operation::MemberRead { .. } | Operation::MemberWrite { .. }
+                            ) {
+                                self.instance_field_symbol(
+                                    c,
+                                    member,
+                                    match owner {
+                                        Owner::Class(c) => Some(c),
+                                        _ => None,
+                                    },
+                                )
+                            } else {
+                                self.member_symbol(c, member)
+                            }
+                        })
                         .collect::<BTreeSet<_>>();
                     if selectors.len() > 1 {
                         return Err(fail(Some(index),Some(operation),"receiver alternatives require different private member selectors; narrow the receiver first".into()));
@@ -2779,7 +2911,11 @@ impl CompilationUnit {
                 match op {
                     Operation::ClassFieldRead { class, field, .. }
                     | Operation::ClassFieldBegin { class, field, .. } => {
-                        self.check_member_access(owner, class, field)
+                        let (declaring, _) = self.qualified_field(class, field, owner, function.is_static_method())
+                            .ok_or_else(|| fail(Some(index), Some(operation), if owner == Owner::Class(class) && !function.is_static_method() && self.field(class, field).is_some_and(|(_, f)| !f.kind.class_shared() && f.kind.allocation_write()) {
+                                "class-qualified allocation-backed instance defaults are not supported".into()
+                            } else { "class-qualified field lookup requires an available receiver view".into() }))?;
+                        self.check_field_access(owner, &declaring.name, field)
                             .map_err(|m| fail(Some(index), Some(operation), m))?;
                     }
                     Operation::MemberRead {
@@ -2790,7 +2926,15 @@ impl CompilationUnit {
                     } => {
                         if let Some(contract) = origins.contract(*receiver) {
                             for class in contract.classes() {
-                                self.check_member_access(owner, &class.name, member)
+                                let (declaring, _) =
+                                    self.instance_field(&class.name, member).ok_or_else(|| {
+                                        fail(
+                                            Some(index),
+                                            Some(operation),
+                                            "unresolved instance field".into(),
+                                        )
+                                    })?;
+                                self.check_field_access(owner, &declaring.name, member)
                                     .map_err(|m| fail(Some(index), Some(operation), m))?;
                             }
                         }
@@ -2887,14 +3031,20 @@ impl CompilationUnit {
                 }
                 if let Operation::ClassFieldBegin { class, field, .. } = &located.operation {
                     if !self
-                        .field(class, field)
-                        .map(|(_, f)| f)
-                        .is_some_and(|f| matches!(f.kind, FieldKind::StaticVariable { .. }))
+                        .qualified_field(class, field, owner, function.is_static_method())
+                        .is_some_and(|(_, f)| {
+                            !f.kind.readonly()
+                                && !(owner == Owner::Class(class)
+                                    && self
+                                        .field(class, field)
+                                        .is_some_and(|(_, f)| f.kind.readonly()))
+                        })
                     {
                         return Err(fail(
                             Some(index),
                             Some(operation),
-                            "class stores require a declared mutable static field".into(),
+                            "class stores require mutable storage in the selected field view"
+                                .into(),
                         ));
                     }
                 }
@@ -2903,14 +3053,21 @@ impl CompilationUnit {
                     class_store(&located.operation, function),
                 ) {
                     let declaration = self
-                        .field(class, field)
+                        .qualified_field(class, field, owner, function.is_static_method())
                         .map(|(_, f)| f)
-                        .filter(|f| matches!(f.kind, FieldKind::StaticVariable { .. }))
+                        .filter(|f| {
+                            !f.kind.readonly()
+                                && !(owner == Owner::Class(class)
+                                    && self
+                                        .field(class, field)
+                                        .is_some_and(|(_, f)| f.kind.readonly()))
+                        })
                         .ok_or_else(|| {
                             fail(
                                 Some(index),
                                 Some(operation),
-                                "class stores require a declared mutable static field".into(),
+                                "class stores require mutable storage in the selected field view"
+                                    .into(),
                             )
                         })?;
                     self.check_value_contract(
@@ -2930,14 +3087,13 @@ impl CompilationUnit {
                 } = &located.operation
                 {
                     let actual = self
-                        .field(class, field)
-                        .map(|(_, f)| f)
-                        .filter(|f| f.kind.class_shared());
+                        .qualified_field(class, field, owner, function.is_static_method())
+                        .map(|(_, f)| f);
                     if !actual.is_some_and(|f| f.result_type() == *result_type) {
                         return Err(fail(
                             Some(index),
                             Some(operation),
-                            "class-shared read must match its declaration".into(),
+                            "class-qualified read must match its receiver lookup view".into(),
                         ));
                     }
                 }
@@ -2958,7 +3114,7 @@ impl CompilationUnit {
                 {
                     if origins.contract(*receiver).is_some_and(|contract| {
                         contract.classes().iter().any(|target| {
-                            self.field(&target.name, member)
+                            self.instance_field(&target.name, member)
                                 .is_some_and(|(_, f)| f.kind.readonly())
                         })
                     }) {
@@ -3065,7 +3221,10 @@ impl CompilationUnit {
                         crate::source_fields::receiver(origins.contract(*receiver))
                             .map_err(|message| fail(Some(index), Some(operation), message))?,
                         member,
-                        |class, field| self.field(&class.name, field).map(|(_, f)| f.result_type()),
+                        |class, field| {
+                            self.instance_field(&class.name, field)
+                                .map(|(_, f)| f.result_type())
+                        },
                     )
                     .map_err(|message| fail(Some(index), Some(operation), message))?;
                     if actual != *claimed {
@@ -3402,7 +3561,17 @@ impl CompilationUnit {
                 | Operation::SelfFieldAssign { field, .. } = &located.operation
                 {
                     let declaration = match owner {
-                        Owner::Class(class) => self.field(class, field).map(|(_, f)| f),
+                        Owner::Class(class) => self
+                            .body_field(
+                                class,
+                                field,
+                                function.is_static_method()
+                                    || (matches!(
+                                        located.operation,
+                                        Operation::SelfFieldAssign { .. }
+                                    ) && field_initializer(function.name())),
+                            )
+                            .map(|(_, f)| f),
                         _ => None,
                     }
                     .ok_or_else(|| {
@@ -4604,13 +4773,12 @@ impl CompilationUnit {
             .find(|c| c.name == class)
             .ok_or("unknown structural implementation class")?;
         for (name, expected) in &shape.fields {
-            if self.member_visibility(class, name) != crate::Visibility::Public {
+            let (owner, field) = self
+                .field(class, name)
+                .ok_or_else(|| format!("{class} does not implement field {name}"))?;
+            if self.member_visibility(&owner.name, name) != crate::Visibility::Public {
                 return Err(format!("{class}.{name} is not a public interface field"));
             }
-            let field = self
-                .field(class, name)
-                .map(|(_, f)| f)
-                .ok_or_else(|| format!("{class} does not implement field {name}"))?;
             if field.kind.readonly() {
                 return Err(format!(
                     "{class}.{name} is readonly; interface fields require mutable bindings"
@@ -5514,6 +5682,53 @@ fn prepare_sources<'a>(
             }
         }
     }
+    let field_specs = parsed_sources
+        .iter()
+        .flat_map(|p| &p.classes)
+        .map(|c| {
+            let fields = c
+                .fields
+                .iter()
+                .map(|f| (f.name.clone(), f.kind.class_shared(), f.kind.readonly()))
+                .chain(c.bindings.iter().map(|b| {
+                    (
+                        b.name.clone(),
+                        b.static_binding || b.enumeration,
+                        !b.mutable,
+                    )
+                }))
+                .map(|(name, shared, readonly)| {
+                    if shared {
+                        calls.class_shared.insert((c.name.clone(), name.clone()));
+                    }
+                    if readonly {
+                        calls
+                            .readonly_declarations
+                            .insert((c.name.clone(), name.clone()));
+                    }
+                    let visibility = c
+                        .visibility
+                        .iter()
+                        .find(|(n, _)| n == &name)
+                        .map_or(crate::Visibility::Public, |(_, v)| *v);
+                    crate::inheritance::FieldSpec {
+                        name,
+                        shared,
+                        visibility,
+                    }
+                })
+                .collect();
+            (c.name.clone(), fields)
+        })
+        .collect();
+    calls.field_views = crate::inheritance::field_views(&aliases.class_types, &field_specs);
+    calls.inherited_fields = calls
+        .field_views
+        .lexical
+        .iter()
+        .filter(|((c, _), owner)| c != *owner)
+        .map(|(key, owner)| (key.clone(), owner.clone()))
+        .collect();
     for class in parsed_sources.iter().flat_map(|p| &p.classes) {
         for ancestor in &aliases.class_types[&class.name].ancestors {
             let parent = parsed_sources
@@ -5521,35 +5736,6 @@ fn prepare_sources<'a>(
                 .flat_map(|p| &p.classes)
                 .find(|p| p.name == *ancestor)
                 .unwrap();
-            for (name, shared) in parent
-                .fields
-                .iter()
-                .map(|f| (&f.name, f.kind.class_shared()))
-                .chain(
-                    parent
-                        .bindings
-                        .iter()
-                        .map(|b| (&b.name, b.static_binding || b.enumeration)),
-                )
-            {
-                let own = class.fields.iter().any(|f| f.name == *name)
-                    || class.bindings.iter().any(|b| b.name == *name);
-                let private = parent
-                    .visibility
-                    .iter()
-                    .any(|(n, v)| n == name && *v == crate::Visibility::Private);
-                if !own && !private {
-                    if shared {
-                        calls
-                            .class_shared
-                            .insert((class.name.clone(), name.clone()));
-                    }
-                    calls
-                        .inherited_fields
-                        .entry((class.name.clone(), name.clone()))
-                        .or_insert_with(|| ancestor.clone());
-                }
-            }
             for method in &parent.methods {
                 if method.name == "initialize" || field_initializer(&method.name) {
                     continue;

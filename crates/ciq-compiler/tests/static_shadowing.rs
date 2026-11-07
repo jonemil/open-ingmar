@@ -93,21 +93,6 @@ fn readiness_uses_distinct_shadowed_slots() {
 }
 
 #[test]
-fn mixed_storage_kinds_remain_explicitly_unsupported() {
-    for (parent, child) in [("static ", ""), ("", "static ")] {
-        let source = format!(
-            "class Root{{{parent}var value=1;}}class Leaf extends Root{{{child}var value=2;}}"
-        );
-        assert!(
-            compile_sources(&[&source])
-                .unwrap_err()
-                .to_string()
-                .contains("receiver lookup views")
-        );
-    }
-}
-
-#[test]
 fn instance_and_static_bodies_apply_distinct_readonly_shadow_rules() {
     let source = "class Root{static var value as Toybox.Lang.Number=1;function put(){value=3;}}class Leaf extends Root{static const value as Toybox.Lang.Number=2;}";
     assert!(

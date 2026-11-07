@@ -1031,10 +1031,8 @@ static variable readonly in a parent static body. Actual inherited calls still
 use their runtime receiver and may fail rather than reach either slot; a
 same-named child field does not redirect a parent-qualified access.
 
-Mixed static/instance redeclarations with a visible ancestor remain unsupported.
-SDK probes accept instance access and same-class qualified access in some mixed
-cases while rejecting external class-qualified access. They need distinct
-receiver lookup views before the compiler can check their contracts correctly.
+Mixed static/instance declarations use the [field lookup views](#field-lookup-views)
+below rather than one closest-field contract for every receiver.
 See the [static-shadowing specimen](../../../examples/compiler-static-shadowing/README.md).
 
 ### Static methods
@@ -1904,29 +1902,54 @@ are resolved before body checking. Access-level changes, static/instance
 shadowing, and static overrides remain rejected: the SDK accepts some of these
 as distinct lookup slots, rather than ordinary virtual overrides.
 
-Instance fields resolve through the same source ancestry. Public/protected
-fields retain their declaring contracts for bare/self reads and writes,
-explicit receiver access, readonly checks, and structural field witnesses.
+Fields resolve through the same source ancestry. Each lookup selects a
+declaration and retains its contract under the views below.
 Private fields are not inherited; a child may declare an independent same-named
 field, including a different type, without capturing the parent's private slot.
 A public instance field may be redeclared with public, protected, or private
 access and a different type or readonly contract. A protected/hidden ancestor
-field cannot be redeclared. Mixed static/instance field and field/method
-shadowing remain unsupported.
+field cannot be redeclared. Field/method shadowing remains unsupported.
 
-Field checking selects the nearest declaration under the receiver's static
-class bound. A parent-bound read keeps the parent's contract even when runtime
-lookup selects a differently typed child field; annotations do not convert or
-check that runtime value. Access reductions retain normal runtime visibility:
-a public parent-bound explicit read can see the parent's field while an
-inherited self read sees the child's protected field. Private shadows have
-separate selectors.
+#### Field lookup views
 
-Outside allocation hooks, an instance body's direct self store also rejects a
-visible readonly shadow of the same storage kind in a known source subclass. Private shadows are independent. Explicit
-receiver stores, including a local alias of self, check the receiver's static
-field declaration instead. This distinction matches the SDK; it does not prove
-that a store reaches the same runtime slot as a subsequent read.
+The visible hierarchy supplies two checked views. The lexical view selects the
+closest declaration. The instance view selects the closest instance field
+anywhere in that hierarchy, falling back to the lexical shared field only when
+no visible instance field exists. Private ancestor declarations are excluded.
+
+| Access/check | Contract used |
+|---|---|
+| Explicit instance `value.field` | Instance view of the receiver's bound class |
+| Bare/self access in an instance body | Instance view of the declaring class |
+| Bare/self access in a static body | Lexical view; the field must be shared |
+| `OwnClass.field` within OwnClass | Current body category's view |
+| `OtherClass.field` | Instance view, which must select a shared field |
+| Structural/interface witness | Lexical declaration, access, and readonly contract |
+
+Qualification still emits class lookup. It does not become self access or a
+conversion. In an instance body, `Leaf.field` may therefore have an inherited
+Number contract but read the child's static String. Structural witnesses also
+check declarations rather than proving that instance lookup will return that
+runtime type. See the
+[mixed-field specimen](../../../examples/compiler-mixed-fields/README.md).
+
+Private selector binding is separate from contract selection. An own private
+lexical declaration supplies the selector inside its class scope, even if the
+instance view supplies a different contract. Explicit receiver operations bind
+that private selector only in the owning class scope; other callers retain the
+instance-view selector. Ordinary Symbol literals remain unchanged.
+
+Outside allocation hooks, direct self stores reject readonly bindings in either
+the selected body view or the lexical view. Instance bodies additionally reject
+visible readonly descendant shadows of the same storage kind. Static bodies
+retain their declaring contract. Explicit receiver stores use only the receiver's
+instance-view declaration, including when the receiver is a local alias of self.
+
+Own-class qualification of an allocation-backed instance field remains rejected.
+The compiler does not yet represent all SDK class-metadata defaults, so returning
+its current Null metadata would silently differ from SDK behavior. Direct
+Number/Symbol/Null metadata defaults and class-shared qualified fields retain
+the rules above.
 
 Construction accepts Object-rooted chains with default-initialized ancestor
 instance fields and empty public zero-argument ancestor `initialize()` methods.

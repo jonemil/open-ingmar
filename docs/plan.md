@@ -35,10 +35,10 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Implement mixed static/instance field redeclarations with distinct receiver
-  lookup views. Cover instance access, same-class qualified access, and external
-  class-qualified rejection where an inherited instance field remains visible;
-  retain storage-kind-specific readonly checks.
+- [ ] Represent SDK instance-field metadata defaults in IR and PRG generation,
+  then enable class-qualified reads of allocation-backed instance defaults.
+  Compare literal String DATA references and constructor-time values; current
+  allocation-only String defaults give different class-definition reads.
 - [ ] Implement SDK-accepted access-level and static/instance method shadowing:
   preserve the parent's public/instance lookup slot when the child declares a
   protected/private or static member with the same name.

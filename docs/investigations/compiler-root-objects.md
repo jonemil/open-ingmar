@@ -440,6 +440,45 @@ is rejected. A private instance ancestor does not cause that external rejection.
 These context-dependent views remain an explicit compiler restriction; they
 cannot safely use one closest-field contract for every receiver category.
 
+## Mixed field lookup views
+
+**Observed, 2026-11-07:** SDK/simulator 9.2.0, `fr265`, API 3.0.0–5.2.0,
+`-O 0`. The [mixed-field specimen](../../examples/compiler-mixed-fields/README.md)
+matches all 24 SDK/generated lines; both PRGs reconstruct through structured
+CODE/DATA. Root instance Number/child static String declarations produce these
+contracts: instance/bare instance access accepts `abs()` and rejects `length()`;
+a static child body accepts `length()` and rejects `abs()`. Reversing storage
+kinds gives String instance access and rejects either access in a static child
+body. Eighteen controlled acceptance probes agree with the compiler.
+
+Within Leaf, `Leaf.slot` is checked under that body's category but emits
+`getselfv Leaf; getsv slot`. A Number-checked instance method can return the
+static String `"leaf"`. With a private static child slot it returns `"private"`;
+a bare instance-body read is Number-checked but also binds that private selector.
+An external instance read remains 11. Symbols in the SDK confirm the private
+selector is scoped to Leaf's statics.
+
+External class qualification is rejected where an inherited instance field stays
+visible. Same-class qualification compiles; Root, Grandchild, and unrelated
+class scopes do not receive that exception. Structural witnesses use the closest
+declaration: the static String field satisfies a mutable String field witness,
+while a Number witness is rejected despite instance access returning a Number.
+Direct/scoped stores also honor a lexical constant; an explicit instance store
+can still update the inherited mutable instance slot. Private binding effects
+must retain the static slot's initialization dependencies.
+
+When an instance field hides the only inherited static member, SDK Leaf DATA
+has no statics reference. Effective members, rather than any static ancestor,
+therefore determine whether generated Leaf needs a statics record.
+
+An unresolved metadata case is `Leaf.slot` for an initialized instance String.
+SDK DATA stores a String reference in the class field; class-qualified access
+in the probe compiles but yields System Error when printed. Our allocation-only
+default initially returned Null. The compiler now rejects that class-metadata
+read explicitly until default representation is implemented; ordinary instance
+allocation/access remains supported. Numeric metadata defaults already round
+trip through the same qualified directive.
+
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

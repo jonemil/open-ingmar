@@ -513,7 +513,10 @@ Inherited class lookup uses the existing class chain and normal `getsv`/member
 operations, preserving the requested subclass. No link from a subclass's static
 record to its parent's static record is synthesized.
 Static redeclarations remain separate fields in those records, using ordinary
-member selectors and each declaration's access/readonly flags. Own-class reads
+member selectors and each declaration's access/readonly flags.
+A subclass needs a statics record only when an effective shared field or static
+method remains visible. An instance field can hide the only inherited static
+member, leaving the subclass with no statics record. Own-class reads
 and writes select that record; neither parent's defaults nor child's defaults
 are copied into the other record. No forwarding store or extra initializer call
 is emitted for a shadow. Bare/self access in an
@@ -712,6 +715,11 @@ Number/Symbol literal defaults remain in DATA, and expression writes remain in
 the declaring allocation hook. A child's literal default is not replayed after
 the parent hook. Static parent-bound field contracts emit no conversion or
 forced lookup in the parent's DATA record.
+Mixed-field contracts use the frontend's receiver-specific view without changing
+these instructions. Own-class qualification keeps class lookup; lexical private
+bindings keep their owning selectors. Neither is rewritten to force a value
+matching its static contract. Allocation-backed instance metadata reads remain
+unsupported until their defaults can be represented faithfully.
 
 Inherited calls use ordinary self/object member lookup and `invokem`; class DATA
 parent links provide runtime dispatch. No copied ancestor body, manual dispatch

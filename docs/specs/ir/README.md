@@ -2283,26 +2283,33 @@ must not expose the receiver before descendant state is initialized.
 Constructor-required ancestor fields remain rejected; ancestor static storage
 is allowed.
 
+Each class stores only its own fields and method bodies. Unit construction derives
+lexical and instance field-owner indexes from headers, storage kinds, and access.
+Source collection uses the same projection while contracts are still inferred;
+unresolved names cannot fall back to outer bindings. The indexes are not
+serialized declaration tables. Private ancestors and compiler allocation hooks
+remain local. Missing source override annotations are resolved before Function
+construction and saved through ordinary signature fields.
 
-Each class stores only its own fields and method bodies. The unit derives an
-effective member/declaring-owner index from class headers and visibility; it is
-not a second serialized declaration table. Private fields stay with their owner,
-while inherited fields keep their original storage contracts. Self and
-explicit field operations resolve against this index, including readonly and
-structural checks. Own private methods remain distinct, and
-private ancestor methods are excluded from inherited lookup. Constructors and
-allocation hooks are not inherited. Source parsing fills omitted override
-contracts before creating Functions; saved IR carries the resolved contracts
-using ordinary signature fields (including their standard defaults).
+Self/member/class-field operations retain source names and their context-specific
+contracts. The class owner and Function receiver header select the checked view;
+no new grammar or claimed declaration-owner operand is needed. Resume validates
+those claims against the same graph and
+[frontend lookup rules](../frontend/README.md#field-lookup-views).
+Class qualification retains its requested class and emits class lookup, even
+where checking uses an instance view. Private selector binding can likewise
+select a lexical private slot without changing the checked contract. These
+contracts are not runtime tag guarantees.
 
-Field shadows retain separate declarations in their respective class headers;
-no field copies, declaration-owner operands, or runtime conversions are added.
-Self/explicit field operations keep their existing names and static contracts.
-Unit validation checks protected-parent redeclarations and, for ordinary
-`.assign-self` in instance bodies, visible readonly shadows of the same storage
-kind in known subclasses. `.member-write`
-uses its receiver's static field contract; allocation-hook writes retain their
-existing initialization exemption. These rules also apply on saved IR resume.
+Readonly checks distinguish explicit instance stores, direct self stores, and
+class-qualified stores. Allocation assignments target their owning declaration;
+reads inside the same initializer still use the ordinary body view. Interface
+witnesses use lexical field declarations. Initialization effects follow the
+bound storage/selector, including private static slots behind an instance view.
+
+Class-qualified reads of allocation-backed instance defaults are rejected until
+their SDK metadata representation is supported; current allocation writes alone
+do not establish equivalent class-definition reads.
 
 Unit construction validates override contracts and access against the
 [frontend hierarchy profile](../frontend/README.md#source-superclasses).
@@ -2311,7 +2318,6 @@ so private shadowing is validated with its actual ownership. Public-first
 construction is insufficient for unrelated private signatures. Effective lookup
 also supplies Method/interface contracts; effect analysis additionally includes
 possible runtime overrides without cloning inherited bodies.
-
 
 Source instance calls use:
 
@@ -2507,8 +2513,8 @@ may differ in access, readonly status, and type. Readiness keys retain both
 class owner and field name, so an initialized child slot cannot prove a parent's
 same-named slot initialized. Direct self-store checks include same-storage-kind
 readonly shadows in instance bodies; static bodies keep the declaring field
-contract. Mixed visible static/instance redeclarations remain rejected pending
-separate receiver lookup views. No new field or operation syntax is needed.
+contract. Mixed storage kinds use the contextual views above. No new field or operation
+syntax is needed.
 
 ### Mutable static fields
 

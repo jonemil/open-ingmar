@@ -92,11 +92,11 @@ pub(crate) fn bind_body<'a>(
             | O::MemberWrite {
                 receiver, member, ..
             } => {
-                if let Some(class) = origins
+                if let Some(receiver_class) = origins
                     .contract(*receiver)
                     .and_then(|c| c.classes().first())
                 {
-                    *member = unit.member_symbol(&class.name, member);
+                    *member = unit.instance_field_symbol(&receiver_class.name, member, class);
                 }
             }
             _ => {}

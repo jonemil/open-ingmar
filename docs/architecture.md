@@ -111,6 +111,10 @@ while initializer types are discovered. Source lookup selects locals/parameters
 before fields and fields before outer bindings; unresolved field types cannot
 fall back to outer values or placeholder types. Bare reads/writes normalize to
 the existing instance-field IR and reuse its validation and VM lowering.
+`inheritance.rs` derives lexical and instance field-owner views from storage and
+visibility before source contract inference. Unit/saved-IR validation reuses that
+projection. Selector binding and initialization effects remain separate from
+checking a field's receiver-specific contract.
 
 Shared `Declarations` collect typedef and binding environments across files.
 Direct non-heap global/class constants are cached before IR construction. Mutable

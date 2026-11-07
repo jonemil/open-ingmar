@@ -473,18 +473,13 @@ fn emit_non_call(
         }
         parser::ExpressionKind::ClassField { class, field } => Operation::ClassFieldRead {
             result: ValueId(operations.len() as u32),
-            result_type: calls
-                .source_fields
-                .get(&class)
-                .and_then(|fields| fields.get(&field))
-                .cloned()
-                .ok_or_else(|| {
-                    Diagnostic::at(
-                        source,
-                        expression.span.start,
-                        "class enum contract is unresolved",
-                    )
-                })?,
+            result_type: calls.class_field_type(&class, &field).ok_or_else(|| {
+                Diagnostic::at(
+                    source,
+                    expression.span.start,
+                    "class enum contract is unresolved",
+                )
+            })?,
             class,
             field,
         },
@@ -3930,7 +3925,10 @@ impl Builder<'_> {
         span: Span,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<(), Diagnostic> {
-        let expected = self.calls.source_fields[&class][&field].clone();
+        let expected = self
+            .calls
+            .class_field_type(&class, &field)
+            .expect("resolved class field contract");
         let builder = crate::BuilderId(self.local_id(span)?.0);
         self.push(
             Operation::ClassFieldBegin {
@@ -4025,11 +4023,16 @@ impl Builder<'_> {
             );
             return Ok(());
         }
-        let expected = self
-            .calls
-            .field_types
-            .get(&name)
-            .and_then(|ty| construction_type(&ty.api_type()));
+        let contract = if self.calls.initializing_fields {
+            self.calls
+                .current_class
+                .as_ref()
+                .and_then(|c| self.calls.source_fields.get(&c.name))
+                .and_then(|f| f.get(&name))
+        } else {
+            self.calls.field_types.get(&name)
+        };
+        let expected = contract.and_then(|ty| construction_type(&ty.api_type()));
         let value = self.value_for_setup_with_context(value, locals, expected)?;
         let value = if let Some(identity) = self
             .calls
@@ -4594,9 +4597,13 @@ pub(crate) struct CallContext {
     pub(crate) field_types: BTreeMap<String, crate::ReturnType>,
     pub(crate) source_fields: BTreeMap<String, BTreeMap<String, crate::ReturnType>>,
     pub(crate) inherited_fields: BTreeMap<(String, String), String>,
+    pub(crate) field_views: crate::inheritance::FieldViews,
+    pub(crate) source_instance_fields: BTreeMap<String, BTreeMap<String, crate::ReturnType>>,
+    pub(crate) readonly_declarations: std::collections::BTreeSet<(String, String)>,
     pub(crate) current_module: Option<String>,
     pub(crate) current_class: Option<crate::SourceClass>,
     pub(crate) static_context: bool,
+    initializing_fields: bool,
 }
 impl CallContext {
     /// Resolve literal namespace references after lexical values/constants have had priority.
@@ -4924,9 +4931,7 @@ impl CallContext {
                         member: field.into(),
                         qualifier: "$".into(),
                     }
-                } else if owner
-                    .is_some_and(|owner| self.class_shared.contains(&(owner.into(), field.into())))
-                {
+                } else if owner.is_some_and(|owner| self.qualified_field(owner, field)) {
                     E::ClassField {
                         class: owner.unwrap().into(),
                         field: field.into(),
@@ -4948,7 +4953,7 @@ impl CallContext {
         if crate::constants::namespace_alias(expression).is_some() {
             let path = crate::constants::path(expression)?;
             let (owner, field) = path.rsplit_once('.')?;
-            let kind = if self.class_shared.contains(&(owner.into(), field.into())) {
+            let kind = if self.qualified_field(owner, field) {
                 E::ClassField {
                     class: owner.into(),
                     field: field.into(),
@@ -4980,9 +4985,7 @@ impl CallContext {
                     .map(|scope| format!("{scope}.{class}"))
                     .find(|name| self.class_bases.contains_key(name))
                     .unwrap_or_else(|| class.into());
-                if self
-                    .class_shared
-                    .contains(&(resolved.clone(), field.into()))
+                if self.qualified_field(&resolved, field)
                     && !locals.contains_key(qualifier)
                     && !parameters.contains_key(qualifier)
                     && !self.field_names.contains(qualifier)
@@ -5223,7 +5226,10 @@ impl CallContext {
         let mut receiver = receiver.clone();
         receiver.nullable = false;
         crate::source_fields::contract(&receiver, member, |class, field| {
-            self.source_fields.get(&class.name)?.get(field).cloned()
+            self.source_instance_fields
+                .get(&class.name)?
+                .get(field)
+                .cloned()
         })
     }
 
@@ -5257,6 +5263,41 @@ impl CallContext {
                     .insert(member.clone(), contract);
             }
         }
+        self.source_instance_fields.clear();
+        for ((class, member), owner) in &self.field_views.instance {
+            if let Some(contract) = self
+                .source_fields
+                .get(owner)
+                .and_then(|f| f.get(member))
+                .cloned()
+            {
+                self.source_instance_fields
+                    .entry(class.clone())
+                    .or_default()
+                    .insert(member.clone(), contract);
+            }
+        }
+    }
+    /// Select the contract visible to this source class-qualified expression.
+    /// Own-class qualification keeps receiver-specific checking; external class
+    /// qualification requires a shared slot in the instance lookup view.
+    fn class_field_owner(&self, class: &str, member: &str) -> Option<&str> {
+        let own = self.current_class.as_ref().is_some_and(|c| c.name == class);
+        let view = if own && self.static_context {
+            &self.field_views.lexical
+        } else {
+            &self.field_views.instance
+        };
+        let owner = view.get(&(class.into(), member.into()))?;
+        (own && !self.static_context || self.class_shared.contains(&(owner.clone(), member.into())))
+            .then_some(owner.as_str())
+    }
+    fn class_field_type(&self, class: &str, member: &str) -> Option<crate::ReturnType> {
+        let owner = self.class_field_owner(class, member)?;
+        self.source_fields.get(owner)?.get(member).cloned()
+    }
+    fn qualified_field(&self, class: &str, member: &str) -> bool {
+        self.class_field_owner(class, member).is_some()
     }
     pub(crate) fn inherit(&mut self, key: (String, String), signature: CallSignature) {
         self.signatures.entry(key).or_insert(signature);
@@ -5346,6 +5387,47 @@ fn build_body(
         });
     let mut body_calls = calls.clone();
     body_calls.static_context = ast.is_static;
+    body_calls.initializing_fields = crate::unit::field_initializer(&ast.name);
+    if let Some(class) = &calls.current_class {
+        body_calls.field_types = if ast.is_static {
+            calls.source_fields.get(&class.name)
+        } else {
+            calls.source_instance_fields.get(&class.name)
+        }
+        .cloned()
+        .unwrap_or_default();
+        let owners = if ast.is_static {
+            &calls.field_views.lexical
+        } else {
+            &calls.field_views.instance
+        };
+        body_calls.readonly_fields = owners
+            .iter()
+            .filter(|((c, member), owner)| {
+                c == &class.name
+                    && calls
+                        .readonly_declarations
+                        .contains(&((*owner).clone(), member.clone()))
+            })
+            .map(|((_, member), _)| member.clone())
+            .collect();
+    }
+
+    if let Some(class) = &calls.current_class {
+        body_calls.readonly_fields.extend(
+            calls
+                .field_views
+                .lexical
+                .iter()
+                .filter(|((c, member), owner)| {
+                    c == &class.name
+                        && calls
+                            .readonly_declarations
+                            .contains(&((*owner).clone(), member.clone()))
+                })
+                .map(|((_, member), _)| member.clone()),
+        );
+    }
     body_calls.parameter_types = candidate_parameters.clone();
     if let Some(base) = method.or_else(|| {
         ast.is_static
