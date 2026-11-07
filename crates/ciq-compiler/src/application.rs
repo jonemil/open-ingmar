@@ -442,10 +442,7 @@ pub fn build_console_application(
         next += 1;
     }
     let mut class_statics = BTreeMap::new();
-    for c in unit.classes().iter().filter(|c| {
-        c.fields.iter().any(|f| f.kind.class_shared())
-            || c.methods.iter().any(|m| m.is_static_method())
-    }) {
+    for c in unit.classes().iter().filter(|c| unit.has_statics(&c.name)) {
         class_statics.insert(c.name.clone(), next);
         next += 1;
     }

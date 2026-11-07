@@ -92,7 +92,6 @@ fn access_and_override_contracts_are_checked_at_the_declaring_owner() {
         "class Root{function f(){return 1;}}class Leaf extends Root{static function f(){return 2;}}".into(),
         "class Root{function f(){return 1;}}class Leaf extends Root{var f=1;}".into(),
         "class Root{var f=1;}class Leaf extends Root{function f(){return 1;}}".into(),
-        "class Root{static var n=1;}class Leaf extends Root{}function f(){return new Leaf();}".into(),
     ] {
         assert!(checking::compile_sources(&[&source]).is_err(), "{source}");
     }

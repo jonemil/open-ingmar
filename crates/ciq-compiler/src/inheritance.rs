@@ -85,8 +85,8 @@ pub(crate) struct MemberIndex {
     pub(crate) classes: BTreeMap<String, SourceClass>,
 }
 
-/// Index effective methods and instance fields without copying declarations.
-/// Private ancestors, static fields, and initializer/hook methods stay local.
+/// Index effective methods and fields without copying declarations.
+/// Private ancestors and initializer/hook methods stay local.
 pub(crate) fn member_index(
     classes: &[ClassDeclaration],
     visibility: &crate::visibility::Members,
@@ -109,9 +109,8 @@ pub(crate) fn member_index(
             let index = indexes[owner.as_str()];
             for (field, declaration) in classes[index].fields.iter().enumerate() {
                 if owner != &class.name
-                    && (declaration.kind.class_shared()
-                        || visibility.get(&(owner.clone(), declaration.name.clone()))
-                            == Some(&crate::Visibility::Private))
+                    && visibility.get(&(owner.clone(), declaration.name.clone()))
+                        == Some(&crate::Visibility::Private)
                 {
                     continue;
                 }

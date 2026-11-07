@@ -1061,6 +1061,34 @@ the same receiver contracts. See the
 [IR contract](../ir/README.md#static-receivers), and
 [SDK evidence](../../investigations/compiler-root-objects.md#static-method-contexts).
 
+### Inherited static members
+
+Static fields, constants, class enum members, and methods participate in source
+superclass lookup, excluding private ancestor declarations. Access and contracts
+come from the selected declaration; class-qualified operations retain the
+requested subclass rather than rewriting it to that declaration's owner.
+Static-field redeclarations and static-method overrides remain unsupported.
+
+Each class with own or inherited statics has a separate static receiver record,
+even if it declares no own static members. The record contains only that class's
+own storage and methods. Inherited class-qualified field reads resolve the
+parent-owned slot; containers in that slot are shared. Lookup may initialize
+each visited class's statics, starting at the requested subclass. Each hook
+runs once. Object-rooted subclass allocation can include ancestor static storage
+without initializing it merely because an instance was allocated.
+
+An inherited static method receives the requested subclass's static receiver on
+a class call, or the supplied instance on an instance call. Its declaring-class
+IR origin does not imply that the actual static receiver contains inherited
+fields. The SDK and generated programs can report Symbol Not Found for bare/self
+field access through a subclass static receiver lacking that field. A direct
+store to an inherited field through the subclass class definition can fail too.
+Explicit parent-qualified access retains parent storage; it is not substituted
+for these runtime lookups. Ordinary checked arity, access, readonly, and value
+contracts still apply before execution.
+
+See the [inherited-statics specimen](../../../examples/compiler-inherited-statics/README.md).
+
 ### Member visibility
 
 Class fields, constants, enum members, and methods support `public`, `private`,
@@ -1879,7 +1907,8 @@ a parent expression can therefore overwrite a child's literal default, while
 a child expression runs after parent expressions. Inherited arrays/containers
 are allocated separately for each instance. An ancestor allocation hook cannot expose self or make virtual
 self calls while descendant initialization is unproven. Ancestor fields needing
-ordinary constructor assignments and ancestor static storage remain rejected.
+ordinary constructor assignments remain rejected; ancestor static storage is
+permitted under the inherited-static lookup rules above.
 The allocated class can use its own ordinary initializer; parent-qualified
 calls and source-based View/AppBase/delegate construction remain outside this
 profile. Allocation hooks do not implicitly call a parent's `initialize()`.
@@ -2106,7 +2135,9 @@ corresponding Number binary operation, then stores the result. A RHS that
 changes the field does not change the captured old value. Branching RHS
 expressions stage the old read through ordinary typed locals. Non-Number results
 are rejected. Inherited instance fields reuse these operations and contracts.
-Inherited static fields remain unsupported. See
+Inherited static fields retain their declaring contracts and ordinary runtime
+lookup; subclass-qualified stores can fail as described under
+[inherited statics](#inherited-static-members). See
 [target evidence](../../investigations/compiler-compound-targets.md).
 
 `ClassDeclaration.fields` holds names and FieldKind defaults/contracts. Unit

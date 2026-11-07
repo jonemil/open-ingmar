@@ -2139,7 +2139,7 @@ views must not be replaced
 with a class-definition value or a forged `.self class=...` operation.
 
 `ClassCall` / `.call-class %result CLASS MEMBER [result=TYPE] %arguments...`
-invokes a declared static method through the canonical class. `ClassCallStatement`
+invokes an effective static method through the requested canonical class. `ClassCallStatement`
 / `.call-class-discard CLASS MEMBER %arguments...` discards its result, including
 Void. Unit validation requires that static declaration and checks its arity,
 argument and result contracts. Instance dispatch remains a separate operation.
@@ -2277,16 +2277,17 @@ separate native-base operand; `.begin-source` selects only the named class.
 Allocation, self, casts/tests, signatures, fields, joins, and nested container
 contracts are checked against the same graph. Native/text paths preserve the
 same ancestry. An Object-rooted source subclass can currently allocate only
-through ancestors whose fields have allocation defaults and whose ordinary
+through ancestors whose instance fields have allocation defaults and whose ordinary
 initializers are public, empty, and zero-argument. Ancestor allocation hooks
-must not expose the receiver before descendant state is initialized; ancestor
-static storage and constructor-required fields remain rejected.
+must not expose the receiver before descendant state is initialized.
+Constructor-required ancestor fields remain rejected; ancestor static storage
+is allowed.
 
 
 Each class stores only its own fields and method bodies. The unit derives an
 effective member/declaring-owner index from class headers and visibility; it is
 not a second serialized declaration table. Private fields stay with their owner,
-while inherited instance fields keep their original storage contracts. Self and
+while inherited fields keep their original storage contracts. Self and
 explicit field operations resolve against this index, including readonly and
 structural checks. Own private methods remain distinct, and
 private ancestor methods are excluded from inherited lookup. Constructors and
@@ -2489,6 +2490,15 @@ and lazy owner initialization. Reads of a still-unwritten slot in the active
 statics initializer are rejected, including class-qualified reads and
 cross-owner reentry. See [source semantics](../frontend/README.md#static-constants).
 Class reads and construction include statics-default bodies in effect analysis.
+
+Inherited static operations use the same class/self/member directives. The
+requested class remains explicit in `.read-class`, class write captures, and
+`.call-class`; the unit resolves the declaring member separately for signature,
+access, and readonly checks. Class aliases therefore cannot bypass a parent's
+initialization readiness: dependency keys use the declaring storage owner.
+Effect summaries include statics hooks visited during inherited lookup, including
+static access through instance fields/methods and allocation-default bodies.
+Static receiver records and inherited bodies are not duplicated in saved IR.
 
 ### Mutable static fields
 

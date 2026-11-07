@@ -379,6 +379,36 @@ These observations justify separate direct-self and explicit-receiver checks,
 while retaining metadata-driven runtime lookup. Existing instructions and DATA
 records represent these cases without new encodings.
 
+## Inherited static lookup and receivers
+
+**Observed, 2026-11-07:** SDK/simulator 9.2.0, `fr265`, API 3.0.0–5.2.0,
+`-O 0`. The [inherited-statics specimen](../../examples/compiler-inherited-statics/README.md)
+matches all 17 SDK/generated lines; both PRGs reconstruct through structured
+CODE/DATA exactly. `Leaf.owner()` visits Leaf, Middle, then Root statics, printing
+30, 20, 10 before the receiver comparison. Each statics hook runs once. Empty's
+inherited `owner()` receives a distinct receiver despite no own static members.
+Root's value and Array remain parent-owned: a Root mutation is visible through
+Leaf, and appending through Leaf changes Root's Array. Inherited static calls
+through a Leaf instance receive that instance and can read/mutate the shared
+parent field. Mere allocation adds no statics-init traces.
+
+Separate two-class probes declare Root.value=`mark(10)` and Leaf.child=`mark(20)`.
+Class-qualified Leaf.value reads 10 after traces 20 then 10. `Leaf.read()` with
+Root's body `return value;`, `Leaf.bump()` with `value+=1`, and direct
+`Leaf.value=30` each compile but fail with Symbol Not Found for value. The
+inherited static receiver has no own value slot. SDK DATA places Root.value in
+Root's separate statics record (key bits `0x40`) and Leaf.child in Leaf's record;
+the records have lexical globals parents, not static superclass links.
+
+Our generated negative read probe also fails at the same self lookup. Its
+console reports numeric selector `0000000b` because generated symbols lack names;
+CODE `getselfv 0x0000000b` and the Root static field key `0x00000b40` identify value.
+No parent-storage rewrite is justified by successful inherited field reads.
+
+A variant redeclaring Root's public static value in Leaf compiles in the SDK.
+Its shadowed storage/access/initialization behavior remains the explicit next
+static-field task; this variant has only compile evidence here.
+
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

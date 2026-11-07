@@ -504,9 +504,16 @@ reuse existing VM lookup/invocation instructions and DATA records.
 Static method CODE uses the ordinary hidden context and argument convention.
 Application metadata places user static methods in the class statics record
 with key low byte `0x50`, excluding them from instance records. A method-only
-class still needs a statics record. Its parent is the containing module and
+class still needs a statics record. A subclass with only inherited statics also
+gets its own record and receiver, without copying ancestor fields or bodies.
+Its parent is the containing module and
 its hidden initializer is the checked statics hook or the shared no-op.
 The hook itself is not a callable user method.
+Inherited class lookup uses the existing class chain and normal `getsv`/member
+operations, preserving the requested subclass. No link from a subclass's static
+record to its parent's static record is synthesized. Bare/self access in an
+inherited static body continues to use the actual invocation receiver; it is
+not changed into a parent-qualified field access.
 
 `StaticSelf` emits `getself`; it does not load or synthesize the class's statics
 object. Its `static-receiver(CLASS)` contract retains origin only for checking;

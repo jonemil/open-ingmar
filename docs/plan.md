@@ -35,8 +35,9 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Resolve inherited static fields/methods and model subclass static storage
-  and initialization separately from the parent's storage.
+- [ ] Implement static-field redeclarations across source classes, including
+  same-named parent/subclass storage, access/readonly changes, and initialization
+  order. Public variable shadows compile in the SDK.
 - [ ] Implement SDK-accepted access-level and static/instance method shadowing:
   preserve the parent's public/instance lookup slot when the child declares a
   protected/private or static member with the same name.

@@ -568,7 +568,10 @@ fn inspect(
                 arguments,
                 ..
             } => {
-                if let Some(parameters) = signatures.get(&(module.clone(), member.clone())) {
+                let owner = unit
+                    .and_then(|u| u.method(module, member))
+                    .map_or(module.as_str(), |(c, _)| c.name.as_str());
+                if let Some(parameters) = signatures.get(&(owner.into(), member.clone())) {
                     boundaries.extend(parameters.iter().cloned().zip(arguments.iter().copied()));
                 }
             }

@@ -163,13 +163,82 @@ fn activation_callees<'a>(
         operation
     };
 
-    if let Operation::ClassCall { class, .. } | Operation::ClassCallStatement { class, .. } =
-        operation
+    if let Operation::ClassCall { class, member, .. }
+    | Operation::ClassCallStatement { class, member, .. } = operation
     {
-        if !(owner == Owner::Class(class) && function.is_static_method()) {
-            calls.push((Owner::Class(class), STATIC_INITIALIZER));
-        }
+        calls.extend(
+            unit.static_lookup(class, member, true)
+                .into_iter()
+                .filter(|c| !(owner == Owner::Class(c) && function.is_static_method()))
+                .map(|c| (Owner::Class(c), STATIC_INITIALIZER)),
+        );
     }
+    let mut static_targets = Vec::new();
+    match operation {
+        Operation::SelfFieldRead { field, .. } | Operation::SelfFieldAssign { field, .. } => {
+            if let Owner::Class(class) = owner {
+                if !function.is_static_method()
+                    && unit
+                        .field(class, field)
+                        .is_some_and(|(_, f)| f.kind.class_shared())
+                {
+                    static_targets.extend(unit.static_lookup(class, field, false));
+                }
+            }
+        }
+        Operation::ObjectCall {
+            classes, member, ..
+        }
+        | Operation::ObjectCallStatement {
+            classes, member, ..
+        } => {
+            for class in classes {
+                if unit
+                    .method(class, member)
+                    .is_some_and(|(_, f)| f.is_static_method())
+                {
+                    static_targets.extend(unit.static_lookup(class, member, true));
+                }
+            }
+        }
+        Operation::MemberRead {
+            receiver, member, ..
+        }
+        | Operation::MemberWrite {
+            receiver, member, ..
+        } if unit.classes.iter().any(|c| {
+            c.fields
+                .iter()
+                .any(|f| f.name == *member && f.kind.class_shared())
+        }) =>
+        {
+            if let Ok(origins) = crate::source_objects::Origins::for_function(function) {
+                if let Some(contract) = origins.contract(*receiver) {
+                    for target in contract.classes() {
+                        if let Some(class) = unit.classes.iter().find(|c| c.name == target.name) {
+                            if unit
+                                .field(&class.name, member)
+                                .is_some_and(|(_, f)| f.kind.class_shared())
+                            {
+                                static_targets.extend(unit.static_lookup(
+                                    &class.name,
+                                    member,
+                                    false,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    calls.extend(
+        static_targets
+            .into_iter()
+            .filter(|c| !(owner == Owner::Class(c) && function.is_static_method()))
+            .map(|c| (Owner::Class(c), STATIC_INITIALIZER)),
+    );
     let module = match operation {
         Operation::ModuleValue {
             module: Some(module),
@@ -302,10 +371,13 @@ fn effect_callees<'a>(
         }
         calls.push((Owner::Class(class), STATIC_INITIALIZER));
     }
-    if let Operation::ClassFieldRead { class, .. } = operation {
-        if owner != Owner::Class(class) {
-            calls.push((Owner::Class(class), STATIC_INITIALIZER));
-        }
+    if let Operation::ClassFieldRead { class, field, .. } = operation {
+        calls.extend(
+            unit.static_lookup(class, field, false)
+                .into_iter()
+                .filter(|c| owner != Owner::Class(c))
+                .map(|c| (Owner::Class(c), STATIC_INITIALIZER)),
+        );
     }
     calls
 }
@@ -1096,7 +1168,7 @@ fn class_shared_requirements<'a>(
                 .iter()
                 .filter_map(|op| match &op.operation {
                     Operation::ClassFieldRead { class, field, .. } => {
-                        Some((class.clone(), field.clone()))
+                        Some(unit.static_field_key(class, field))
                     }
                     Operation::SharedWrite { .. } => {
                         class_store(&op.operation, body).map(|(c, f)| (c.into(), f.into()))
@@ -1118,12 +1190,9 @@ fn class_shared_requirements<'a>(
                         let Owner::Class(class) = owner else {
                             return None;
                         };
-                        classes
-                            .iter()
-                            .find(|c| c.name == *class)
-                            .and_then(|c| c.fields.iter().find(|f| f.name == *field))
-                            .filter(|f| f.kind.class_shared())
-                            .map(|_| ((*class).to_owned(), field.clone()))
+                        unit.field(class, field)
+                            .filter(|(_, f)| f.kind.class_shared())
+                            .map(|_| unit.static_field_key(class, field))
                     }
                     _ => None,
                 })
@@ -1230,6 +1299,46 @@ impl CompilationUnit {
             .methods
             .get(&(class.into(), member.into()))?;
         Some((&self.classes[owner], &self.classes[owner].methods[method]))
+    }
+    /// Return classes visited by class-qualified lookup, through the declaring
+    /// owner. Each visited statics record may initialize independently.
+    fn static_lookup<'a>(&'a self, class: &'a str, member: &str, method: bool) -> Vec<&'a str> {
+        let owner = if method {
+            self.method(class, member).map(|(c, _)| c.name.as_str())
+        } else {
+            self.field(class, member).map(|(c, _)| c.name.as_str())
+        };
+        let mut path = vec![class];
+        if owner != Some(class) {
+            if let Some(identity) = self.member_index.classes.get(class) {
+                for parent in &identity.ancestors {
+                    path.push(parent.as_str());
+                    if Some(parent.as_str()) == owner {
+                        break;
+                    }
+                }
+            }
+        }
+        path
+    }
+    /// Report whether this class needs a distinct static receiver, including
+    /// inherited static members. Its record contains only its own storage.
+    pub(crate) fn has_statics(&self, class: &str) -> bool {
+        self.classes
+            .iter()
+            .filter(|c| self.is_subclass(class, &c.name))
+            .any(|c| {
+                c.fields.iter().any(|f| f.kind.class_shared())
+                    || c.methods.iter().any(Function::is_static_method)
+            })
+    }
+    fn static_field_key(&self, class: &str, field: &str) -> (String, String) {
+        (
+            self.field(class, field)
+                .map_or(class, |(c, _)| c.name.as_str())
+                .into(),
+            field.into(),
+        )
     }
     /// Check readonly selectors reachable by a direct self store. Private fields
     /// have separate selectors; explicit receiver stores keep their static bound.
@@ -2144,15 +2253,13 @@ impl CompilationUnit {
                     let invalid = match &op.operation {
                         Operation::StaticSelf { class, .. } => class != &declaration.name,
                         Operation::SelfFieldRead { field, .. }
-                        | Operation::SelfFieldAssign { field, .. } => !declaration
-                            .fields
-                            .iter()
-                            .any(|f| f.name == *field && f.kind.class_shared()),
+                        | Operation::SelfFieldAssign { field, .. } => !self
+                            .field(&declaration.name, field)
+                            .is_some_and(|(_, f)| f.kind.class_shared()),
                         Operation::SelfCall { member, .. }
-                        | Operation::SelfCallStatement { member, .. } => !declaration
-                            .methods
-                            .iter()
-                            .any(|f| f.name() == member && f.is_static_method()),
+                        | Operation::SelfCallStatement { member, .. } => !self
+                            .method(&declaration.name, member)
+                            .is_some_and(|(_, f)| f.is_static_method()),
                         _ => false,
                     };
                     if invalid {
@@ -2380,7 +2487,7 @@ impl CompilationUnit {
                             required.insert((class.to_owned(), field.to_owned()));
                         }
                         if let Operation::ClassFieldRead { class, field, .. } = &located.operation {
-                            required.insert((class.clone(), field.clone()));
+                            required.insert(self.static_field_key(class, field));
                         }
                         for callee in effect_callees(self, owner, &located.operation)
                             .into_iter()
@@ -2778,10 +2885,8 @@ impl CompilationUnit {
                 }
                 if let Operation::ClassFieldBegin { class, field, .. } = &located.operation {
                     if !self
-                        .classes
-                        .iter()
-                        .find(|c| c.name == *class)
-                        .and_then(|c| c.fields.iter().find(|f| f.name == *field))
+                        .field(class, field)
+                        .map(|(_, f)| f)
                         .is_some_and(|f| matches!(f.kind, FieldKind::StaticVariable { .. }))
                     {
                         return Err(fail(
@@ -2796,10 +2901,8 @@ impl CompilationUnit {
                     class_store(&located.operation, function),
                 ) {
                     let declaration = self
-                        .classes
-                        .iter()
-                        .find(|c| c.name == class)
-                        .and_then(|c| c.fields.iter().find(|f| f.name == field))
+                        .field(class, field)
+                        .map(|(_, f)| f)
                         .filter(|f| matches!(f.kind, FieldKind::StaticVariable { .. }))
                         .ok_or_else(|| {
                             fail(
@@ -2825,10 +2928,8 @@ impl CompilationUnit {
                 } = &located.operation
                 {
                     let actual = self
-                        .classes
-                        .iter()
-                        .find(|c| c.name == *class)
-                        .and_then(|c| c.fields.iter().find(|f| f.name == *field))
+                        .field(class, field)
+                        .map(|(_, f)| f)
                         .filter(|f| f.kind.class_shared());
                     if !actual.is_some_and(|f| f.result_type() == *result_type) {
                         return Err(fail(
@@ -3406,7 +3507,7 @@ impl CompilationUnit {
                             if self.member_visibility(&parent.name, "initialize")
                                 != crate::Visibility::Public
                                 || parent.fields.iter().any(|f| {
-                                    f.kind.class_shared() || f.kind.requires_initialization()
+                                    !f.kind.class_shared() && f.kind.requires_initialization()
                                 })
                                 || parent
                                     .methods
@@ -3577,10 +3678,8 @@ impl CompilationUnit {
                 | Operation::ClassCallStatement { class, member, .. } = &located.operation
                 {
                     if !self
-                        .classes
-                        .iter()
-                        .find(|c| c.name == *class)
-                        .and_then(|c| c.methods.iter().find(|f| f.name() == member))
+                        .method(class, member)
+                        .map(|(_, f)| f)
                         .is_some_and(|f| f.is_static_method())
                     {
                         return Err(fail(
@@ -5437,7 +5536,12 @@ fn prepare_sources<'a>(
                     .visibility
                     .iter()
                     .any(|(n, v)| n == name && *v == crate::Visibility::Private);
-                if !own && !shared && !private {
+                if !own && !private {
+                    if shared {
+                        calls
+                            .class_shared
+                            .insert((class.name.clone(), name.clone()));
+                    }
                     calls
                         .inherited_fields
                         .entry((class.name.clone(), name.clone()))
@@ -5445,10 +5549,7 @@ fn prepare_sources<'a>(
                 }
             }
             for method in &parent.methods {
-                if method.name == "initialize"
-                    || field_initializer(&method.name)
-                    || method.is_static
-                {
+                if method.name == "initialize" || field_initializer(&method.name) {
                     continue;
                 }
                 if parent

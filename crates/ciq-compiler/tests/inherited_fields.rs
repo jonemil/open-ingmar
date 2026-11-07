@@ -87,8 +87,6 @@ fn unsupported_parent_initialization_and_receiver_escape_stay_explicit() {
         "var value=1;function initialize(n as Toybox.Lang.Number){}",
         "var value=self;",
         "var value=f();function f() as Toybox.Lang.Number{return 1;}",
-        "static var value=1;",
-        "enum Kind{VALUE=1}",
     ] {
         let source = format!(
             "class Root{{{parent}}}class Leaf extends Root{{}}function f(){{return new Leaf();}}"
