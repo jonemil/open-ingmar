@@ -1340,26 +1340,28 @@ impl CompilationUnit {
             field.into(),
         )
     }
-    /// Check readonly selectors reachable by a direct self store. Private fields
-    /// have separate selectors; explicit receiver stores keep their static bound.
-    fn self_field_readonly(&self, class: &str, member: &str) -> bool {
+    /// Check direct self stores against readonly declarations and, for instance
+    /// bodies, same-storage-kind descendant shadows. Static bodies retain their
+    /// declaring storage contract; private selectors remain independent.
+    fn self_field_readonly(&self, class: &str, member: &str, static_method: bool) -> bool {
         let Some((owner, field)) = self.field(class, member) else {
             return false;
         };
         if field.kind.readonly() {
             return true;
         }
-        if field.kind.class_shared()
+        if (field.kind.class_shared() && static_method)
             || self.member_visibility(&owner.name, member) == crate::Visibility::Private
         {
             return false;
         }
         self.classes.iter().any(|candidate| {
             self.is_subclass(&candidate.name, class)
-                && candidate
-                    .fields
-                    .iter()
-                    .any(|f| f.name == member && f.kind.readonly() && !f.kind.class_shared())
+                && candidate.fields.iter().any(|f| {
+                    f.name == member
+                        && f.kind.readonly()
+                        && f.kind.class_shared() == field.kind.class_shared()
+                })
                 && self.member_visibility(&candidate.name, member) != crate::Visibility::Private
         })
     }
@@ -2094,11 +2096,11 @@ impl CompilationUnit {
                                 "field/method shadowing is not implemented".into(),
                             ));
                         };
-                        if inherited.kind.class_shared() || declared.kind.class_shared() {
+                        if inherited.kind.class_shared() != declared.kind.class_shared() {
                             return Err(fail(
                                 None,
                                 None,
-                                "inherited static field shadowing is not implemented".into(),
+                                "static/instance field shadowing requires separate receiver lookup views".into(),
                             ));
                         }
                         if self.member_visibility(&parent.name, member)
@@ -2941,7 +2943,7 @@ impl CompilationUnit {
                 }
                 if let Operation::SelfFieldAssign { field, .. } = &located.operation {
                     if !field_initializer(function.name())
-                        && matches!(owner, Owner::Class(class) if self.self_field_readonly(class, field))
+                        && matches!(owner, Owner::Class(class) if self.self_field_readonly(class, field, function.is_static_method()))
                     {
                         return Err(fail(
                             Some(index),

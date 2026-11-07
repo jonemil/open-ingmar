@@ -409,6 +409,37 @@ A variant redeclaring Root's public static value in Leaf compiles in the SDK.
 Its shadowed storage/access/initialization behavior remains the explicit next
 static-field task; this variant has only compile evidence here.
 
+## Static-field redeclarations
+
+**Observed, 2026-11-07:** SDK/simulator 9.2.0, `fr265`, API 3.0.0–5.2.0,
+`-O 0`. The [static-shadowing specimen](../../examples/compiler-static-shadowing/README.md)
+matches all 29 SDK/generated lines; both PRGs reconstruct with structured
+CODE/DATA. Parent and child slots mutate independently, including differently
+typed and readonly/variable redeclarations. Separate Array initializers do not
+share contents. Accessing a child's shadow does not run the parent's default;
+a later parent expression default leaves the child's value unchanged.
+
+Protected ancestor static fields reject public/protected/private redeclarations.
+Private ancestor slots allow independent child declarations. A parent static
+body may store its mutable field despite a visible constant child; the same
+store in an instance body is rejected as a write to the child's constant.
+A separate enum probe prints 11, 22, 11, 23 for parent enum ITEM and child static
+variable ITEM before/after the child store.
+
+Inherited `readRoot()` containing `return value` fails through the Leaf class
+receiver even when both classes declare a public static value (11 and 22).
+SDK and generated negative probes first print 22, 11, then Symbol Not Found.
+Both SDK records use the same value Symbol, with separate `0x40` field entries;
+no distinct public selector or shared storage follows from the spelling.
+
+Mixed storage-kind probes accept instance access in both directions. External
+`Leaf.value` is rejected when public parent/child fields change static/instance
+kind. A static child body accepts bare/self access and `Leaf.value` within Leaf,
+while the same qualified expression in Root, Grandchild, or an unrelated class
+is rejected. A private instance ancestor does not cause that external rejection.
+These context-dependent views remain an explicit compiler restriction; they
+cannot safely use one closest-field contract for every receiver category.
+
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

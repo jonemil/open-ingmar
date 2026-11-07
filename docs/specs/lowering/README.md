@@ -511,7 +511,12 @@ its hidden initializer is the checked statics hook or the shared no-op.
 The hook itself is not a callable user method.
 Inherited class lookup uses the existing class chain and normal `getsv`/member
 operations, preserving the requested subclass. No link from a subclass's static
-record to its parent's static record is synthesized. Bare/self access in an
+record to its parent's static record is synthesized.
+Static redeclarations remain separate fields in those records, using ordinary
+member selectors and each declaration's access/readonly flags. Own-class reads
+and writes select that record; neither parent's defaults nor child's defaults
+are copied into the other record. No forwarding store or extra initializer call
+is emitted for a shadow. Bare/self access in an
 inherited static body continues to use the actual invocation receiver; it is
 not changed into a parent-qualified field access.
 

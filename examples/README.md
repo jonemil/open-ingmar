@@ -120,6 +120,9 @@ and future Rust toolchain experiments.
 - [compiler-field-shadowing](compiler-field-shadowing/README.md):
   field redeclarations, differing contracts, access changes, readonly shadows,
   and metadata defaults versus allocation expressions.
+- [compiler-static-shadowing](compiler-static-shadowing/README.md):
+  separate static slots, lazy initialization, access and readonly changes,
+  differing contracts, and independent container values.
 - [compiler-inherited-statics](compiler-inherited-statics/README.md):
   inherited class lookup, separate static receivers, parent-owned storage,
   instance calls, and one-time statics initialization.

@@ -2299,7 +2299,8 @@ Field shadows retain separate declarations in their respective class headers;
 no field copies, declaration-owner operands, or runtime conversions are added.
 Self/explicit field operations keep their existing names and static contracts.
 Unit validation checks protected-parent redeclarations and, for ordinary
-`.assign-self`, visible readonly shadows in known subclasses. `.member-write`
+`.assign-self` in instance bodies, visible readonly shadows of the same storage
+kind in known subclasses. `.member-write`
 uses its receiver's static field contract; allocation-hook writes retain their
 existing initialization exemption. These rules also apply on saved IR resume.
 
@@ -2499,6 +2500,15 @@ initialization readiness: dependency keys use the declaring storage owner.
 Effect summaries include statics hooks visited during inherited lookup, including
 static access through instance fields/methods and allocation-default bodies.
 Static receiver records and inherited bodies are not duplicated in saved IR.
+
+Static shadows retain own field records in each class; the effective member
+index selects the closest contract without merging storage. Saved declarations
+may differ in access, readonly status, and type. Readiness keys retain both
+class owner and field name, so an initialized child slot cannot prove a parent's
+same-named slot initialized. Direct self-store checks include same-storage-kind
+readonly shadows in instance bodies; static bodies keep the declaring field
+contract. Mixed visible static/instance redeclarations remain rejected pending
+separate receiver lookup views. No new field or operation syntax is needed.
 
 ### Mutable static fields
 

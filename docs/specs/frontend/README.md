@@ -1010,6 +1010,33 @@ the method rules below. See the
 [IR contract](../ir/README.md#mutable-static-fields), and
 [runtime evidence](../../investigations/compiler-root-objects.md#mutable-static-fields).
 
+### Static-field redeclarations
+
+A public static field may be redeclared as a static variable or constant with
+public, protected, or private access and a different value contract. Protected
+ancestor fields cannot be redeclared; private fields retain independent selectors.
+Class enum slots use the same class-shared storage rules.
+
+Each declaration keeps its own class's slot and initializer. `Root.value` and
+`Leaf.value` select their respective declarations; mutating either slot leaves
+the other unchanged. Containers initialized in both slots are separate values.
+A subclass read of its own shadow does not activate the parent's initializer;
+parent/child expression defaults run lazily on their respective first accesses.
+A parent's expression default does not overwrite the child's metadata default.
+
+Readonly checks use the selected declaration. An instance body's direct self
+store also checks visible constant shadows of the same storage kind. Static
+bodies keep their declaring contract: a child constant does not make a parent
+static variable readonly in a parent static body. Actual inherited calls still
+use their runtime receiver and may fail rather than reach either slot; a
+same-named child field does not redirect a parent-qualified access.
+
+Mixed static/instance redeclarations with a visible ancestor remain unsupported.
+SDK probes accept instance access and same-class qualified access in some mixed
+cases while rejecting external class-qualified access. They need distinct
+receiver lookup views before the compiler can check their contracts correctly.
+See the [static-shadowing specimen](../../../examples/compiler-static-shadowing/README.md).
+
 ### Static methods
 
 Class `static function` declarations retain ordinary argument/result contracts
@@ -1067,7 +1094,8 @@ Static fields, constants, class enum members, and methods participate in source
 superclass lookup, excluding private ancestor declarations. Access and contracts
 come from the selected declaration; class-qualified operations retain the
 requested subclass rather than rewriting it to that declaration's owner.
-Static-field redeclarations and static-method overrides remain unsupported.
+Static-field redeclarations follow the [shadowing rules](#static-field-redeclarations);
+static-method overrides remain unsupported.
 
 Each class with own or inherited statics has a separate static receiver record,
 even if it declares no own static members. The record contains only that class's
@@ -1080,8 +1108,9 @@ without initializing it merely because an instance was allocated.
 An inherited static method receives the requested subclass's static receiver on
 a class call, or the supplied instance on an instance call. Its declaring-class
 IR origin does not imply that the actual static receiver contains inherited
-fields. The SDK and generated programs can report Symbol Not Found for bare/self
-field access through a subclass static receiver lacking that field. A direct
+field slots. The SDK and generated programs can report Symbol Not Found for
+bare/self access in an inherited static body, even when the subclass declares
+a same-named static field. A direct
 store to an inherited field through the subclass class definition can fail too.
 Explicit parent-qualified access retains parent storage; it is not substituted
 for these runtime lookups. Ordinary checked arity, access, readonly, and value
@@ -1882,8 +1911,8 @@ Private fields are not inherited; a child may declare an independent same-named
 field, including a different type, without capturing the parent's private slot.
 A public instance field may be redeclared with public, protected, or private
 access and a different type or readonly contract. A protected/hidden ancestor
-field cannot be redeclared. Static-field and field/method shadowing remain
-unsupported.
+field cannot be redeclared. Mixed static/instance field and field/method
+shadowing remain unsupported.
 
 Field checking selects the nearest declaration under the receiver's static
 class bound. A parent-bound read keeps the parent's contract even when runtime
@@ -1893,8 +1922,8 @@ a public parent-bound explicit read can see the parent's field while an
 inherited self read sees the child's protected field. Private shadows have
 separate selectors.
 
-Outside allocation hooks, a direct self store also rejects any visible readonly
-shadow in a known source subclass. Private shadows are independent. Explicit
+Outside allocation hooks, an instance body's direct self store also rejects a
+visible readonly shadow of the same storage kind in a known source subclass. Private shadows are independent. Explicit
 receiver stores, including a local alias of self, check the receiver's static
 field declaration instead. This distinction matches the SDK; it does not prove
 that a store reaches the same runtime slot as a subsequent read.
