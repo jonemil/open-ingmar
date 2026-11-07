@@ -318,6 +318,32 @@ The implemented profile supports same-access instance overrides and separate
 private helpers. Access/kind shadowing, inherited fields/static storage, and
 parent initialization remain explicit restrictions in the frontend contract.
 
+## Inherited field allocation
+
+**Observed, 2026-11-07:** SDK/simulator 9.2.0, `fr265`, API 3.0.0–5.2.0,
+`-O 0`. The [field specimen](../../examples/compiler-inherited-fields/README.md)
+matches all 23 SDK/generated lines and reconstructs structured CODE/DATA exactly.
+Root's expressions print 1, 2, 3, Middle prints 4 after reading Root's field,
+and Leaf prints 5. A second Leaf repeats that order with independent array
+storage. Protected mutation and parent-bound reads address inherited public
+storage. Root/Leaf private fields have different types and remain independent.
+
+A separate authored probe gives Root defaults `a=mark(1)` and private
+`secret=mark(2)`, Leaf default `b=mark(3)`, and ordinary initializers printing
+10 and 20 respectively. `new Leaf()` prints 1, 2, 3, 20, followed by 4 for
+`a+b` and 2 for Root's private helper. It never prints 10: parent allocation
+work runs without an implicit parent ordinary-initializer call.
+
+The SDK's Leaf allocation CODE explicitly uses `getselfv Root`, `getsv <init>`,
+`invokemz` before its own default expressions. Root and Leaf have separate
+allocation CODE entries; existing DATA class links and VM instructions suffice.
+Our reserved default-body selector must likewise retain its declaring owner;
+a shared virtual selector would select Leaf's body from Root's hook.
+
+This establishes default allocation order, not general constructor forwarding,
+public field shadowing, or safe receiver escape from partially initialized
+subclasses. Those remain explicit frontend restrictions.
+
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

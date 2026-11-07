@@ -1072,7 +1072,8 @@ outside class-member scope are rejected.
 
 Private members belong to their declaring class. Protected members belong to
 that class and its subclasses. Inherited method access resolves the declaring
-class before checking the caller; inherited field layout remains unsupported.
+class before checking the caller. Inherited fields retain the same declaring
+owner and access rules.
 Source files do not create access scopes. Reads, writes, calls, and construction
 check the caller's class against every known receiver alternative. An instance
 of the same class can be used explicitly. Multi-class alternatives that need
@@ -1846,12 +1847,23 @@ are resolved before body checking. Access-level changes, static/instance
 shadowing, and static overrides remain rejected: the SDK accepts some of these
 as distinct lookup slots, rather than ordinary virtual overrides.
 
-Source construction currently accepts Object-rooted chains only when every
-source ancestor has no fields (including static storage) and an empty public
-zero-argument initializer. The allocated class can have its own fields and
-initializer. Inherited initialization that needs state, arguments, or effects
-is rejected; source-based View/AppBase/delegate construction remains outside
-this profile. Inherited field redeclarations remain rejected.
+Instance fields resolve through the same source ancestry. Public/protected
+fields retain their declaring contracts for bare/self reads and writes,
+explicit receiver access, readonly checks, and structural field witnesses.
+Private fields are not inherited; a child may declare an independent same-named
+field, including a different type, without capturing the parent's private slot.
+Other inherited field redeclarations remain rejected.
+
+Construction accepts Object-rooted chains with default-initialized ancestor
+instance fields and empty public zero-argument ancestor `initialize()` methods.
+Allocation hooks run parent before child, applying each declaring class's own
+expression defaults once. Inherited arrays/containers are allocated separately
+for each instance. An ancestor allocation hook cannot expose self or make virtual
+self calls while descendant initialization is unproven. Ancestor fields needing
+ordinary constructor assignments and ancestor static storage remain rejected.
+The allocated class can use its own ordinary initializer; parent-qualified
+calls and source-based View/AppBase/delegate construction remain outside this
+profile. Allocation hooks do not implicitly call a parent's `initialize()`.
 
 Signature/access checks select the declaration from the receiver's static bound.
 Initialization safety summaries also include all possible overrides among known
@@ -1860,6 +1872,8 @@ is conservative even when a particular allocation is more specific.
 
 See the [identity specimen](../../../examples/compiler-inheritance-identities/README.md)
 and [inherited-method specimen](../../../examples/compiler-inherited-methods/README.md).
+The [field specimen](../../../examples/compiler-inherited-fields/README.md)
+covers default ordering, ownership, and independent instance storage.
 
 ### Source-class signatures
 
@@ -2070,14 +2084,14 @@ Number fields also support all ten arithmetic/bitwise compound operators:
 corresponding Number binary operation, then stores the result. A RHS that
 changes the field does not change the captured old value. Branching RHS
 expressions stage the old read through ordinary typed locals. Non-Number results
-are rejected. Static fields use the same mutable contracts; source-inherited
-fields remain unsupported. See
+are rejected. Inherited instance fields reuse these operations and contracts.
+Inherited static fields remain unsupported. See
 [target evidence](../../investigations/compiler-compound-targets.md).
 
 `ClassDeclaration.fields` holds names and FieldKind defaults/contracts. Unit
 validation resolves every SelfFieldRead/SelfFieldAssign against its enclosing
-class; standalone method IR retains this ownership obligation. Function
-validation requires an instance receiver, supported assignment values, and
+class hierarchy; standalone method IR retains this ownership obligation.
+Function validation requires an instance receiver, supported assignment values, and
 expression evaluation order; unit validation enforces the exact field
 declaration. A read that must survive a subsequent write/call is stored in a
 local first. The same checks apply to typed and saved IR.

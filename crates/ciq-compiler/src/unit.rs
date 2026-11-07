@@ -292,6 +292,14 @@ fn effect_callees<'a>(
     let mut calls = source_callees(unit, owner, operation);
     if let Operation::SourceBegin { class, .. } | Operation::SourceNew { class, .. } = operation {
         calls.push((Owner::Class(class), FIELD_INITIALIZER));
+        if let Some(identity) = unit.member_index.classes.get(class) {
+            calls.extend(
+                identity
+                    .ancestors
+                    .iter()
+                    .map(|parent| (Owner::Class(parent.as_str()), FIELD_INITIALIZER)),
+            );
+        }
         calls.push((Owner::Class(class), STATIC_INITIALIZER));
     }
     if let Operation::ClassFieldRead { class, .. } = operation {
@@ -1186,11 +1194,11 @@ impl SharedBinding {
 /// Qualified user calls and source constructors resolve inside the unit.
 /// Arguments and results must match the callee's supported value contracts.
 /// Void calls are permitted only as statements. Self calls require a declared
-/// method in the enclosing class; native callbacks cannot be called directly.
+/// method in the enclosing class hierarchy; native callbacks cannot be called directly.
 /// CODE lowering leaves symbol/DATA bindings and application metadata external.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationUnit {
-    method_index: crate::inheritance::MethodIndex,
+    member_index: crate::inheritance::MemberIndex,
     visibility: crate::visibility::Members,
     modules: BTreeSet<String>,
     declarations: Vec<FunctionDeclaration>,
@@ -1200,13 +1208,25 @@ pub struct CompilationUnit {
 }
 
 impl CompilationUnit {
+    /// Resolve an effective field to its declaring class and storage contract.
+    pub(crate) fn field(
+        &self,
+        class: &str,
+        member: &str,
+    ) -> Option<(&ClassDeclaration, &InstanceField)> {
+        let (owner, field) = *self
+            .member_index
+            .fields
+            .get(&(class.into(), member.into()))?;
+        Some((&self.classes[owner], &self.classes[owner].fields[field]))
+    }
     pub(crate) fn method(
         &self,
         class: &str,
         member: &str,
     ) -> Option<(&ClassDeclaration, &Function)> {
         let (owner, method) = *self
-            .method_index
+            .member_index
             .methods
             .get(&(class.into(), member.into()))?;
         Some((&self.classes[owner], &self.classes[owner].methods[method]))
@@ -1224,7 +1244,7 @@ impl CompilationUnit {
         for class in &self.classes {
             if self.is_subclass(&class.name, bound) {
                 if let Some(index) = self
-                    .method_index
+                    .member_index
                     .methods
                     .get(&(class.name.clone(), member.into()))
                 {
@@ -1239,10 +1259,12 @@ impl CompilationUnit {
     }
     fn method_owner<'a>(&'a self, class: &'a str, member: &str) -> &'a str {
         self.method(class, member)
-            .map_or(class, |(c, _)| c.name.as_str())
+            .map(|(c, _)| c.name.as_str())
+            .or_else(|| self.field(class, member).map(|(c, _)| c.name.as_str()))
+            .unwrap_or(class)
     }
     fn is_subclass(&self, class: &str, parent: &str) -> bool {
-        self.method_index
+        self.member_index
             .classes
             .get(class)
             .is_some_and(|c| c.name == parent || c.ancestors.iter().any(|a| a == parent))
@@ -1266,7 +1288,7 @@ impl CompilationUnit {
                 });
             }
         }
-        self.method_index = crate::inheritance::method_index(&self.classes, &self.visibility)
+        self.member_index = crate::inheritance::member_index(&self.classes, &self.visibility)
             .map_err(|message| UnitError {
                 declaration: None,
                 operation: None,
@@ -1277,12 +1299,10 @@ impl CompilationUnit {
             .retain(|_, access| *access != crate::Visibility::Public);
         Ok(self)
     }
-    /// Return a member's effective access, resolving inherited method ownership.
-    /// Omitted access is public; inherited fields are not resolved here.
+    /// Return a member's effective access, resolving its declaring owner.
+    /// Omitted access is public.
     pub fn member_visibility(&self, class: &str, member: &str) -> crate::Visibility {
-        let owner = self
-            .method(class, member)
-            .map_or(class, |(c, _)| c.name.as_str());
+        let owner = self.method_owner(class, member);
         self.visibility
             .get(&(owner.into(), member.into()))
             .copied()
@@ -1294,6 +1314,9 @@ impl CompilationUnit {
             .any(|((owner, _), access)| owner == class && *access == crate::Visibility::Private)
     }
     pub(crate) fn member_symbol(&self, class: &str, member: &str) -> String {
+        if member == FIELD_INITIALIZER {
+            return crate::visibility::private_symbol(class, FIELD_INITIALIZER);
+        }
         if self.member_visibility(class, member) == crate::Visibility::Private {
             crate::visibility::private_symbol(self.method_owner(class, member), member)
         } else {
@@ -1558,8 +1581,8 @@ impl CompilationUnit {
                 }
             }
         }
-        let method_index =
-            crate::inheritance::method_index(&classes, &visibility).map_err(|message| {
+        let member_index =
+            crate::inheritance::member_index(&classes, &visibility).map_err(|message| {
                 UnitError {
                     declaration: None,
                     operation: None,
@@ -1567,7 +1590,7 @@ impl CompilationUnit {
                 }
             })?;
         let mut unit = Self {
-            method_index,
+            member_index,
             visibility,
             modules,
             declarations,
@@ -1587,7 +1610,7 @@ impl CompilationUnit {
 
     fn validate_context(&self, context: Option<crate::api::ApiContext>) -> Result<(), UnitError> {
         crate::enums::validate_unit(self)?;
-        let hierarchy = &self.method_index.classes;
+        let hierarchy = &self.member_index.classes;
         if self.classes.iter().any(|c| {
             c.fields
                 .iter()
@@ -1927,7 +1950,9 @@ impl CompilationUnit {
                     if member == "initialize" || field_initializer(member) {
                         continue;
                     }
-                    if parent.fields.iter().any(|f| f.name == member)
+                    if (parent.fields.iter().any(|f| f.name == member)
+                        && self.member_visibility(&parent.name, member)
+                            != crate::Visibility::Private)
                         || (class.fields.iter().any(|f| f.name == member)
                             && parent.methods.iter().any(|f| f.name() == member))
                     {
@@ -2154,8 +2179,8 @@ impl CompilationUnit {
                             })
                             || self.classes.iter().any(|c| {
                                 Some(c.name.as_str()) == scope
-                                    && (c.fields.iter().any(|f| f.name == path[0])
-                                        || c.methods.iter().any(|f| f.name() == path[0])
+                                    && (self.field(&c.name, &path[0]).is_some()
+                                        || self.method(&c.name, &path[0]).is_some()
                                         || (!function.is_static_method()
                                             && (c.base.api_name().rsplit('.').next()
                                                 == Some(path[0].as_str())
@@ -2224,8 +2249,8 @@ impl CompilationUnit {
                     {
                         if self.classes.iter().any(|class| {
                             class.name == scope
-                                && (class.fields.iter().any(|field| field.name == member)
-                                    || class.methods.iter().any(|f| f.name() == member)
+                                && (self.field(&class.name, member).is_some()
+                                    || self.method(&class.name, member).is_some()
                                     || (!function.is_static_method()
                                         && (class.base.api_name().rsplit('.').next()
                                             == Some(member)
@@ -2771,12 +2796,7 @@ impl CompilationUnit {
                 }
                 if let Operation::SelfFieldAssign { field, .. } = &located.operation {
                     if !field_initializer(function.name())
-                        && self
-                            .classes
-                            .iter()
-                            .filter(|class| owner == Owner::Class(class.name.as_str()))
-                            .flat_map(|class| &class.fields)
-                            .any(|decl| decl.name == *field && decl.kind.readonly())
+                        && matches!(owner, Owner::Class(class) if self.field(class, field).is_some_and(|(_, f)| f.kind.readonly()))
                     {
                         return Err(fail(
                             Some(index),
@@ -2791,11 +2811,8 @@ impl CompilationUnit {
                 {
                     if origins.contract(*receiver).is_some_and(|contract| {
                         contract.classes().iter().any(|target| {
-                            self.classes
-                                .iter()
-                                .filter(|class| class.name == target.name)
-                                .flat_map(|class| &class.fields)
-                                .any(|field| field.name == *member && field.kind.readonly())
+                            self.field(&target.name, member)
+                                .is_some_and(|(_, f)| f.kind.readonly())
                         })
                     }) {
                         return Err(fail(
@@ -2901,15 +2918,7 @@ impl CompilationUnit {
                         crate::source_fields::receiver(origins.contract(*receiver))
                             .map_err(|message| fail(Some(index), Some(operation), message))?,
                         member,
-                        |class, field| {
-                            self.classes
-                                .iter()
-                                .find(|c| c.name == class.name && c.base == class.base)?
-                                .fields
-                                .iter()
-                                .find(|f| f.name == field)
-                                .map(InstanceField::result_type)
-                        },
+                        |class, field| self.field(&class.name, field).map(|(_, f)| f.result_type()),
                     )
                     .map_err(|message| fail(Some(index), Some(operation), message))?;
                     if actual != *claimed {
@@ -3245,23 +3254,17 @@ impl CompilationUnit {
                 if let Operation::SelfFieldRead { field, .. }
                 | Operation::SelfFieldAssign { field, .. } = &located.operation
                 {
-                    let declaration = self
-                        .classes
-                        .iter()
-                        .find(|class| owner == Owner::Class(class.name.as_str()))
-                        .and_then(|class| {
-                            class
-                                .fields
-                                .iter()
-                                .find(|declaration| declaration.name == *field)
-                        })
-                        .ok_or_else(|| {
-                            fail(
-                                Some(index),
-                                Some(operation),
-                                format!("unresolved instance field {field}"),
-                            )
-                        })?;
+                    let declaration = match owner {
+                        Owner::Class(class) => self.field(class, field).map(|(_, f)| f),
+                        _ => None,
+                    }
+                    .ok_or_else(|| {
+                        fail(
+                            Some(index),
+                            Some(operation),
+                            format!("unresolved instance field {field}"),
+                        )
+                    })?;
                     match &located.operation {
                         Operation::SelfFieldRead {
                             result_type,
@@ -3358,7 +3361,23 @@ impl CompilationUnit {
                             let parent = self.classes.iter().find(|c| c.name == *ancestor).unwrap();
                             if self.member_visibility(&parent.name, "initialize")
                                 != crate::Visibility::Public
-                                || !parent.fields.is_empty()
+                                || parent.fields.iter().any(|f| {
+                                    f.kind.class_shared() || f.kind.requires_initialization()
+                                })
+                                || parent
+                                    .methods
+                                    .iter()
+                                    .filter(|f| f.name() == FIELD_INITIALIZER)
+                                    .any(|f| {
+                                        f.operations().iter().any(|op| {
+                                            matches!(
+                                                op.operation,
+                                                Operation::SelfValue { .. }
+                                                    | Operation::SelfCall { .. }
+                                                    | Operation::SelfCallStatement { .. }
+                                            )
+                                        })
+                                    })
                                 || !parent
                                     .methods
                                     .iter()
@@ -3370,7 +3389,7 @@ impl CompilationUnit {
                                             })
                                     })
                             {
-                                return Err(fail(Some(index),Some(operation),"inherited fields and initializer effects require superclass initialization support".into()));
+                                return Err(fail(Some(index),Some(operation),"source ancestors require initialized instance fields, non-escaping allocation hooks, and empty public zero-argument initializers".into()));
                             }
                         }
                     }
@@ -4443,10 +4462,9 @@ impl CompilationUnit {
             if self.member_visibility(class, name) != crate::Visibility::Public {
                 return Err(format!("{class}.{name} is not a public interface field"));
             }
-            let field = declaration
-                .fields
-                .iter()
-                .find(|f| f.name == *name)
+            let field = self
+                .field(class, name)
+                .map(|(_, f)| f)
                 .ok_or_else(|| format!("{class} does not implement field {name}"))?;
             if field.kind.readonly() {
                 return Err(format!(
@@ -5105,16 +5123,8 @@ pub(crate) fn compile_sources_mapped(
                     .unwrap_or_default(),
                 base: class.base,
             });
-            method_calls.field_names = class
-                .fields
-                .iter()
-                .map(|field| field.name.clone())
-                .collect();
-            method_calls.field_types = class
-                .fields
-                .iter()
-                .map(|field| (field.name.clone(), field.result_type()))
-                .collect();
+            method_calls.field_names = calls.source_fields[&class.name].keys().cloned().collect();
+            method_calls.field_types = calls.source_fields[&class.name].clone();
             for (member, signature) in calls.class_signatures(&class.name) {
                 method_calls.insert(("self".into(), member), signature);
             }
@@ -5144,15 +5154,15 @@ pub(crate) fn compile_sources_mapped(
     }
     origins.extend(class_origins);
     let modules = module_names(modules, &declarations, &shared);
-    let method_index =
-        crate::inheritance::method_index(&classes, &visibility).map_err(|message| {
+    let member_index =
+        crate::inheritance::member_index(&classes, &visibility).map_err(|message| {
             SourceDiagnostic {
                 source: 0,
                 diagnostic: Diagnostic::at(sources[0], 0, message),
             }
         })?;
     let unit = CompilationUnit {
-        method_index,
+        member_index,
         visibility,
         modules,
         declarations,
@@ -5366,6 +5376,30 @@ fn prepare_sources<'a>(
                 .flat_map(|p| &p.classes)
                 .find(|p| p.name == *ancestor)
                 .unwrap();
+            for (name, shared) in parent
+                .fields
+                .iter()
+                .map(|f| (&f.name, f.kind.class_shared()))
+                .chain(
+                    parent
+                        .bindings
+                        .iter()
+                        .map(|b| (&b.name, b.static_binding || b.enumeration)),
+                )
+            {
+                let own = class.fields.iter().any(|f| f.name == *name)
+                    || class.bindings.iter().any(|b| b.name == *name);
+                let private = parent
+                    .visibility
+                    .iter()
+                    .any(|(n, v)| n == name && *v == crate::Visibility::Private);
+                if !own && !shared && !private {
+                    calls
+                        .inherited_fields
+                        .entry((class.name.clone(), name.clone()))
+                        .or_insert_with(|| ancestor.clone());
+                }
+            }
             for method in &parent.methods {
                 if method.name == "initialize"
                     || field_initializer(&method.name)
@@ -5387,6 +5421,7 @@ fn prepare_sources<'a>(
             }
         }
     }
+    calls.refresh_inherited_fields();
     for parsed in &parsed_sources {
         for (owner, declaration) in &parsed.shared {
             if declaration.mutable {
@@ -5505,6 +5540,12 @@ fn infer_stored_constants(
             );
         }
     }
+    for (class, field) in calls.inherited_fields.keys() {
+        field_names
+            .get_mut(class.as_str())
+            .unwrap()
+            .insert(field.clone());
+    }
     let shared_order = shared_initialization_order(parsed);
     while !pending.is_empty() {
         let count = pending.len();
@@ -5593,6 +5634,7 @@ fn infer_stored_constants(
                                 .get_mut(class)
                                 .unwrap()
                                 .insert(declaration.name.clone(), value_type);
+                            calls.refresh_inherited_fields();
                         }
                         _ => {
                             let module = match owner {

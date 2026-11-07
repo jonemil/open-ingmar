@@ -79,17 +79,18 @@ pub(crate) fn for_classes(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct MethodIndex {
+pub(crate) struct MemberIndex {
     pub(crate) methods: BTreeMap<(String, String), (usize, usize)>,
+    pub(crate) fields: BTreeMap<(String, String), (usize, usize)>,
     pub(crate) classes: BTreeMap<String, SourceClass>,
 }
 
-/// Index effective method declarations without copying their bodies. Initializer
-/// and compiler-hook entries remain local to each class until forwarding exists.
-pub(crate) fn method_index(
+/// Index effective methods and instance fields without copying declarations.
+/// Private ancestors, static fields, and initializer/hook methods stay local.
+pub(crate) fn member_index(
     classes: &[ClassDeclaration],
     visibility: &crate::visibility::Members,
-) -> Result<MethodIndex, String> {
+) -> Result<MemberIndex, String> {
     let hierarchy = for_classes(classes)?;
     let indexes = classes
         .iter()
@@ -97,6 +98,7 @@ pub(crate) fn method_index(
         .map(|(i, c)| (c.name.as_str(), i))
         .collect::<BTreeMap<_, _>>();
     let mut result = BTreeMap::new();
+    let mut fields = BTreeMap::new();
     for class in classes {
         for owner in hierarchy[&class.name]
             .ancestors
@@ -105,6 +107,20 @@ pub(crate) fn method_index(
             .chain(std::iter::once(&class.name))
         {
             let index = indexes[owner.as_str()];
+            for (field, declaration) in classes[index].fields.iter().enumerate() {
+                if owner != &class.name
+                    && (declaration.kind.class_shared()
+                        || visibility.get(&(owner.clone(), declaration.name.clone()))
+                            == Some(&crate::Visibility::Private))
+                {
+                    continue;
+                }
+                fields.insert(
+                    (class.name.clone(), declaration.name.clone()),
+                    (index, field),
+                );
+            }
+
             for (method, body) in classes[index].methods.iter().enumerate() {
                 if owner != &class.name
                     && (body.name() == "initialize"
@@ -118,8 +134,9 @@ pub(crate) fn method_index(
             }
         }
     }
-    Ok(MethodIndex {
+    Ok(MemberIndex {
         methods: result,
+        fields,
         classes: hierarchy,
     })
 }

@@ -4593,6 +4593,7 @@ pub(crate) struct CallContext {
     parameter_types: Vec<crate::ParameterType>,
     pub(crate) field_types: BTreeMap<String, crate::ReturnType>,
     pub(crate) source_fields: BTreeMap<String, BTreeMap<String, crate::ReturnType>>,
+    pub(crate) inherited_fields: BTreeMap<(String, String), String>,
     pub(crate) current_module: Option<String>,
     pub(crate) current_class: Option<crate::SourceClass>,
     pub(crate) static_context: bool,
@@ -5238,6 +5239,24 @@ impl CallContext {
             ancestors: self.class_ancestors.get(name).cloned().unwrap_or_default(),
             base,
         })
+    }
+    /// Publish inherited contracts only after the declaring field is resolved.
+    /// Names stay visible during inference so unresolved fields cannot fall back
+    /// to outer bindings.
+    pub(crate) fn refresh_inherited_fields(&mut self) {
+        for ((class, member), owner) in &self.inherited_fields {
+            if let Some(contract) = self
+                .source_fields
+                .get(owner)
+                .and_then(|f| f.get(member))
+                .cloned()
+            {
+                self.source_fields
+                    .get_mut(class)
+                    .unwrap()
+                    .insert(member.clone(), contract);
+            }
+        }
     }
     pub(crate) fn inherit(&mut self, key: (String, String), signature: CallSignature) {
         self.signatures.entry(key).or_insert(signature);

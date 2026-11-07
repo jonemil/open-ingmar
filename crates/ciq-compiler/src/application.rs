@@ -520,6 +520,25 @@ pub fn build_console_application(
         .filter(|class| class.base.constructed_type().is_some())
     {
         if source_class.base == crate::ClassBase::LangObject {
+            if let Some(parent) = &source_class.superclass {
+                items.extend([
+                    Item::Label(format!(
+                        "__ciq_ctor_{}",
+                        crate::names::module_key(&source_class.name)
+                    )),
+                    instruction(
+                        Opcode::Getselfv,
+                        vec![sym(&format!(
+                            "__ciq_class_{}",
+                            crate::names::module_key(parent)
+                        ))],
+                    ),
+                    instruction(Opcode::Getsv, vec![sym("__ciq_app_init")]),
+                    instruction(Opcode::Invokemz, vec![]),
+                    instruction(Opcode::Return, vec![]),
+                ]);
+                continue;
+            }
             items.extend([
                 Item::Label(format!(
                     "__ciq_ctor_{}",
@@ -586,7 +605,7 @@ pub fn build_console_application(
                 Opcode::Getselfv,
                 vec![sym(&format!(
                     "__ciq_member_{}",
-                    crate::unit::FIELD_INITIALIZER
+                    unit.member_symbol(&source_class.name, crate::unit::FIELD_INITIALIZER)
                 ))],
             ),
             instruction(Opcode::Invokemz, vec![]),

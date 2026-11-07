@@ -682,9 +682,18 @@ A source subclass's `extends` header and superclass-valued field refer to the
 direct parent's DATA class alias, with ordinary class relocation. Its terminal
 native projection still governs API checks/imports. VM class tests retain the
 runtime inheritance chain; subtype annotations emit no conversion. Source
-construction is limited to the stateless Object-rooted ancestor profile in the
+construction follows the bounded Object-rooted ancestor profile in the
 [frontend contract](../frontend/README.md#source-superclasses), so no parent
 initialization effects or member layouts are silently omitted.
+
+Instance field records stay in their declaring DATA class; the runtime class
+chain supplies inherited storage. Each source allocation hook calls its direct
+parent's `<init>` hook using parent-class lookup, `getsv`, and `invokemz`, then
+runs its own expression-default body. The default body's reserved runtime
+selector is scoped to its declaring class, so the parent hook cannot dispatch
+to the child's same-named body. Ordinary `initialize()` remains a separate
+call after allocation. Private field references retain declaring-class selectors;
+public/protected fields use their ordinary member symbols.
 
 Inherited calls use ordinary self/object member lookup and `invokem`; class DATA
 parent links provide runtime dispatch. No copied ancestor body, manual dispatch

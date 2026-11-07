@@ -57,7 +57,6 @@ fn invalid_graphs_and_unimplemented_initialization_are_rejected() {
         "class A extends B{}class B extends A{}",
         "class A extends B{}class B extends C{}class C extends A{}",
         "module M{}class A extends M{}",
-        "class A{var n=1;}class B extends A{}function f(){return new B();}",
         "class A{function initialize(){Toybox.System.println(1);}}class B extends A{}function f(){return new B();}",
         "class A{function initialize(n as Toybox.Lang.Number){}}class B extends A{}function f(){return new B();}",
         "class A{private function initialize(){}}class B extends A{}function f(){return new B();}",

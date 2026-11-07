@@ -2105,7 +2105,7 @@ late records are rejected. Function fragments carry no class access records.
 enum represents public, protected, and private access. Ownership, rather than
 source filenames, governs checked field operations, class/instance calls, and
 construction. Known alternatives must agree on their bound private selector;
-inherited methods retain their declaring owner for access checks. Non-public members
+inherited methods and fields retain their declaring owner for access checks. Non-public members
 cannot supply public interface witnesses or checked runtime Method bindings.
 Dynamic lookup remains subject to the generated runtime metadata.
 
@@ -2186,7 +2186,7 @@ Two call directives also require an instance method:
 
 Arguments are ordered, earlier-defined supported scalar, nullable, or Null
 values in the same block. The existing use/effect/control-flow checks apply.
-Unit validation binds calls only to declared methods in the enclosing class,
+Unit validation binds calls to effective methods in the enclosing class hierarchy,
 checks arity/result contracts, and rejects instance bodies in global/module
 owners. Standalone method IR retains its required receiver and unbound
 class/callee obligations.
@@ -2277,13 +2277,18 @@ separate native-base operand; `.begin-source` selects only the named class.
 Allocation, self, casts/tests, signatures, fields, joins, and nested container
 contracts are checked against the same graph. Native/text paths preserve the
 same ancestry. An Object-rooted source subclass can currently allocate only
-through stateless ancestors with public empty zero-argument initializers;
-inherited field state and initializer effects remain rejected.
+through ancestors whose fields have allocation defaults and whose ordinary
+initializers are public, empty, and zero-argument. Ancestor allocation hooks
+must not expose the receiver before descendant state is initialized; ancestor
+static storage and constructor-required fields remain rejected.
 
 
-Each class stores only its own method bodies. The unit derives an effective
-method/declaring-owner index from class headers and visibility; it is not a
-second serialized declaration table. Own private methods remain distinct, and
+Each class stores only its own fields and method bodies. The unit derives an
+effective member/declaring-owner index from class headers and visibility; it is
+not a second serialized declaration table. Private fields stay with their owner,
+while inherited instance fields keep their original storage contracts. Self and
+explicit field operations resolve against this index, including readonly and
+structural checks. Own private methods remain distinct, and
 private ancestor methods are excluded from inherited lookup. Constructors and
 allocation hooks are not inherited. Source parsing fills omitted override
 contracts before creating Functions; saved IR carries the resolved contracts

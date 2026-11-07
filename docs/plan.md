@@ -35,8 +35,9 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Lay out inherited instance fields and run their defaults/initializers in
-  superclass order, including protected/private field ownership and shadowing.
+- [ ] Implement public/protected field shadowing across source classes; verify
+  literal-default versus runtime-initializer order and differing field contracts
+  through parent-bound reads.
 - [ ] Resolve inherited static fields/methods and model subclass static storage
   and initialization separately from the parent's storage.
 - [ ] Implement SDK-accepted access-level and static/instance method shadowing:
@@ -52,7 +53,8 @@ implemented contracts; investigations retain evidence, not another backlog.
   initialization/metadata contract with an authored specimen.
 - [ ] Permit receiver exposure, branches, and early exits in initializers when
   required-field initialization is proven on every relevant path, replacing the
-  current mandatory straight-line initialization prefix.
+  current mandatory straight-line initialization prefix. Extend that proof to
+  ancestor allocation hooks exposing a receiver before descendant fields are ready.
 
 ### 2. Operators, calls, and control flow
 
