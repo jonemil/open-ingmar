@@ -64,9 +64,13 @@ fn source_callee<'a>(owner: Owner<'a>, operation: &'a Operation) -> Option<(Owne
     }
 }
 
-/// List every possible source body; each contributes call effects and contracts.
-fn source_callees<'a>(owner: Owner<'a>, operation: &'a Operation) -> Vec<(Owner<'a>, &'a str)> {
-    match operation {
+/// Resolve statically selected declarations for access and signature checks.
+fn source_bindings<'a>(
+    unit: &'a CompilationUnit,
+    owner: Owner<'a>,
+    operation: &'a Operation,
+) -> Vec<(Owner<'a>, &'a str)> {
+    let raw = match operation {
         Operation::ObjectCall {
             classes, member, ..
         }
@@ -74,21 +78,73 @@ fn source_callees<'a>(owner: Owner<'a>, operation: &'a Operation) -> Vec<(Owner<
             classes, member, ..
         } => classes
             .iter()
-            .map(|class| (Owner::Class(class.as_str()), member.as_str()))
+            .map(|c| (Owner::Class(c.as_str()), member.as_str()))
             .collect(),
-        _ => source_callee(owner, operation).into_iter().collect(),
+        _ => source_callee(owner, operation)
+            .into_iter()
+            .collect::<Vec<_>>(),
+    };
+    raw.into_iter()
+        .map(|(owner, member)| match owner {
+            Owner::Class(class) => unit
+                .method(class, member)
+                .map_or((owner, member), |(c, f)| {
+                    (Owner::Class(c.name.as_str()), f.name())
+                }),
+            _ => (owner, member),
+        })
+        .collect()
+}
+
+/// Include every possible instance override in effect summaries. Declaration
+/// signatures/access remain tied to the statically selected member.
+fn source_callees<'a>(
+    unit: &'a CompilationUnit,
+    owner: Owner<'a>,
+    operation: &'a Operation,
+) -> Vec<(Owner<'a>, &'a str)> {
+    let bindings = source_bindings(unit, owner, operation);
+    let bounds = match operation {
+        Operation::ObjectCall { classes, .. } | Operation::ObjectCallStatement { classes, .. } => {
+            classes.iter().map(String::as_str).collect::<Vec<_>>()
+        }
+        Operation::SelfCall { .. } | Operation::SelfCallStatement { .. } => {
+            if let Owner::Class(c) = owner {
+                vec![c]
+            } else {
+                Vec::new()
+            }
+        }
+        _ => return bindings,
+    };
+    let mut targets = bindings.iter().copied().collect::<BTreeSet<_>>();
+    for bound in bounds {
+        let member = match operation {
+            Operation::ObjectCall { member, .. }
+            | Operation::ObjectCallStatement { member, .. }
+            | Operation::SelfCall { member, .. }
+            | Operation::SelfCallStatement { member, .. } => member,
+            _ => unreachable!(),
+        };
+        targets.extend(
+            unit.runtime_methods(bound, member)
+                .into_iter()
+                .map(|(class, method)| (Owner::Class(class.name.as_str()), method.name())),
+        );
     }
+    targets.into_iter().collect()
 }
 
 /// Include allocation-time bodies activated by a module lookup, independently
 /// of the selected member. Same-owner access must not restart initialization.
 fn activation_callees<'a>(
+    unit: &'a CompilationUnit,
     owner: Owner<'a>,
     operation: &'a Operation,
     function: &'a Function,
     bodies: &[(Owner<'a>, &'a Function)],
 ) -> Vec<(Owner<'a>, &'a str)> {
-    let mut calls = effect_callees(owner, operation);
+    let mut calls = effect_callees(unit, owner, operation);
     if let Some((class, _)) = class_store(operation, function) {
         if owner != Owner::Class(class) {
             calls.push((Owner::Class(class), STATIC_INITIALIZER));
@@ -228,8 +284,12 @@ fn tuple_callback_elements(tuple: &crate::TupleType) -> bool {
         .any(|slot| slot.source_contract().is_some() || callback_value_type(&slot.api_type()))
 }
 
-fn effect_callees<'a>(owner: Owner<'a>, operation: &'a Operation) -> Vec<(Owner<'a>, &'a str)> {
-    let mut calls = source_callees(owner, operation);
+fn effect_callees<'a>(
+    unit: &'a CompilationUnit,
+    owner: Owner<'a>,
+    operation: &'a Operation,
+) -> Vec<(Owner<'a>, &'a str)> {
+    let mut calls = source_callees(unit, owner, operation);
     if let Operation::SourceBegin { class, .. } | Operation::SourceNew { class, .. } = operation {
         calls.push((Owner::Class(class), FIELD_INITIALIZER));
         calls.push((Owner::Class(class), STATIC_INITIALIZER));
@@ -356,11 +416,11 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
 
 /// Resolve a checked sort callback to its source body for effect propagation.
 /// The runtime selects the same pinned compare member checked by the unit.
-fn comparator_callee<'a>(
+fn comparator_callees<'a>(
+    unit: &'a CompilationUnit,
     function: &Function,
     operation: &Operation,
-    bodies: &[(Owner<'a>, &'a Function)],
-) -> Option<(Owner<'a>, &'a str)> {
+) -> Vec<(Owner<'a>, &'a str)> {
     let (receiver, arguments) = match operation {
         Operation::NativeCall {
             receiver,
@@ -373,7 +433,7 @@ fn comparator_callee<'a>(
             member,
             arguments,
         } if member == "sort" => (*receiver, arguments),
-        _ => return None,
+        _ => return Vec::new(),
     };
     if !crate::unions::alternatives(&function.value_types[&receiver].api_type())
         .iter()
@@ -384,26 +444,31 @@ fn comparator_callee<'a>(
             )
         })
     {
-        return None;
+        return Vec::new();
     }
     let [argument] = arguments.as_slice() else {
-        return None;
+        return Vec::new();
     };
-    let class = crate::source_objects::class(
+    let Some(class) = crate::source_objects::class(
         function.operations(),
         *argument,
         function.parameter_types().to_vec(),
-    )?;
-    bodies.iter().find_map(|&(owner, method)| {
-        (owner == Owner::Class(&class) && method.name() == "compare")
-            .then_some((owner, method.name()))
-    })
+    ) else {
+        return Vec::new();
+    };
+    unit.runtime_methods(&class, "compare")
+        .into_iter()
+        .map(|(c, f)| (Owner::Class(c.name.as_str()), f.name()))
+        .collect()
 }
 
 /// Find bodies that can request shutdown, including through recursive source
 /// calls. Conservatively include conditional calls; this does not prove safety
 /// against runtime failures or unknown native callback effects.
-fn exit_callers<'a>(bodies: &[(Owner<'a>, &'a Function)]) -> BTreeSet<(Owner<'a>, &'a str)> {
+fn exit_callers<'a>(
+    unit: &'a CompilationUnit,
+    bodies: &[(Owner<'a>, &'a Function)],
+) -> BTreeSet<(Owner<'a>, &'a str)> {
     let mut exits = BTreeSet::new();
     loop {
         let mut changed = false;
@@ -411,11 +476,12 @@ fn exit_callers<'a>(bodies: &[(Owner<'a>, &'a Function)]) -> BTreeSet<(Owner<'a>
             if function.operations().iter().any(|located| {
                 requests_exit(&located.operation)
                     || erased_callbacks(function, &located.operation)
-                    || activation_callees(owner, &located.operation, function, bodies)
+                    || activation_callees(unit, owner, &located.operation, function, bodies)
                         .iter()
                         .any(|key| exits.contains(key))
-                    || comparator_callee(function, &located.operation, bodies)
-                        .is_some_and(|key| exits.contains(&key))
+                    || comparator_callees(unit, function, &located.operation)
+                        .iter()
+                        .any(|key| exits.contains(key))
             }) {
                 changed |= exits.insert((owner, function.name()));
             }
@@ -1004,6 +1070,7 @@ struct SharedReads {
 /// Statics initializers use these requirements to reject reentrant reads of
 /// still-unwritten slots, including accesses hidden behind another initializer.
 fn class_shared_requirements<'a>(
+    unit: &'a CompilationUnit,
     bodies: &[(Owner<'a>, &'a Function)],
     classes: &[ClassDeclaration],
 ) -> BTreeMap<(Owner<'a>, &'a str), BTreeSet<(String, String)>> {
@@ -1061,10 +1128,16 @@ fn class_shared_requirements<'a>(
         for (owner, body) in bodies {
             let summary = reads.get_mut(&(*owner, body.name())).unwrap();
             for op in body.operations() {
-                for callee in effect_callees(*owner, &op.operation)
+                for callee in effect_callees(unit, *owner, &op.operation)
                     .into_iter()
-                    .chain(activation_callees(*owner, &op.operation, body, bodies))
-                    .chain(comparator_callee(body, &op.operation, bodies))
+                    .chain(activation_callees(
+                        unit,
+                        *owner,
+                        &op.operation,
+                        body,
+                        bodies,
+                    ))
+                    .chain(comparator_callees(unit, body, &op.operation))
                 {
                     if body.name() == STATIC_INITIALIZER && callee == (*owner, STATIC_INITIALIZER) {
                         continue;
@@ -1117,6 +1190,7 @@ impl SharedBinding {
 /// CODE lowering leaves symbol/DATA bindings and application metadata external.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationUnit {
+    method_index: crate::inheritance::MethodIndex,
     visibility: crate::visibility::Members,
     modules: BTreeSet<String>,
     declarations: Vec<FunctionDeclaration>,
@@ -1126,6 +1200,53 @@ pub struct CompilationUnit {
 }
 
 impl CompilationUnit {
+    pub(crate) fn method(
+        &self,
+        class: &str,
+        member: &str,
+    ) -> Option<(&ClassDeclaration, &Function)> {
+        let (owner, method) = *self
+            .method_index
+            .methods
+            .get(&(class.into(), member.into()))?;
+        Some((&self.classes[owner], &self.classes[owner].methods[method]))
+    }
+    fn runtime_methods(&self, bound: &str, member: &str) -> Vec<(&ClassDeclaration, &Function)> {
+        let Some((class, method)) = self.method(bound, member) else {
+            return Vec::new();
+        };
+        if method.is_static_method()
+            || self.member_visibility(&class.name, member) == crate::Visibility::Private
+        {
+            return vec![(class, method)];
+        }
+        let mut targets = BTreeSet::new();
+        for class in &self.classes {
+            if self.is_subclass(&class.name, bound) {
+                if let Some(index) = self
+                    .method_index
+                    .methods
+                    .get(&(class.name.clone(), member.into()))
+                {
+                    targets.insert(*index);
+                }
+            }
+        }
+        targets
+            .into_iter()
+            .map(|(owner, method)| (&self.classes[owner], &self.classes[owner].methods[method]))
+            .collect()
+    }
+    fn method_owner<'a>(&'a self, class: &'a str, member: &str) -> &'a str {
+        self.method(class, member)
+            .map_or(class, |(c, _)| c.name.as_str())
+    }
+    fn is_subclass(&self, class: &str, parent: &str) -> bool {
+        self.method_index
+            .classes
+            .get(class)
+            .is_some_and(|c| c.name == parent || c.ancestors.iter().any(|a| a == parent))
+    }
     /// Apply class-member access declarations and recheck all uses. Duplicate
     /// entries and names without a declared field/method are rejected.
     pub fn with_visibility(
@@ -1145,15 +1266,25 @@ impl CompilationUnit {
                 });
             }
         }
+        self.method_index = crate::inheritance::method_index(&self.classes, &self.visibility)
+            .map_err(|message| UnitError {
+                declaration: None,
+                operation: None,
+                message,
+            })?;
         self.validate()?;
         self.visibility
             .retain(|_, access| *access != crate::Visibility::Public);
         Ok(self)
     }
-    /// Return the declared access of a class member; omitted access is public.
+    /// Return a member's effective access, resolving inherited method ownership.
+    /// Omitted access is public; inherited fields are not resolved here.
     pub fn member_visibility(&self, class: &str, member: &str) -> crate::Visibility {
+        let owner = self
+            .method(class, member)
+            .map_or(class, |(c, _)| c.name.as_str());
         self.visibility
-            .get(&(class.into(), member.into()))
+            .get(&(owner.into(), member.into()))
             .copied()
             .unwrap_or_default()
     }
@@ -1164,7 +1295,7 @@ impl CompilationUnit {
     }
     pub(crate) fn member_symbol(&self, class: &str, member: &str) -> String {
         if self.member_visibility(class, member) == crate::Visibility::Private {
-            crate::visibility::private_symbol(class, member)
+            crate::visibility::private_symbol(self.method_owner(class, member), member)
         } else {
             member.into()
         }
@@ -1175,9 +1306,16 @@ impl CompilationUnit {
         class: &str,
         member: &str,
     ) -> Result<(), String> {
-        if self.member_visibility(class, member) != crate::Visibility::Public
-            && owner != Owner::Class(class)
-        {
+        let declaring = self.method_owner(class, member);
+        let access = self.member_visibility(class, member);
+        let allowed = match access {
+            crate::Visibility::Public => true,
+            crate::Visibility::Private => owner == Owner::Class(declaring),
+            crate::Visibility::Protected => {
+                matches!(owner,Owner::Class(c) if self.is_subclass(c,declaring))
+            }
+        };
+        if !allowed {
             return Err(format!(
                 "{class}.{member} is not accessible from this declaration"
             ));
@@ -1257,7 +1395,7 @@ impl CompilationUnit {
 
     /// Validate global/module functions and instance classes together.
     ///
-    /// Resolves self calls only against the enclosing class, and module calls
+    /// Resolves self calls through the enclosing class and its ancestors, and module calls
     /// only against module functions. Checks owner/name uniqueness, exact arity,
     /// receiver contracts, and call argument/result types. Requires 1..=256 bodies.
     /// Class errors use flattened body indexes after all global/module functions.
@@ -1294,11 +1432,35 @@ impl CompilationUnit {
     /// Owners imply their containing modules; paths and member collisions are checked.
     pub fn with_modules(
         declarations: Vec<FunctionDeclaration>,
+        classes: Vec<ClassDeclaration>,
+        shared: Vec<SharedBinding>,
+        enums: Vec<crate::EnumDeclaration>,
+        modules: Vec<String>,
+    ) -> Result<Self, UnitError> {
+        Self::with_modules_and_visibility(declarations, classes, shared, enums, modules, Vec::new())
+    }
+
+    /// Validate declarations and member access together. Use this constructor
+    /// when private inherited names distinguish otherwise unrelated methods.
+    /// Duplicate or undeclared access records are rejected before canonicalization.
+    pub fn with_modules_and_visibility(
+        declarations: Vec<FunctionDeclaration>,
         mut classes: Vec<ClassDeclaration>,
         mut shared: Vec<SharedBinding>,
         enums: Vec<crate::EnumDeclaration>,
         mut modules: Vec<String>,
+        access: Vec<(String, String, crate::Visibility)>,
     ) -> Result<Self, UnitError> {
+        let mut visibility = crate::visibility::Members::new();
+        for (class, member, access) in access {
+            if visibility.insert((class, member), access).is_some() {
+                return Err(UnitError {
+                    declaration: None,
+                    operation: None,
+                    message: "duplicate member visibility".into(),
+                });
+            }
+        }
         modules.extend(
             classes
                 .iter()
@@ -1396,8 +1558,17 @@ impl CompilationUnit {
                 }
             }
         }
-        let unit = Self {
-            visibility: Default::default(),
+        let method_index =
+            crate::inheritance::method_index(&classes, &visibility).map_err(|message| {
+                UnitError {
+                    declaration: None,
+                    operation: None,
+                    message,
+                }
+            })?;
+        let mut unit = Self {
+            method_index,
+            visibility,
             modules,
             declarations,
             classes,
@@ -1405,6 +1576,8 @@ impl CompilationUnit {
             enums,
         };
         unit.validate()?;
+        unit.visibility
+            .retain(|_, access| *access != crate::Visibility::Public);
         Ok(unit)
     }
 
@@ -1414,12 +1587,7 @@ impl CompilationUnit {
 
     fn validate_context(&self, context: Option<crate::api::ApiContext>) -> Result<(), UnitError> {
         crate::enums::validate_unit(self)?;
-        let hierarchy =
-            crate::inheritance::for_classes(&self.classes).map_err(|message| UnitError {
-                declaration: None,
-                operation: None,
-                message,
-            })?;
+        let hierarchy = &self.method_index.classes;
         if self.classes.iter().any(|c| {
             c.fields
                 .iter()
@@ -1760,7 +1928,8 @@ impl CompilationUnit {
                         continue;
                     }
                     if parent.fields.iter().any(|f| f.name == member)
-                        || parent.methods.iter().any(|f| f.name() == member)
+                        || (class.fields.iter().any(|f| f.name == member)
+                            && parent.methods.iter().any(|f| f.name() == member))
                     {
                         return Err(fail(
                             None,
@@ -1774,10 +1943,57 @@ impl CompilationUnit {
                 }
             }
         }
+        for class in &self.classes {
+            let Some(parent) = class.superclass.as_deref() else {
+                continue;
+            };
+            for method in &class.methods {
+                if method.name() == "initialize" || field_initializer(method.name()) {
+                    continue;
+                }
+                if let Some((owner, inherited)) = self.method(parent, method.name()) {
+                    let access = self.member_visibility(&owner.name, inherited.name());
+                    if access == crate::Visibility::Private {
+                        continue;
+                    }
+                    if inherited.is_static_method()
+                        || self.member_visibility(&class.name, method.name()) != access
+                        || method.is_static_method() != inherited.is_static_method()
+                    {
+                        return Err(fail(
+                            None,
+                            None,
+                            "inherited access/receiver-kind shadowing is not implemented".into(),
+                        ));
+                    }
+                    if method.parameter_types().len() != inherited.parameter_types().len()
+                        || !method
+                            .parameter_types()
+                            .iter()
+                            .zip(inherited.parameter_types())
+                            .all(|(a, b)| crate::inheritance::override_parameter(a, b))
+                        || !crate::inheritance::override_result(
+                            &method.return_type(),
+                            &inherited.return_type(),
+                        )
+                    {
+                        return Err(fail(
+                            None,
+                            None,
+                            format!(
+                                "override {}.{} differs from its inherited signature",
+                                class.name,
+                                method.name()
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
         let mut signatures = BTreeMap::new();
-        let exit_callers = exit_callers(&bodies);
-        let class_requirements = class_shared_requirements(&bodies, &self.classes);
-        self.validate_shared(&bodies, context, &exit_callers, &hierarchy)?;
+        let exit_callers = exit_callers(self, &bodies);
+        let class_requirements = class_shared_requirements(self, &bodies, &self.classes);
+        self.validate_shared(&bodies, context, &exit_callers, hierarchy)?;
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let mut source_classes = Vec::new();
             let mut collect = |class: &mut crate::SourceClass| {
@@ -2097,15 +2313,16 @@ impl CompilationUnit {
                         if let Operation::ClassFieldRead { class, field, .. } = &located.operation {
                             required.insert((class.clone(), field.clone()));
                         }
-                        for callee in effect_callees(owner, &located.operation)
+                        for callee in effect_callees(self, owner, &located.operation)
                             .into_iter()
                             .chain(activation_callees(
+                                self,
                                 owner,
                                 &located.operation,
                                 function,
                                 &bodies,
                             ))
-                            .chain(comparator_callee(function, &located.operation, &bodies))
+                            .chain(comparator_callees(self, function, &located.operation))
                         {
                             if callee == (owner, STATIC_INITIALIZER) {
                                 continue;
@@ -2131,11 +2348,18 @@ impl CompilationUnit {
                     if (incomplete || !unreadable.is_empty())
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
-                            || activation_callees(owner, &located.operation, function, &bodies)
-                                .iter()
-                                .any(|key| exit_callers.contains(key))
-                            || comparator_callee(function, &located.operation, &bodies)
-                                .is_some_and(|key| exit_callers.contains(&key)))
+                            || activation_callees(
+                                self,
+                                owner,
+                                &located.operation,
+                                function,
+                                &bodies,
+                            )
+                            .iter()
+                            .any(|key| exit_callers.contains(key))
+                            || comparator_callees(self, function, &located.operation)
+                                .into_iter()
+                                .any(|key| exit_callers.contains(&key)))
                     {
                         return Err(fail(
                             Some(index),
@@ -2214,11 +2438,18 @@ impl CompilationUnit {
                     if !pending.is_empty()
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
-                            || activation_callees(owner, &located.operation, function, &bodies)
-                                .iter()
-                                .any(|key| exit_callers.contains(key))
-                            || comparator_callee(function, &located.operation, &bodies)
-                                .is_some_and(|key| exit_callers.contains(&key)))
+                            || activation_callees(
+                                self,
+                                owner,
+                                &located.operation,
+                                function,
+                                &bodies,
+                            )
+                            .iter()
+                            .any(|key| exit_callers.contains(key))
+                            || comparator_callees(self, function, &located.operation)
+                                .into_iter()
+                                .any(|key| exit_callers.contains(&key)))
                     {
                         return Err(fail(
                             Some(index),
@@ -2335,7 +2566,7 @@ impl CompilationUnit {
                 .map_err(|message| fail(Some(index), None, message.into()))?;
             for (operation, located) in function.operations().iter().enumerate() {
                 let op = &located.operation;
-                for (target, member) in source_callees(owner, op) {
+                for (target, member) in source_bindings(self, owner, op) {
                     if let Owner::Class(class) = target {
                         self.check_member_access(owner, class, member)
                             .map_err(|m| fail(Some(index), Some(operation), m))?;
@@ -3127,7 +3358,7 @@ impl CompilationUnit {
                             let parent = self.classes.iter().find(|c| c.name == *ancestor).unwrap();
                             if self.member_visibility(&parent.name, "initialize")
                                 != crate::Visibility::Public
-                                || parent.fields.iter().any(|f| !f.kind.class_shared())
+                                || !parent.fields.is_empty()
                                 || !parent
                                     .methods
                                     .iter()
@@ -3225,8 +3456,11 @@ impl CompilationUnit {
                         }
                     }
                     let targets = crate::source_calls::targets(contract, member, |class| {
-                        signatures
-                            .get(&(Owner::Class(class.name.as_str()), member.as_str()))
+                        self.method(&class.name, member)
+                            .and_then(|(owner, _)| {
+                                signatures
+                                    .get(&(Owner::Class(owner.name.as_str()), member.as_str()))
+                            })
                             .map(|(parameters, result)| crate::StructuralMethod {
                                 parameters: parameters.to_vec(),
                                 result: result.clone(),
@@ -3293,7 +3527,7 @@ impl CompilationUnit {
                         ));
                     }
                 }
-                for key in source_callees(owner, &located.operation) {
+                for key in source_bindings(self, owner, &located.operation) {
                     if field_initializer(key.1) || key.1.starts_with("__ciq_initialize_shared_") {
                         return Err(fail(
                             Some(index),
@@ -3853,10 +4087,8 @@ impl CompilationUnit {
         // Function summaries include ordinary callees plus lazy initialization of
         // other modules. Globals already exist before any module is activated.
         let callees = |owner, function: &Function, op: &Operation| {
-            let mut targets = activation_callees(owner, op, function, bodies);
-            if let Some(key) = comparator_callee(function, op, bodies) {
-                targets.push(key);
-            }
+            let mut targets = activation_callees(self, owner, op, function, bodies);
+            targets.extend(comparator_callees(self, function, op));
             targets
                 .into_iter()
                 .map(|(owner, name)| (owner.name().to_owned(), name.to_owned()))
@@ -4231,8 +4463,7 @@ impl CompilationUnit {
             if self.member_visibility(class, name) != crate::Visibility::Public {
                 return Err(format!("{class}.{name} is not a public interface method"));
             }
-            let actual = if let Some(method) = declaration.methods.iter().find(|m| m.name() == name)
-            {
+            let actual = if let Some((_, method)) = self.method(class, name) {
                 crate::StructuralMethod {
                     parameters: method.parameter_types().to_vec(),
                     result: method.return_type().clone(),
@@ -4259,11 +4490,11 @@ impl CompilationUnit {
     /// Match directly declared source members against an interface signature.
     /// Availability is checked separately when API context is supplied.
     fn check_interface_signature(&self, class: &str, interface: &str) -> Result<(), String> {
-        let declaration = self
-            .classes
-            .iter()
-            .find(|c| c.name == class)
-            .ok_or_else(|| format!("unresolved source interface implementation {class}"))?;
+        if !self.classes.iter().any(|c| c.name == class) {
+            return Err(format!(
+                "unresolved source interface implementation {class}"
+            ));
+        }
         let interface = crate::api::core()
             .interface(interface)
             .ok_or_else(|| format!("unknown structural interface {interface}"))?;
@@ -4274,10 +4505,9 @@ impl CompilationUnit {
                     required.name
                 ));
             }
-            let implementation = declaration
-                .methods
-                .iter()
-                .find(|m| m.name() == required.name)
+            let implementation = self
+                .method(class, &required.name)
+                .map(|(_, method)| method)
                 .ok_or_else(|| {
                     format!(
                         "{class} does not implement {}.{}",
@@ -4885,11 +5115,8 @@ pub(crate) fn compile_sources_mapped(
                 .iter()
                 .map(|field| (field.name.clone(), field.result_type()))
                 .collect();
-            for ast in &class.methods {
-                method_calls.insert(
-                    ("self".into(), ast.name.clone()),
-                    source_ir::declared_signature(ast),
-                );
+            for (member, signature) in calls.class_signatures(&class.name) {
+                method_calls.insert(("self".into(), member), signature);
             }
             for ast in class.methods {
                 if origins.len() + class_origins.len() >= MAX_FUNCTIONS {
@@ -4917,7 +5144,15 @@ pub(crate) fn compile_sources_mapped(
     }
     origins.extend(class_origins);
     let modules = module_names(modules, &declarations, &shared);
+    let method_index =
+        crate::inheritance::method_index(&classes, &visibility).map_err(|message| {
+            SourceDiagnostic {
+                source: 0,
+                diagnostic: Diagnostic::at(sources[0], 0, message),
+            }
+        })?;
     let unit = CompilationUnit {
+        method_index,
         visibility,
         modules,
         declarations,
@@ -5086,6 +5321,7 @@ fn prepare_sources<'a>(
             }
         }
     }
+    crate::inheritance::prepare_overrides(sources, &mut parsed_sources, &aliases.class_types)?;
     let mut calls = source_ir::CallContext::new();
     calls.class_ancestors = aliases
         .class_types
@@ -5119,6 +5355,34 @@ fn prepare_sources<'a>(
                 calls.insert(
                     (class.name.clone(), ast.name.clone()),
                     source_ir::declared_signature(ast),
+                );
+            }
+        }
+    }
+    for class in parsed_sources.iter().flat_map(|p| &p.classes) {
+        for ancestor in &aliases.class_types[&class.name].ancestors {
+            let parent = parsed_sources
+                .iter()
+                .flat_map(|p| &p.classes)
+                .find(|p| p.name == *ancestor)
+                .unwrap();
+            for method in &parent.methods {
+                if method.name == "initialize"
+                    || field_initializer(&method.name)
+                    || method.is_static
+                {
+                    continue;
+                }
+                if parent
+                    .visibility
+                    .iter()
+                    .any(|(name, v)| name == &method.name && *v == crate::Visibility::Private)
+                {
+                    continue;
+                }
+                calls.inherit(
+                    (class.name.clone(), method.name.clone()),
+                    source_ir::declared_signature(method),
                 );
             }
         }
@@ -5276,17 +5540,8 @@ fn infer_stored_constants(
                         base,
                     });
                     if declaration.static_binding {
-                        if let Some(declaration) = parsed
-                            .iter()
-                            .flat_map(|p| &p.classes)
-                            .find(|c| c.name == class)
-                        {
-                            for method in &declaration.methods {
-                                owner_calls.insert(
-                                    ("self".into(), method.name.clone()),
-                                    source_ir::declared_signature(method),
-                                );
-                            }
+                        for (member, signature) in calls.class_signatures(class) {
+                            owner_calls.insert(("self".into(), member), signature);
                         }
                     }
                     owner_calls.field_names = field_names[class].clone();
@@ -5962,24 +6217,30 @@ fn parse_unit_ir_context(
         }
     }
     locations.extend(class_locations);
-    CompilationUnit::with_modules(declarations, classes, shared, enums, modules)
-        .and_then(|unit| unit.with_visibility(visibility))
-        .and_then(|unit| {
-            if let Some(context) = context {
-                unit.validate_declaration_api(context)?;
-                unit.validate_context(Some(context))?;
-            }
-            Ok(unit)
-        })
-        .map_err(|e| {
-            Diagnostic::at(
-                text,
-                e.declaration
-                    .and_then(|i| locations.get(i).copied())
-                    .unwrap_or(0),
-                e.message,
-            )
-        })
+    CompilationUnit::with_modules_and_visibility(
+        declarations,
+        classes,
+        shared,
+        enums,
+        modules,
+        visibility,
+    )
+    .and_then(|unit| {
+        if let Some(context) = context {
+            unit.validate_declaration_api(context)?;
+            unit.validate_context(Some(context))?;
+        }
+        Ok(unit)
+    })
+    .map_err(|e| {
+        Diagnostic::at(
+            text,
+            e.declaration
+                .and_then(|i| locations.get(i).copied())
+                .unwrap_or(0),
+            e.message,
+        )
+    })
 }
 
 /// Include explicit modules and every containing scope implied by owned members.

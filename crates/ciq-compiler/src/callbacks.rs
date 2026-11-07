@@ -153,22 +153,21 @@ pub(crate) fn check_binding(
             .iter()
             .find(|c| c.name == name)
             .ok_or("unknown binding receiver class")?;
-        if class.methods.iter().any(|method| method.name() == "method") {
+        if unit.method(&class.name, "method").is_some() {
             return Err("typed binding requires the inherited Object.method implementation".into());
         }
-        let actual =
-            if let Some(method) = class.methods.iter().find(|method| method.name() == member) {
-                StructuralMethod {
-                    parameters: method.parameter_types().to_vec(),
-                    result: method.return_type(),
-                }
-            } else {
-                native_signature(
-                    &crate::api::Type::named(class.base.api_name()),
-                    member,
-                    context,
-                )?
-            };
+        let actual = if let Some((_, method)) = unit.method(&class.name, member) {
+            StructuralMethod {
+                parameters: method.parameter_types().to_vec(),
+                result: method.return_type(),
+            }
+        } else {
+            native_signature(
+                &crate::api::Type::named(class.base.api_name()),
+                member,
+                context,
+            )?
+        };
         if !expected.accepts(&actual) {
             return Err("bound Method signature does not match its source target".into());
         }

@@ -35,13 +35,13 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Lay out inherited fields, resolve inherited methods, and dispatch overrides
-  using the actual instance's class.
-- [ ] Apply protected/hidden access through source superclass chains, retaining
-  each private member's declaring-class selector. Probe override visibility
-  reductions and implement the SDK-accepted inherited access contracts.
-- [ ] Inherit undecorated override signatures and check explicitly decorated
-  overrides for arity, argument, and result compatibility.
+- [ ] Lay out inherited instance fields and run their defaults/initializers in
+  superclass order, including protected/private field ownership and shadowing.
+- [ ] Resolve inherited static fields/methods and model subclass static storage
+  and initialization separately from the parent's storage.
+- [ ] Implement SDK-accepted access-level and static/instance method shadowing:
+  preserve the parent's public/instance lookup slot when the child declares a
+  protected/private or static member with the same name.
 - [ ] Support superclass-qualified method and initializer calls, including their
   receiver, argument order, and field-initialization effects.
 - [ ] Establish SDK default/inherited initializer rules for View,

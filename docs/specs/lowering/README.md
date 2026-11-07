@@ -686,6 +686,14 @@ construction is limited to the stateless Object-rooted ancestor profile in the
 [frontend contract](../frontend/README.md#source-superclasses), so no parent
 initialization effects or member layouts are silently omitted.
 
+Inherited calls use ordinary self/object member lookup and `invokem`; class DATA
+parent links provide runtime dispatch. No copied ancestor body, manual dispatch
+branch, or new VM opcode is needed. Private references bind to the selected
+method's declaring-class selector, so a child helper cannot capture a parent's
+private call. Semantic IR retains the receiver's static bound for checking;
+it does not replace a virtual call with a direct parent CODE address.
+
+
 
 Global/module bodies precede class bodies; each group preserves declaration
 order, and methods retain class order. Class labels are

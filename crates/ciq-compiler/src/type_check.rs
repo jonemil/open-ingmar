@@ -603,8 +603,7 @@ fn inspect(
             } => {
                 if let Some(contract) = origins.contract(*receiver) {
                     let targets = crate::source_calls::targets(contract, member, |class| {
-                        let declaration = unit?.classes().iter().find(|c| c.name == class.name)?;
-                        let method = declaration.methods.iter().find(|f| f.name() == member)?;
+                        let (_, method) = unit?.method(&class.name, member)?;
                         Some(crate::StructuralMethod {
                             parameters: method.parameter_types().to_vec(),
                             result: method.return_type(),
@@ -652,9 +651,14 @@ fn inspect(
                 member, arguments, ..
             }
             | Operation::SelfCallStatement { member, arguments } => {
-                if let Some(parameters) =
-                    signatures.get(&(owner.trim_end_matches('.').into(), member.clone()))
-                {
+                if let Some(parameters) = signatures.get(&(
+                    unit.and_then(|u| u.method(owner.trim_end_matches('.'), member))
+                        .map_or_else(
+                            || owner.trim_end_matches('.').into(),
+                            |(c, _)| c.name.clone(),
+                        ),
+                    member.clone(),
+                )) {
                     boundaries.extend(parameters.iter().cloned().zip(arguments.iter().copied()));
                 }
             }

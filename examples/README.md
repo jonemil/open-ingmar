@@ -117,6 +117,9 @@ and future Rust toolchain experiments.
   class storage, once-only initialization, nested owners, and shared references.
 - [compiler-static-fields](compiler-static-fields/README.md): mutable static
   storage, assignment order, compound captures, and reference replacement.
+- [compiler-inherited-methods](compiler-inherited-methods/README.md):
+  multilevel method lookup, virtual calls, inherited override signatures,
+  protected access, private helper ownership, and inherited Method bindings.
 - [compiler-inheritance-identities](compiler-inheritance-identities/README.md):
   source superclass chains, subtype contracts, runtime tests, and guarded narrowing.
 - [compiler-visibility](compiler-visibility/README.md): class-member access,

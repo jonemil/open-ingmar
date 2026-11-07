@@ -1071,8 +1071,8 @@ are rejected. Modules and class declarations remain public; non-public modifiers
 outside class-member scope are rejected.
 
 Private members belong to their declaring class. Protected members belong to
-that class and its subclasses; source superclass chains are not implemented yet,
-so current checked uses require the declaring class for both access levels.
+that class and its subclasses. Inherited method access resolves the declaring
+class before checking the caller; inherited field layout remains unsupported.
 Source files do not create access scopes. Reads, writes, calls, and construction
 check the caller's class against every known receiver alternative. An instance
 of the same class can be used explicitly. Multi-class alternatives that need
@@ -1740,8 +1740,8 @@ Unit validation rejects lookup with no available member, wrong argument/result
 contracts, and ordinary calls to native lifecycle callbacks, even through a
 different receiver.
 Object-rooted classes may resolve supported inherited Object members below.
-Other undeclared native/source inheritance remains unsupported. Source
-inheritance remains unsupported. Field access follows the
+Source method inheritance follows the [hierarchy profile](#source-superclasses);
+other native bases remain unsupported. Field access follows the
 [source-instance field contract](#source-instance-field-access).
 
 Exact constructor identity is a flow-sensitive local refinement, not a new
@@ -1804,7 +1804,7 @@ identity after erasure. Object-element Arrays erase exact source identities
 under the
 [container contract](#object-containers). Typed [source-class Array
 elements](#source-class-array-elements) retain those identities instead. Source
-superclass chains remain unsupported.
+superclass chains follow the [bounded hierarchy profile](#source-superclasses).
 
 Complete application DATA gives each class an Object base reference and a
 return-only hidden allocation constructor. Its explicit or default `initialize`
@@ -1830,15 +1830,36 @@ its declared base-element contract. Runtime class tests use the actual class;
 a positive subclass test narrows a superclass-bound value, while a superclass
 test preserves a known more-derived bound.
 
+Instance-method lookup searches the class, then its source ancestors. Bodies
+remain owned by the declaring class: inherited methods use that class's private
+selectors, while ordinary public/protected calls dispatch through the actual
+instance. Private ancestor methods are not inherited; a child's same-named
+private helper has an independent signature and selector. Protected/hidden
+methods are accessible from source subclasses. Public inherited methods also
+supply checked Method bindings and structural/interface witnesses.
+
+An instance override inherits each omitted parameter/result annotation from the
+nearest non-private ancestor declaration. Arity must match. Explicit annotations
+must match a decorated ancestor slot exactly, including source identity;
+a dynamic Any ancestor slot permits a more specific annotation. Missing slots
+are resolved before body checking. Access-level changes, static/instance
+shadowing, and static overrides remain rejected: the SDK accepts some of these
+as distinct lookup slots, rather than ordinary virtual overrides.
+
 Source construction currently accepts Object-rooted chains only when every
-source ancestor has no instance fields and an empty public zero-argument
-initializer. The allocated class can have its own fields/initializer.
-Inherited initialization that needs state, arguments, or effects is rejected;
-source-based View/AppBase/delegate construction remains outside this profile.
-Inherited-member lookup and redeclaration/overrides are not implemented;
-redeclarations other than initializers and internal hooks are rejected. The
-[plan](../../plan.md#1-source-inheritance-and-construction) owns these remaining
-steps. See the [SDK/generated specimen](../../../examples/compiler-inheritance-identities/README.md).
+source ancestor has no fields (including static storage) and an empty public
+zero-argument initializer. The allocated class can have its own fields and
+initializer. Inherited initialization that needs state, arguments, or effects
+is rejected; source-based View/AppBase/delegate construction remains outside
+this profile. Inherited field redeclarations remain rejected.
+
+Signature/access checks select the declaration from the receiver's static bound.
+Initialization safety summaries also include all possible overrides among known
+source subclasses, including virtual self calls and comparator callbacks. This
+is conservative even when a particular allocation is more specific.
+
+See the [identity specimen](../../../examples/compiler-inheritance-identities/README.md)
+and [inherited-method specimen](../../../examples/compiler-inherited-methods/README.md).
 
 ### Source-class signatures
 
@@ -2643,8 +2664,8 @@ uses the partial-lookup policy. An explicit non-null source assertion instead
 claims that proof. This is a caller assertion, not runtime validation or conversion.
 
 Class operands are named declarations, not dynamic class values. The bounded
-profile rejects local/parameter shadowing of a source target. Qualified/nested
-source names and source inheritance remain unsupported.
+profile rejects local/parameter shadowing of a source target. Qualified source names and superclass identities use the unit declaration
+namespace; nested class declarations remain unsupported.
 Unit validation checks target identity and base;
 standalone function IR retains that declaration-resolution obligation.
 

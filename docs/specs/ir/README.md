@@ -2105,7 +2105,7 @@ late records are rejected. Function fragments carry no class access records.
 enum represents public, protected, and private access. Ownership, rather than
 source filenames, governs checked field operations, class/instance calls, and
 construction. Known alternatives must agree on their bound private selector;
-inherited member access retains its separate unsupported status. Non-public members
+inherited methods retain their declaring owner for access checks. Non-public members
 cannot supply public interface witnesses or checked runtime Method bindings.
 Dynamic lookup remains subject to the generated runtime metadata.
 
@@ -2278,7 +2278,24 @@ Allocation, self, casts/tests, signatures, fields, joins, and nested container
 contracts are checked against the same graph. Native/text paths preserve the
 same ancestry. An Object-rooted source subclass can currently allocate only
 through stateless ancestors with public empty zero-argument initializers;
-inherited instance state/effects and member overrides remain rejected.
+inherited field state and initializer effects remain rejected.
+
+
+Each class stores only its own method bodies. The unit derives an effective
+method/declaring-owner index from class headers and visibility; it is not a
+second serialized declaration table. Own private methods remain distinct, and
+private ancestor methods are excluded from inherited lookup. Constructors and
+allocation hooks are not inherited. Source parsing fills omitted override
+contracts before creating Functions; saved IR carries the resolved contracts
+using ordinary signature fields (including their standard defaults).
+
+Unit construction validates override contracts and access against the
+[frontend hierarchy profile](../frontend/README.md#source-superclasses).
+`with_modules_and_visibility` accepts declarations and access records together,
+so private shadowing is validated with its actual ownership. Public-first
+construction is insufficient for unrelated private signatures. Effective lookup
+also supplies Method/interface contracts; effect analysis additionally includes
+possible runtime overrides without cloning inherited bodies.
 
 
 Source instance calls use:

@@ -288,6 +288,36 @@ It does not establish their order, default forwarding, protected subclass
 access, or override compatibility. Those remain explicit construction/member
 restrictions and work in the inheritance plan.
 
+## Inherited instance methods
+
+**Observed, 2026-11-07:** SDK/simulator 9.2.0, `fr265`, API 3.0.0–5.2.0,
+`-O 0`. The [inherited-method specimen](../../examples/compiler-inherited-methods/README.md)
+matches all ten SDK/generated output lines. Both PRGs pass structured CODE/DATA
+export and exact unsigned reconstruction. It covers a three-level hierarchy,
+overrides through a Root parameter, protected virtual self calls, inherited
+Method bindings, and independent private helpers with different result types.
+
+Focused authored variants establish these checking rules:
+
+- Undecorated override parameter/result slots inherit independently. Explicit
+  Number → String parameter/result changes fail; widening a Number parameter
+  to Object also fails. A typed Number override of an undecorated parent slot
+  compiles, whether only the parameter, only the result, or both are untyped.
+- A private child helper may differ from the parent's private helper signature.
+  The parent's body retains its own helper; private names fail ordinary `has`.
+- Public → private/protected and instance → static redeclarations compile.
+  A Root-typed call still returns Root's result (8), whereas an ordinary public
+  override returns the child's result (108). These are distinct lookup profiles;
+  treating every same-named child method as a virtual override is incorrect.
+- Inherited field reads and public field shadowing compile/run. Inherited static
+  reads return 10, but `Leaf.owner() == Root.owner()` is false: subclass static
+  context differs from the parent's. These observations do not establish the
+  complete storage/default initialization order.
+
+The implemented profile supports same-access instance overrides and separate
+private helpers. Access/kind shadowing, inherited fields/static storage, and
+parent initialization remain explicit restrictions in the frontend contract.
+
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

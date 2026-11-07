@@ -5239,6 +5239,16 @@ impl CallContext {
             base,
         })
     }
+    pub(crate) fn inherit(&mut self, key: (String, String), signature: CallSignature) {
+        self.signatures.entry(key).or_insert(signature);
+    }
+    pub(crate) fn class_signatures(&self, class: &str) -> Vec<(String, CallSignature)> {
+        self.signatures
+            .iter()
+            .filter(|((owner, _), _)| owner == class)
+            .map(|((_, member), signature)| (member.clone(), signature.clone()))
+            .collect()
+    }
     pub(crate) fn insert(&mut self, key: (String, String), signature: CallSignature) {
         self.signatures.insert(key, signature);
     }
