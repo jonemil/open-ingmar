@@ -1852,13 +1852,32 @@ fields retain their declaring contracts for bare/self reads and writes,
 explicit receiver access, readonly checks, and structural field witnesses.
 Private fields are not inherited; a child may declare an independent same-named
 field, including a different type, without capturing the parent's private slot.
-Other inherited field redeclarations remain rejected.
+A public instance field may be redeclared with public, protected, or private
+access and a different type or readonly contract. A protected/hidden ancestor
+field cannot be redeclared. Static-field and field/method shadowing remain
+unsupported.
+
+Field checking selects the nearest declaration under the receiver's static
+class bound. A parent-bound read keeps the parent's contract even when runtime
+lookup selects a differently typed child field; annotations do not convert or
+check that runtime value. Access reductions retain normal runtime visibility:
+a public parent-bound explicit read can see the parent's field while an
+inherited self read sees the child's protected field. Private shadows have
+separate selectors.
+
+Outside allocation hooks, a direct self store also rejects any visible readonly
+shadow in a known source subclass. Private shadows are independent. Explicit
+receiver stores, including a local alias of self, check the receiver's static
+field declaration instead. This distinction matches the SDK; it does not prove
+that a store reaches the same runtime slot as a subsequent read.
 
 Construction accepts Object-rooted chains with default-initialized ancestor
 instance fields and empty public zero-argument ancestor `initialize()` methods.
 Allocation hooks run parent before child, applying each declaring class's own
-expression defaults once. Inherited arrays/containers are allocated separately
-for each instance. An ancestor allocation hook cannot expose self or make virtual
+expression defaults once. Literal metadata defaults exist before these hooks;
+a parent expression can therefore overwrite a child's literal default, while
+a child expression runs after parent expressions. Inherited arrays/containers
+are allocated separately for each instance. An ancestor allocation hook cannot expose self or make virtual
 self calls while descendant initialization is unproven. Ancestor fields needing
 ordinary constructor assignments and ancestor static storage remain rejected.
 The allocated class can use its own ordinary initializer; parent-qualified
@@ -1874,6 +1893,8 @@ See the [identity specimen](../../../examples/compiler-inheritance-identities/RE
 and [inherited-method specimen](../../../examples/compiler-inherited-methods/README.md).
 The [field specimen](../../../examples/compiler-inherited-fields/README.md)
 covers default ordering, ownership, and independent instance storage.
+The [shadowing specimen](../../../examples/compiler-field-shadowing/README.md)
+compares redeclarations, access changes, and parent-bound reads.
 
 ### Source-class signatures
 

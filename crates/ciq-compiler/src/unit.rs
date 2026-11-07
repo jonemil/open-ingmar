@@ -1231,6 +1231,29 @@ impl CompilationUnit {
             .get(&(class.into(), member.into()))?;
         Some((&self.classes[owner], &self.classes[owner].methods[method]))
     }
+    /// Check readonly selectors reachable by a direct self store. Private fields
+    /// have separate selectors; explicit receiver stores keep their static bound.
+    fn self_field_readonly(&self, class: &str, member: &str) -> bool {
+        let Some((owner, field)) = self.field(class, member) else {
+            return false;
+        };
+        if field.kind.readonly() {
+            return true;
+        }
+        if field.kind.class_shared()
+            || self.member_visibility(&owner.name, member) == crate::Visibility::Private
+        {
+            return false;
+        }
+        self.classes.iter().any(|candidate| {
+            self.is_subclass(&candidate.name, class)
+                && candidate
+                    .fields
+                    .iter()
+                    .any(|f| f.name == member && f.kind.readonly() && !f.kind.class_shared())
+                && self.member_visibility(&candidate.name, member) != crate::Visibility::Private
+        })
+    }
     fn runtime_methods(&self, bound: &str, member: &str) -> Vec<(&ClassDeclaration, &Function)> {
         let Some((class, method)) = self.method(bound, member) else {
             return Vec::new();
@@ -1950,19 +1973,40 @@ impl CompilationUnit {
                     if member == "initialize" || field_initializer(member) {
                         continue;
                     }
-                    if (parent.fields.iter().any(|f| f.name == member)
-                        && self.member_visibility(&parent.name, member)
-                            != crate::Visibility::Private)
-                        || (class.fields.iter().any(|f| f.name == member)
-                            && parent.methods.iter().any(|f| f.name() == member))
-                    {
+                    let inherited = parent.fields.iter().find(|f| f.name == member);
+                    let declared = class.fields.iter().find(|f| f.name == member);
+                    if let Some(inherited) = inherited.filter(|_| {
+                        self.member_visibility(&parent.name, member) != crate::Visibility::Private
+                    }) {
+                        let Some(declared) = declared else {
+                            return Err(fail(
+                                None,
+                                None,
+                                "field/method shadowing is not implemented".into(),
+                            ));
+                        };
+                        if inherited.kind.class_shared() || declared.kind.class_shared() {
+                            return Err(fail(
+                                None,
+                                None,
+                                "inherited static field shadowing is not implemented".into(),
+                            ));
+                        }
+                        if self.member_visibility(&parent.name, member)
+                            == crate::Visibility::Protected
+                        {
+                            return Err(fail(
+                                None,
+                                None,
+                                format!("protected inherited field {member} cannot be redeclared"),
+                            ));
+                        }
+                    }
+                    if declared.is_some() && parent.methods.iter().any(|f| f.name() == member) {
                         return Err(fail(
                             None,
                             None,
-                            format!(
-                                "inherited member redeclaration {}.{member} requires override/layout support",
-                                class.name
-                            ),
+                            "field/method shadowing is not implemented".into(),
                         ));
                     }
                 }
@@ -2796,7 +2840,7 @@ impl CompilationUnit {
                 }
                 if let Operation::SelfFieldAssign { field, .. } = &located.operation {
                     if !field_initializer(function.name())
-                        && matches!(owner, Owner::Class(class) if self.field(class, field).is_some_and(|(_, f)| f.kind.readonly()))
+                        && matches!(owner, Owner::Class(class) if self.self_field_readonly(class, field))
                     {
                         return Err(fail(
                             Some(index),

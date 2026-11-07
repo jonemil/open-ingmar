@@ -694,6 +694,12 @@ selector is scoped to its declaring class, so the parent hook cannot dispatch
 to the child's same-named body. Ordinary `initialize()` remains a separate
 call after allocation. Private field references retain declaring-class selectors;
 public/protected fields use their ordinary member symbols.
+Shadows preserve those symbols and each declaration's access/readonly metadata;
+ordinary self and explicit receiver lookup supply the runtime distinction.
+Number/Symbol literal defaults remain in DATA, and expression writes remain in
+the declaring allocation hook. A child's literal default is not replayed after
+the parent hook. Static parent-bound field contracts emit no conversion or
+forced lookup in the parent's DATA record.
 
 Inherited calls use ordinary self/object member lookup and `invokem`; class DATA
 parent links provide runtime dispatch. No copied ancestor body, manual dispatch

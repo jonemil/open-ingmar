@@ -68,7 +68,7 @@ fn inherited_fields_preserve_access_readonly_and_invariant_contracts() {
     let bad = declarations.replace("return hidden;", "return secret;");
     assert!(compile_sources(&[&bad]).is_err());
     let shadow = "class Root{var value=1;}class Leaf extends Root{var value=2;}";
-    assert!(compile_sources(&[shadow]).is_err());
+    common::pipeline(compile_sources(&[shadow]).unwrap());
     let private = "class Root{private var value as Toybox.Lang.Number=1;function read() as Toybox.Lang.Number{return value;}}class Leaf extends Root{private var value as Toybox.Lang.String=\"leaf\";function readLeaf() as Toybox.Lang.String{return value;}}function make(){return new Leaf();}";
     common::pipeline(checking::compile_sources(&[private]).unwrap());
 }

@@ -344,6 +344,41 @@ This establishes default allocation order, not general constructor forwarding,
 public field shadowing, or safe receiver escape from partially initialized
 subclasses. Those remain explicit frontend restrictions.
 
+## Field shadowing
+
+**Observed, 2026-11-07:** SDK/simulator 9.2.0, `fr265`, API 3.0.0–5.2.0,
+`-O 0`. The [shadowing specimen](../../examples/compiler-field-shadowing/README.md)
+matches all 34 SDK/generated output lines and reconstructs both PRGs' CODE/DATA
+exactly. Focused variants establish the following:
+
+| Parent default | Child default | Visible result after allocation |
+|---|---|---|
+| Number literal 11 | Number literal 22 | 22 |
+| `mark(11)` | Number literal 22 | 11 |
+| Number literal 11 | `mark(22)` | 22 |
+| `mark(11)` | `mark(22)` | 22, after traces 11 then 22 |
+
+Public Number → String redeclaration compiles. A parent-declared Number read
+returns `"leaf"`; a parent self store of 30 then makes the child's String-declared
+read return 30. These are static contracts, not runtime conversion guarantees.
+
+With public Root.value=11 and protected Leaf.value=22, a global function reading
+`x.value` for `x as Root` returns 11; inherited Root self lookup returns 22.
+A Root self store updates the protected value while the explicit parent-bound
+read remains 11. A private child field instead has an independent selector.
+The SDK rejects redeclaring a protected parent field with any of public,
+protected, or private access.
+
+A visible constant child rejects direct `value=...` and `self.value=...` stores
+in the parent body, even without a call to that body. A private child constant
+does not. An explicit parent-typed parameter or local alias of self permits the
+store; in the runtime probe, the visible child constant remains 22 afterwards.
+Parent expression defaults with constant child shadows also compile/run.
+A variable child may shadow a parent constant; the child store is accepted.
+These observations justify separate direct-self and explicit-receiver checks,
+while retaining metadata-driven runtime lookup. Existing instructions and DATA
+records represent these cases without new encodings.
+
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

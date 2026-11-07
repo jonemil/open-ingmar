@@ -2294,6 +2294,14 @@ allocation hooks are not inherited. Source parsing fills omitted override
 contracts before creating Functions; saved IR carries the resolved contracts
 using ordinary signature fields (including their standard defaults).
 
+Field shadows retain separate declarations in their respective class headers;
+no field copies, declaration-owner operands, or runtime conversions are added.
+Self/explicit field operations keep their existing names and static contracts.
+Unit validation checks protected-parent redeclarations and, for ordinary
+`.assign-self`, visible readonly shadows in known subclasses. `.member-write`
+uses its receiver's static field contract; allocation-hook writes retain their
+existing initialization exemption. These rules also apply on saved IR resume.
+
 Unit construction validates override contracts and access against the
 [frontend hierarchy profile](../frontend/README.md#source-superclasses).
 `with_modules_and_visibility` accepts declarations and access records together,

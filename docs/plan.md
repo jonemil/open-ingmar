@@ -35,9 +35,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Implement public/protected field shadowing across source classes; verify
-  literal-default versus runtime-initializer order and differing field contracts
-  through parent-bound reads.
 - [ ] Resolve inherited static fields/methods and model subclass static storage
   and initialization separately from the parent's storage.
 - [ ] Implement SDK-accepted access-level and static/instance method shadowing:

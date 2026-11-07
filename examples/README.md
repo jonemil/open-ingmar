@@ -117,6 +117,9 @@ and future Rust toolchain experiments.
   class storage, once-only initialization, nested owners, and shared references.
 - [compiler-static-fields](compiler-static-fields/README.md): mutable static
   storage, assignment order, compound captures, and reference replacement.
+- [compiler-field-shadowing](compiler-field-shadowing/README.md):
+  field redeclarations, differing contracts, access changes, readonly shadows,
+  and metadata defaults versus allocation expressions.
 - [compiler-inherited-fields](compiler-inherited-fields/README.md):
   inherited field lookup, parent-before-child defaults, private field ownership,
   protected mutation, and independent array storage.
