@@ -1135,10 +1135,14 @@ owner and access rules.
 Source files do not create access scopes. Reads, writes, calls, and construction
 check the caller's class against every known receiver alternative. An instance
 of the same class can be used explicitly. Multi-class alternatives that need
-different private selectors require narrowing before dispatch. Non-public
-members cannot satisfy public structural/interface contracts.
+different private field selectors require narrowing before dispatch. Structural
+fields require public mutable bindings. Method witnesses instead match the
+nearest declaration's signature without imposing public visibility; they do not
+prove which body an erased runtime call will invoke.
 
-Private declarations get distinct runtime Symbol identities. Ordinary Symbol
+Private declarations get distinct runtime Symbol identities. Bare/self method
+calls use those identities; calls through explicit receiver values keep ordinary
+selectors even when checking selects a private method signature. Ordinary Symbol
 literals keep their original names, so `has :name` cannot discover a private
 member. Checked `method(:name)` bindings require public targets, including
 inside the declaring class: SDK probes compile non-public bindings but their
@@ -1889,21 +1893,35 @@ its declared base-element contract. Runtime class tests use the actual class;
 a positive subclass test narrows a superclass-bound value, while a superclass
 test preserves a known more-derived bound.
 
-Instance-method lookup searches the class, then its source ancestors. Bodies
-remain owned by the declaring class: inherited methods use that class's private
-selectors, while ordinary public/protected calls dispatch through the actual
-instance. Private ancestor methods are not inherited; a child's same-named
-private helper has an independent signature and selector. Protected/hidden
-methods are accessible from source subclasses. Public inherited methods also
-supply checked Method bindings and structural/interface witnesses.
+#### Method lookup and access
 
-An instance override inherits each omitted parameter/result annotation from the
-nearest non-private ancestor declaration. Arity must match. Explicit annotations
-must match a decorated ancestor slot exactly, including source identity;
-a dynamic Any ancestor slot permits a more specific annotation. Missing slots
-are resolved before body checking. Access-level changes, static/instance
-shadowing, and static overrides remain rejected: the SDK accepts some of these
-as distinct lookup slots, rather than ordinary virtual overrides.
+Method checking selects the closest declaration accessible from the caller's
+class scope. An external caller can retain a public parent slot behind a
+protected/private child declaration. Within the child, bare/self calls and
+explicit receiver calls select its accessible declaration. Private ancestor
+methods are not inherited. If no accessible method exists, a hidden declaration
+still produces an access error rather than falling back to an unrelated name.
+
+A nonprivate instance override inherits each omitted parameter/result annotation
+from the nearest nonprivate ancestor, including across access changes and private
+intermediate declarations. Arity and decorated contracts must match; an Any
+ancestor slot permits a more specific annotation. A private child declaration has
+an independent signature and selector. Static/instance shadowing and static
+redeclarations remain unsupported.
+
+Bodies remain owned by their declaring class. Bare/self calls bind an own
+private selector; ordinary self lookup can dispatch to public/protected
+implementations on descendants. Explicit receiver calls keep an ordinary selector:
+protected implementations require the caller's protected scope, and private
+methods are not selected at runtime. Thus a private String-checked explicit call
+can invoke a public parent method returning Number. This is preserved SDK lookup,
+not a conversion or a runtime type guarantee.
+
+Structural and native interface witnesses use the nearest method declaration's
+signature, including private/protected declarations. Signature matching does not
+prove that ordinary runtime lookup will find that declaration. Checked
+`method(:name)` binding retains its separate public-target restriction.
+See the [method-access specimen](../../../examples/compiler-method-access/README.md).
 
 Fields resolve through the same source ancestry. Each lookup selects a
 declaration and retains its contract under the views below.

@@ -70,6 +70,10 @@ fn source_bindings<'a>(
     owner: Owner<'a>,
     operation: &'a Operation,
 ) -> Vec<(Owner<'a>, &'a str)> {
+    let caller = match owner {
+        Owner::Class(c) => Some(c),
+        _ => None,
+    };
     let raw = match operation {
         Operation::ObjectCall {
             classes, member, ..
@@ -87,7 +91,7 @@ fn source_bindings<'a>(
     raw.into_iter()
         .map(|(owner, member)| match owner {
             Owner::Class(class) => unit
-                .method(class, member)
+                .visible_method(class, member, caller)
                 .map_or((owner, member), |(c, f)| {
                     (Owner::Class(c.name.as_str()), f.name())
                 }),
@@ -117,7 +121,15 @@ fn source_callees<'a>(
         }
         _ => return bindings,
     };
-    let mut targets = bindings.iter().copied().collect::<BTreeSet<_>>();
+    let explicit = matches!(
+        operation,
+        Operation::ObjectCall { .. } | Operation::ObjectCallStatement { .. }
+    );
+    let mut targets = if explicit {
+        BTreeSet::new()
+    } else {
+        bindings.iter().copied().collect::<BTreeSet<_>>()
+    };
     for bound in bounds {
         let member = match operation {
             Operation::ObjectCall { member, .. }
@@ -127,9 +139,17 @@ fn source_callees<'a>(
             _ => unreachable!(),
         };
         targets.extend(
-            unit.runtime_methods(bound, member)
-                .into_iter()
-                .map(|(class, method)| (Owner::Class(class.name.as_str()), method.name())),
+            unit.runtime_methods(
+                bound,
+                member,
+                match owner {
+                    Owner::Class(c) => Some(c),
+                    _ => None,
+                },
+                !explicit,
+            )
+            .into_iter()
+            .map(|(class, method)| (Owner::Class(class.name.as_str()), method.name())),
         );
     }
     targets.into_iter().collect()
@@ -543,7 +563,7 @@ fn comparator_callees<'a>(
     ) else {
         return Vec::new();
     };
-    unit.runtime_methods(&class, "compare")
+    unit.runtime_methods(&class, "compare", None, false)
         .into_iter()
         .map(|(c, f)| (Owner::Class(c.name.as_str()), f.name()))
         .collect()
@@ -1517,6 +1537,33 @@ impl CompilationUnit {
             .get(&(class.into(), member.into()))?;
         Some((&self.classes[owner], &self.classes[owner].methods[method]))
     }
+    pub(crate) fn visible_method(
+        &self,
+        class: &str,
+        member: &str,
+        caller: Option<&str>,
+    ) -> Option<(&ClassDeclaration, &Function)> {
+        let hierarchy = &self.member_index.classes;
+        let owner = crate::inheritance::visible_method(
+            &self.member_index.method_access,
+            class,
+            member,
+            caller,
+            hierarchy.get(class).map_or(&[], |c| c.ancestors.as_slice()),
+            caller
+                .and_then(|c| hierarchy.get(c))
+                .map_or(&[], |c| c.ancestors.as_slice()),
+        )?;
+        self.method(owner, member)
+    }
+    pub(crate) fn method_symbol(&self, class: &str, member: &str, caller: Option<&str>) -> String {
+        if let Some((owner, _)) = self.visible_method(class, member, caller) {
+            if self.member_visibility(&owner.name, member) == crate::Visibility::Private {
+                return crate::visibility::private_symbol(&owner.name, member);
+            }
+        }
+        member.into()
+    }
     /// Return classes visited by class-qualified lookup, through the declaring
     /// owner. Each visited statics record may initialize independently.
     fn static_lookup<'a>(&'a self, class: &'a str, member: &str, method: bool) -> Vec<&'a str> {
@@ -1592,30 +1639,56 @@ impl CompilationUnit {
                 && self.member_visibility(&candidate.name, member) != crate::Visibility::Private
         })
     }
-    fn runtime_methods(&self, bound: &str, member: &str) -> Vec<(&ClassDeclaration, &Function)> {
-        let Some((class, method)) = self.method(bound, member) else {
-            return Vec::new();
-        };
-        if method.is_static_method()
-            || self.member_visibility(&class.name, member) == crate::Visibility::Private
-        {
-            return vec![(class, method)];
+    /// Follow emitted method lookup, independently of its checked signature.
+    /// Self lookup admits protected overrides; explicit receivers keep public
+    /// slots outside protected scope and never use mangled private selectors.
+    fn runtime_methods(
+        &self,
+        bound: &str,
+        member: &str,
+        caller: Option<&str>,
+        self_lookup: bool,
+    ) -> Vec<(&ClassDeclaration, &Function)> {
+        if self_lookup {
+            if let Some((class, method)) = self.visible_method(bound, member, caller) {
+                if method.is_static_method()
+                    || self.member_visibility(&class.name, member) == crate::Visibility::Private
+                {
+                    return vec![(class, method)];
+                }
+            }
         }
         let mut targets = BTreeSet::new();
-        for class in &self.classes {
-            if self.is_subclass(&class.name, bound) {
-                if let Some(index) = self
-                    .member_index
-                    .methods
-                    .get(&(class.name.clone(), member.into()))
+        for class in self
+            .classes
+            .iter()
+            .filter(|c| self.is_subclass(&c.name, bound))
+        {
+            let identity = &self.member_index.classes[&class.name];
+            for owner in std::iter::once(&class.name).chain(&identity.ancestors) {
+                let Some((declaration, method)) =
+                    self.method(owner, member).filter(|(d, _)| d.name == *owner)
+                else {
+                    continue;
+                };
+                let access = self.member_visibility(owner, member);
+                if access == crate::Visibility::Private
+                    || (access == crate::Visibility::Protected
+                        && !self_lookup
+                        && !caller.is_some_and(|c| self.is_subclass(c, owner)))
                 {
-                    targets.insert(*index);
+                    continue;
                 }
+                targets.insert((
+                    self.member_index.classes[&declaration.name].name.clone(),
+                    method.name().to_owned(),
+                ));
+                break;
             }
         }
         targets
             .into_iter()
-            .map(|(owner, method)| (&self.classes[owner], &self.classes[owner].methods[method]))
+            .filter_map(|(class, member)| self.method(&class, &member))
             .collect()
     }
     fn method_owner<'a>(&'a self, class: &'a str, member: &str) -> &'a str {
@@ -2364,20 +2437,26 @@ impl CompilationUnit {
                 if method.name() == "initialize" || field_initializer(method.name()) {
                     continue;
                 }
-                if let Some((owner, inherited)) = self.method(parent, method.name()) {
+                if let Some((owner, inherited)) =
+                    self.visible_method(parent, method.name(), Some(&class.name))
+                {
                     let access = self.member_visibility(&owner.name, inherited.name());
                     if access == crate::Visibility::Private {
                         continue;
                     }
                     if inherited.is_static_method()
-                        || self.member_visibility(&class.name, method.name()) != access
                         || method.is_static_method() != inherited.is_static_method()
                     {
                         return Err(fail(
                             None,
                             None,
-                            "inherited access/receiver-kind shadowing is not implemented".into(),
+                            "inherited static/instance method shadowing is not implemented".into(),
                         ));
+                    }
+                    if self.member_visibility(&class.name, method.name())
+                        == crate::Visibility::Private
+                    {
+                        continue;
                     }
                     if method.parameter_types().len() != inherited.parameter_types().len()
                         || !method
@@ -3017,7 +3096,7 @@ impl CompilationUnit {
                                     },
                                 )
                             } else {
-                                self.member_symbol(c, member)
+                                member.clone()
                             }
                         })
                         .collect::<BTreeSet<_>>();
@@ -3906,15 +3985,23 @@ impl CompilationUnit {
                         }
                     }
                     let targets = crate::source_calls::targets(contract, member, |class| {
-                        self.method(&class.name, member)
-                            .and_then(|(owner, _)| {
-                                signatures
-                                    .get(&(Owner::Class(owner.name.as_str()), member.as_str()))
-                            })
-                            .map(|(parameters, result)| crate::StructuralMethod {
+                        self.visible_method(
+                            &class.name,
+                            member,
+                            match owner {
+                                Owner::Class(c) => Some(c),
+                                _ => None,
+                            },
+                        )
+                        .and_then(|(owner, _)| {
+                            signatures.get(&(Owner::Class(owner.name.as_str()), member.as_str()))
+                        })
+                        .map(|(parameters, result)| {
+                            crate::StructuralMethod {
                                 parameters: parameters.to_vec(),
                                 result: result.clone(),
-                            })
+                            }
+                        })
                     });
                     for native in &targets.native {
                         for (argument, expected) in arguments.iter().zip(
@@ -3964,7 +4051,14 @@ impl CompilationUnit {
                 | Operation::ClassCallStatement { class, member, .. } = &located.operation
                 {
                     if !self
-                        .method(class, member)
+                        .visible_method(
+                            class,
+                            member,
+                            match owner {
+                                Owner::Class(c) => Some(c),
+                                _ => None,
+                            },
+                        )
                         .map(|(_, f)| f)
                         .is_some_and(|f| f.is_static_method())
                     {
@@ -4906,9 +5000,6 @@ impl CompilationUnit {
             }
         }
         for (name, required) in &shape.methods {
-            if self.member_visibility(class, name) != crate::Visibility::Public {
-                return Err(format!("{class}.{name} is not a public interface method"));
-            }
             let actual = if let Some((_, method)) = self.method(class, name) {
                 crate::StructuralMethod {
                     parameters: method.parameter_types().to_vec(),
@@ -4945,12 +5036,6 @@ impl CompilationUnit {
             .interface(interface)
             .ok_or_else(|| format!("unknown structural interface {interface}"))?;
         for required in &interface.methods {
-            if self.member_visibility(class, &required.name) != crate::Visibility::Public {
-                return Err(format!(
-                    "{class}.{} is not a public interface method",
-                    required.name
-                ));
-            }
             let implementation = self
                 .method(class, &required.name)
                 .map(|(_, method)| method)
@@ -5809,6 +5894,16 @@ fn prepare_sources<'a>(
             );
         }
         for class in &parsed.classes {
+            for method in &class.methods {
+                calls.method_access.insert(
+                    (class.name.clone(), method.name.clone()),
+                    class
+                        .visibility
+                        .iter()
+                        .find(|(name, _)| name == &method.name)
+                        .map_or(crate::Visibility::Public, |(_, v)| *v),
+                );
+            }
             calls.class_bases.insert(class.name.clone(), class.base);
             calls.source_fields.insert(
                 class.name.clone(),

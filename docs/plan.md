@@ -35,11 +35,12 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Implement SDK-accepted access-level and static/instance method shadowing:
-  preserve the parent's public/instance lookup slot when the child declares a
-  protected/private or static member with the same name.
-- [ ] Support superclass-qualified method and initializer calls, including their
-  receiver, argument order, and field-initialization effects.
+- [ ] Implement SDK-accepted static/instance method shadowing and static method
+  redeclarations: preserve the parent's instance lookup slot behind a static
+  child method, including private selectors and receiver-specific signatures.
+- [ ] Support class/superclass-qualified instance method and initializer calls,
+  including own-class qualification, receiver, argument order, and
+  field-initialization effects.
 - [ ] Establish SDK default/inherited initializer rules for View,
   BehaviorDelegate, and source subclasses, then implement accepted forms.
 - [ ] Support nested classes and outer-instance construction/member lookup;

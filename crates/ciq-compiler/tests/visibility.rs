@@ -110,7 +110,6 @@ fn nonpublic_members_are_checked_across_files_and_access_forms() {
         "class C{protected function f(){return 1;}function g(){return method(:f);}}",
         "class C{var __ciq_private_1_C_x=1;}",
         "typedef I as interface{var x as Toybox.Lang.Number;};class C{private var x as Toybox.Lang.Number=1;}function take(c as I){return c.x;}function f(){return take(new C());}",
-        "typedef I as interface{function read() as Toybox.Lang.Number;};class C{protected function read() as Toybox.Lang.Number{return 1;}}function take(c as I){return c.read();}function f(){return take(new C());}",
         "class C{static static function f(){}}",
         "class C{private function initialize(){}}function f(){return new C();}",
     ] {
@@ -121,6 +120,7 @@ fn nonpublic_members_are_checked_across_files_and_access_forms() {
 #[test]
 fn declaring_classes_can_use_nonpublic_members_and_private_constructors() {
     for source in [
+        "typedef I as interface{function read() as Toybox.Lang.Number;};class C{protected function read() as Toybox.Lang.Number{return 1;}}function take(c as I){return c.read();}function f(){return take(new C());}",
         "class C{private var x=1;function f(other as C){return other.x;}}",
         "class C{protected var x=1;function f(other as C){return other.x;}}",
         "class C{private static var x=1;static private function f(){return C.x;}}",

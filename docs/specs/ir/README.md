@@ -2320,6 +2320,19 @@ construction is insufficient for unrelated private signatures. Effective lookup
 also supplies Method/interface contracts; effect analysis additionally includes
 possible runtime overrides without cloning inherited bodies.
 
+Method calls keep source names and existing receiver headers. Source and unit
+checking share caller-aware declaration selection: a public ancestor can remain
+accessible behind a less-visible child. Nonprivate overrides retain decorated
+contracts across access changes; private child signatures stay independent.
+Saved IR rechecks access and signature claims against those same declarations.
+
+Effect summaries follow emitted lookup separately. Self calls retain private
+bindings or public/protected virtual targets. Explicit receiver calls keep an
+ordinary selector even when their checked contract came from a private method;
+their effects include the actual accessible nonprivate implementations. Method
+witnesses use lexical declaration signatures without a public-visibility filter.
+See [method lookup](../frontend/README.md#method-lookup-and-access).
+
 Source instance calls use:
 
 [Directive syntax](grammar.md#operation-syntax) is defined in the grammar.

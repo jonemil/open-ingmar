@@ -122,6 +122,8 @@ and future Rust toolchain experiments.
   and metadata defaults versus allocation expressions.
 - [compiler-field-metadata](compiler-field-metadata/README.md): literal tags,
   String defaults, allocation placeholders, and class-definition reads.
+- [compiler-method-access](compiler-method-access/README.md): public parent slots,
+  access-changing methods, independent private signatures, and scoped dispatch.
 - [compiler-mixed-fields](compiler-mixed-fields/README.md):
   instance/static lookup views, own-class qualification, scoped private binding,
   readonly stores, and declaration-based structural witnesses.

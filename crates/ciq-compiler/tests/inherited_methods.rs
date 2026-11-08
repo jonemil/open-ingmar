@@ -44,8 +44,7 @@ fn inherited_methods_preserve_complete_application_and_saved_contracts() {
 fn lookup_and_partial_override_contracts_work_across_files() {
     let root = "using Toybox.Lang;module M{class Root{function value(n as Lang.Number) as Lang.Number{return n+1;}protected function step(n as Lang.Number) as Lang.Number{return n;}function initialize(){}}}";
     let leaf = "using Toybox.Lang;using M as Types;class Leaf extends Types.Root{function value(n){return n+2;}function step(n){return n;}function initialize(){}}";
-    // Access changes are a separate unsupported lookup profile.
-    assert!(compile_sources(&[leaf, root]).is_err());
+    common::pipeline(checking::compile_sources(&[leaf, root]).unwrap());
     let leaf = leaf.replace("function step", "protected function step");
     for sources in [vec![leaf.as_str(), root], vec![root, leaf.as_str()]] {
         common::pipeline(checking::compile_sources(&sources).unwrap());
@@ -88,7 +87,6 @@ fn access_and_override_contracts_are_checked_at_the_declaring_owner() {
         "class Root{function f(n as Toybox.Lang.Number) as Toybox.Lang.Number{return n;}}class Leaf extends Root{function f(){return 1;}}".into(),
         "class Root{function f(n as Toybox.Lang.Number) as Toybox.Lang.Number{return n;}}class Leaf extends Root{function f(n as Toybox.Lang.Object) as Toybox.Lang.Number{return 1;}}".into(),
         "class Root{function f() as Toybox.Lang.Number{return 1;}}class Leaf extends Root{function f() as Toybox.Lang.String{return \"bad\";}}".into(),
-        "class Root{function f(){return 1;}}class Leaf extends Root{private function f(){return 2;}}".into(),
         "class Root{function f(){return 1;}}class Leaf extends Root{static function f(){return 2;}}".into(),
         "class Root{function f(){return 1;}}class Leaf extends Root{var f=1;}".into(),
         "class Root{var f=1;}class Leaf extends Root{function f(){return 1;}}".into(),
@@ -133,11 +131,7 @@ fn saved_overrides_validate_contracts_even_when_the_body_ignores_its_input() {
             ".function value parameters=1 receiver=instance",
             ".function value parameters=1 parameter-types=string receiver=instance",
         ),
-        leaf.replacen(
-            "Lang.Object parent=Root\n",
-            "Lang.Object parent=Root\n.visibility value protected\n",
-            1,
-        ),
+        leaf.replace("receiver=instance", "receiver=static"),
     ] {
         assert_ne!(changed, leaf);
         assert!(parse_unit_ir(&format!("{root}.class Leaf {changed}")).is_err());

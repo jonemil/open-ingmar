@@ -114,7 +114,10 @@ the existing instance-field IR and reuse its validation and VM lowering.
 `inheritance.rs` derives lexical and instance field-owner views from storage and
 visibility before source contract inference. Unit/saved-IR validation reuses that
 projection. Selector binding and initialization effects remain separate from
-checking a field's receiver-specific contract.
+checking a field's receiver-specific contract. The same module owns caller-aware
+method declaration selection for source and saved-unit validation. Method effect
+summaries follow emitted self/explicit lookup independently of checked signatures;
+private declarations and ordinary runtime selectors need not select the same body.
 
 Shared `Declarations` collect typedef and binding environments across files.
 Direct non-heap global/class constants are cached before IR construction. Mutable

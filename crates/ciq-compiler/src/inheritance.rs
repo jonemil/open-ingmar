@@ -130,6 +130,7 @@ pub(crate) fn field_views(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MemberIndex {
     pub(crate) methods: BTreeMap<(String, String), (usize, usize)>,
+    pub(crate) method_access: BTreeMap<(String, String), crate::Visibility>,
     pub(crate) fields: BTreeMap<(String, String), (usize, usize)>,
     pub(crate) instance_fields: BTreeMap<(String, String), (usize, usize)>,
     pub(crate) classes: BTreeMap<String, SourceClass>,
@@ -207,15 +208,61 @@ pub(crate) fn member_index(
     }
     Ok(MemberIndex {
         methods: result,
+        method_access: classes
+            .iter()
+            .flat_map(|c| {
+                c.methods.iter().map(|m| {
+                    let key = (c.name.clone(), m.name().to_owned());
+                    let access = visibility.get(&key).copied().unwrap_or_default();
+                    (key, access)
+                })
+            })
+            .collect(),
         fields,
         instance_fields,
         classes: hierarchy,
     })
 }
 
+/// Select the closest method accessible to the caller, preserving an inherited
+/// public slot behind a less-visible declaration. Private ancestors stay local.
+/// If no candidate is accessible, retain the closest one for access diagnostics.
+pub(crate) fn visible_method<'a>(
+    declarations: &'a BTreeMap<(String, String), crate::Visibility>,
+    class: &str,
+    member: &str,
+    caller: Option<&str>,
+    ancestors: &[String],
+    caller_ancestors: &[String],
+) -> Option<&'a str> {
+    use crate::Visibility;
+    let mut fallback = None;
+    for owner in std::iter::once(class).chain(ancestors.iter().map(String::as_str)) {
+        if owner != class && (member == "initialize" || crate::unit::field_initializer(member)) {
+            continue;
+        }
+        let Some(((owner, _), access)) = declarations.get_key_value(&(owner.into(), member.into()))
+        else {
+            continue;
+        };
+        if owner != class && *access == Visibility::Private {
+            continue;
+        }
+        fallback.get_or_insert(owner.as_str());
+        if *access == Visibility::Public
+            || caller == Some(owner.as_str())
+            || (*access == Visibility::Protected && caller_ancestors.contains(owner))
+        {
+            return Some(owner);
+        }
+    }
+    fallback
+}
+
 /// Fill undecorated source overrides from the nearest inherited contract before
-/// compiling bodies. Receiver/access shadowing remains a separately rejected
-/// lookup profile; private declarations create distinct selector families.
+/// compiling bodies. Nonprivate methods retain inherited contracts across access
+/// changes; private declarations create independent signatures and selectors.
+/// Static/instance shadowing remains a separately rejected lookup profile.
 pub(crate) fn prepare_overrides(
     sources: &[&str],
     parsed: &mut [crate::parser::ParsedUnit],
@@ -247,7 +294,8 @@ pub(crate) fn prepare_overrides(
                 if let Some((signature, parent_access, is_static)) = types[&class.name]
                     .ancestors
                     .iter()
-                    .find_map(|p| declarations.get(&(p.clone(), method.name.clone())))
+                    .filter_map(|p| declarations.get(&(p.clone(), method.name.clone())))
+                    .find(|(_, access, _)| *access != Visibility::Private)
                 {
                     if *parent_access != Visibility::Private {
                         let fail = |message| crate::SourceDiagnostic {
@@ -258,36 +306,39 @@ pub(crate) fn prepare_overrides(
                                 message,
                             ),
                         };
-                        if *is_static || access != *parent_access || method.is_static != *is_static
-                        {
+                        if *is_static || method.is_static != *is_static {
                             return Err(fail(
-                                "inherited access/receiver-kind shadowing is not implemented",
+                                "inherited static/instance method shadowing is not implemented",
                             ));
                         }
-                        if method.parameters.len() != signature.parameters.len() {
+                        if access != Visibility::Private
+                            && method.parameters.len() != signature.parameters.len()
+                        {
                             return Err(fail("override arity differs from inherited method"));
                         }
-                        for (slot, parent) in
-                            method.parameter_types.iter_mut().zip(&signature.parameters)
-                        {
-                            if let Some(actual) = slot {
-                                if !override_parameter(actual, parent) {
+                        if access != Visibility::Private {
+                            for (slot, parent) in
+                                method.parameter_types.iter_mut().zip(&signature.parameters)
+                            {
+                                if let Some(actual) = slot {
+                                    if !override_parameter(actual, parent) {
+                                        return Err(fail(
+                                            "override parameter differs from inherited contract",
+                                        ));
+                                    }
+                                } else {
+                                    *slot = Some(parent.clone());
+                                }
+                            }
+                            if let Some(actual) = &method.result_type {
+                                if !override_result(actual, &signature.result) {
                                     return Err(fail(
-                                        "override parameter differs from inherited contract",
+                                        "override result differs from inherited contract",
                                     ));
                                 }
                             } else {
-                                *slot = Some(parent.clone());
+                                method.result_type = Some(signature.result.clone());
                             }
-                        }
-                        if let Some(actual) = &method.result_type {
-                            if !override_result(actual, &signature.result) {
-                                return Err(fail(
-                                    "override result differs from inherited contract",
-                                ));
-                            }
-                        } else {
-                            method.result_type = Some(signature.result.clone());
                         }
                     }
                 }

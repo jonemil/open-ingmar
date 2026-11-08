@@ -62,7 +62,7 @@ pub(crate) fn bind_body<'a>(
         match &mut located.operation {
             O::SelfCall { member, .. } | O::SelfCallStatement { member, .. } => {
                 if let Some(class) = class {
-                    *member = unit.member_symbol(class, member);
+                    *member = unit.method_symbol(class, member, Some(class));
                 }
             }
             O::SelfFieldRead { field, .. } | O::SelfFieldAssign { field, .. } => {
@@ -70,21 +70,18 @@ pub(crate) fn bind_body<'a>(
                     *field = unit.member_symbol(class, field);
                 }
             }
-            O::ClassCall { class, member, .. } | O::ClassCallStatement { class, member, .. } => {
-                *member = unit.member_symbol(class, member)
+            O::ClassCall {
+                class: receiver,
+                member,
+                ..
             }
+            | O::ClassCallStatement {
+                class: receiver,
+                member,
+                ..
+            } => *member = unit.method_symbol(receiver, member, class),
             O::ClassFieldRead { class, field, .. } | O::ClassFieldBegin { class, field, .. } => {
                 *field = unit.member_symbol(class, field)
-            }
-            O::ObjectCall {
-                classes, member, ..
-            }
-            | O::ObjectCallStatement {
-                classes, member, ..
-            } => {
-                if let Some(class) = classes.first() {
-                    *member = unit.member_symbol(class, member);
-                }
             }
             O::MemberRead {
                 receiver, member, ..

@@ -489,7 +489,10 @@ selection. Private fields/methods receive selectors of the form
 `__ciq_private_LENGTH_CLASSKEY_MEMBER`, where CLASSKEY is the existing escaped
 canonical class key. Unit-local lowering binds each access using its exact
 receiver class; source operation names and CODE labels remain unchanged.
-Private constructors use the same binding for their `initialize` lookup.
+Explicit receiver method calls retain ordinary selectors, including where
+checking selected an own private declaration. Bare/self and class-qualified
+private calls retain their declaring selector. Contracts and runtime binding
+therefore remain separate. Private constructors use the same binding for their `initialize` lookup.
 Ordinary Symbol literals and reflection retain their ordinary selector IDs.
 No binding pass or origin replay is needed for a class without private members.
 
@@ -725,9 +728,10 @@ hooks; Null or unmaterialized heap-backed defaults retain their SDK behavior.
 
 Inherited calls use ordinary self/object member lookup and `invokem`; class DATA
 parent links provide runtime dispatch. No copied ancestor body, manual dispatch
-branch, or new VM opcode is needed. Private references bind to the selected
+branch, or new VM opcode is needed. Private self calls bind to the selected
 method's declaring-class selector, so a child helper cannot capture a parent's
-private call. Semantic IR retains the receiver's static bound for checking;
+private call. Explicit receiver calls retain ordinary selectors and VM access
+scope, preserving public ancestor slots behind private/protected children. Semantic IR retains the receiver's static bound for checking;
 it does not replace a virtual call with a direct parent CODE address.
 
 

@@ -507,6 +507,50 @@ reads and the Null result of `classExpr()`. They supersede the compiler's
 previous blanket rejection: preserving the metadata and ordinary `getsv`
 operation reproduces the SDK behavior without manufacturing an instance value.
 
+## Method access shadowing
+
+**Observed, 2026-11-08:** SDK/simulator 9.2.0, `fr265`, minimum API 3.0.0,
+target API 5.2.0, `-O 0`. The
+[method-access specimen](../../examples/compiler-method-access/README.md)
+matches all 16 SDK/generated lines and reconstructs both PRGs through structured
+CODE/DATA. An external explicit receiver retains the public Root method behind
+a protected/private child method. Protected calls within the child invoke its
+body; Root's inherited self call can also dispatch to that protected body.
+A private child self call invokes its mangled selector. Its explicit receiver
+call is checked against the private String signature but invokes the public
+Number method, returning 11. SDK CODE confirms plain `getlocalv ... pick` for
+that explicit call and a scoped private Symbol in the bare self call.
+A separate class with only `private pick() as Number { return 99; }` and
+`through(x as OnlyPrivate) as Number { return x.pick(); }` compiles, but invoking
+`through` raises `Error: Symbol Not Found Error` in both SDK and generated
+programs when no ordinary parent slot exists. SDK CODE still uses the plain `pick` selector. This distinguishes absent
+runtime lookup from a private body's effects.
+
+Acceptance probes used `Root.pick(Number) as Number` and a child
+`pick(String) as String`, varying public/protected/private and instance/static
+modifiers. For each combination, test no call, external Number/String calls,
+instance-body Number/String calls, static-body Number/String calls, and an
+own-class qualified String call: 48 cases. Public/protected redeclarations fail
+override signature checks. Private instance declarations compile independently;
+external calls retain the Number contract, while calls in the private child's
+instance scope use String. A public grandchild skips the private intermediate
+method when inheriting the Root signature. Separate probes confirm the same
+private String contract for an explicit receiver inside its owning class.
+
+The pending static profile differs: a private static child behind an instance
+parent accepts Number in an instance body and String in a static body. Public
+and protected static children still undergo parent signature checks. These are
+checked lookup observations; this batch does not establish their runtime profile.
+
+Method interface witnesses match declarations independently of public access.
+PrivateLeaf satisfies a String-method shape and fails the Number-method shape,
+although ordinary runtime calls reach the public Number slot. A private-only
+String method also satisfies the String shape, and a private `compare(Object,
+Object) as Number` satisfies Lang.Comparator. Protected methods satisfy matching
+method shapes. The specimen's erased calls retain ordinary selectors and return
+11 through both String and Number witnesses. These results concern method
+witnesses; structural field access keeps its separate public/mutable checks.
+
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

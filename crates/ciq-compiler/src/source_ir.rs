@@ -4591,6 +4591,7 @@ pub(crate) struct CallContext {
     pub(crate) constants: std::rc::Rc<BTreeMap<String, crate::constants::Immediate>>,
     pub(crate) unchecked: bool,
     signatures: BTreeMap<(String, String), CallSignature>,
+    pub(crate) method_access: BTreeMap<(String, String), crate::Visibility>,
     pub(crate) class_bases: BTreeMap<String, crate::ClassBase>,
     pub(crate) class_ancestors: BTreeMap<String, Vec<String>>,
     parameter_types: Vec<crate::ParameterType>,
@@ -5335,6 +5336,26 @@ impl CallContext {
             && self.get(&(class.into(), member.into())).is_none()
     }
     fn get(&self, key: &(String, String)) -> Option<&CallSignature> {
+        let class = if key.0 == "self" {
+            self.current_class.as_ref().map(|c| c.name.as_str())
+        } else {
+            Some(key.0.as_str())
+        };
+        if let Some(class) = class.filter(|c| self.class_ancestors.contains_key(*c)) {
+            let caller = self.current_class.as_ref().map(|c| c.name.as_str());
+            if let Some(owner) = crate::inheritance::visible_method(
+                &self.method_access,
+                class,
+                &key.1,
+                caller,
+                self.class_ancestors.get(class).map_or(&[], Vec::as_slice),
+                caller
+                    .and_then(|c| self.class_ancestors.get(c))
+                    .map_or(&[], Vec::as_slice),
+            ) {
+                return self.signatures.get(&(owner.into(), key.1.clone()));
+            }
+        }
         self.signatures.get(key)
     }
 }
