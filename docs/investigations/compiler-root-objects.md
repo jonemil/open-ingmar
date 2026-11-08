@@ -479,6 +479,34 @@ read explicitly until default representation is implemented; ordinary instance
 allocation/access remains supported. Numeric metadata defaults already round
 trip through the same qualified directive.
 
+## Instance field metadata defaults
+
+**Observed, 2026-11-08:** SDK/simulator 9.2.0, `fr265`, minimum API 3.0.0,
+target API 5.2.0, `-O 0`. The
+[field-metadata specimen](../../examples/compiler-field-metadata/README.md)
+matches SDK/generated console output and reconstructs both PRGs with structured
+CODE/DATA. Literal String defaults use type `0x03` DATA references; Float,
+Boolean, and Char defaults use inline `0x02`, `0x09`, and `0x13` payloads.
+Readonly String constants use the same reference with field flag `0x10`.
+An added `classFrozen()` method returning `Defaults.frozen` compiles to
+`getselfv Defaults; getsv frozen`, retaining class lookup even for readonly fields.
+Long/Double literals have type `0x0e`/`0x0f` with zero payloads and allocation
+CODE writes the actual values. Grouped literals, including Number and String,
+have Null metadata and allocation writes. The fixture distinguishes metadata
+reads from instance values and verifies a parent expression overwrites a child's
+literal default without replaying that literal afterward.
+
+Class-qualified heap-backed reads expose a runtime limitation, not a usable
+zero/default value. To reproduce the String case, insert
+`System.println(a.classTextIsNull());` in the specimen after its existing class
+reads. Both SDK and generated programs raise `Error: System Error` in that
+method, even though the String is only compared with Null. Inserting
+`System.println(a.classLong() == 0l);` instead raises `Error: Invalid Value` in
+both programs. These isolated failures differ from the successful instance
+reads and the Null result of `classExpr()`. They supersede the compiler's
+previous blanket rejection: preserving the metadata and ordinary `getsv`
+operation reproduces the SDK behavior without manufacturing an instance value.
+
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

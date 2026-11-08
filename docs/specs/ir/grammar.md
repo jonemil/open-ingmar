@@ -76,7 +76,9 @@ module or a class: `.enum C Kind integer` declares `C.Kind` backed by Number.
 
 ```text
 field-record = field-body newline
-field-body = ".field-constant" identifier call-result-tag
+field-body = ".field-metadata" identifier call-result-tag
+             ("mutable" | "readonly") field-default
+           | ".field-constant" identifier call-result-tag
            | ".field-static-constant" identifier call-result-tag
              (signed-decimal-i32 | "static")
            | ".field-static-variable" identifier call-result-tag
@@ -102,6 +104,21 @@ field-body = ".field-constant" identifier call-result-tag
              ("weak-reference" | "nullable-weak-reference")
            | ".field-byte-array" identifier ("byte-array" | "nullable-byte-array")
 ```
+
+```text
+field-default = "number" signed-decimal-i32
+              | "float" bits32
+              | "boolean" ("true" | "false")
+              | "char" bits32
+              | "string" quoted-string
+              | "symbol" ":" identifier
+              | ("long" | "double") "0"
+```
+
+Char values must be Unicode scalars. String text uses the shared quoted-literal
+escapes, including whitespace and `#`. Long/Double zero payloads require a
+separate allocation assignment; other metadata defaults require none. The
+literal must satisfy its declared field contract independently of mutability.
 
 Dynamic Number/Symbol declarations carry an Any contract with the specified
 metadata default. Typed Number and Symbol declarations retain their fixed

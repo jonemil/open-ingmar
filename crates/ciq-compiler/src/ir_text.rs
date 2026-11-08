@@ -144,6 +144,31 @@ pub fn parse_function_ir_with_api(
     parse_function_ir_context(source, Some(context))
 }
 
+/// Tokenize IR fields with shared quoted-literal and whitespace-only rules.
+pub(crate) fn fields(source: &str, line: &str, offset: usize) -> Result<Vec<String>, Diagnostic> {
+    let mut quoted = false;
+    let mut escaped = false;
+    for (column, c) in line.char_indices() {
+        if escaped {
+            escaped = false;
+        } else if quoted && c == '\\' {
+            escaped = true;
+        } else if c == '"' {
+            quoted = !quoted;
+        } else if !quoted && c == '#' {
+            break;
+        } else if !quoted && c == ',' {
+            return Err(Diagnostic::at(
+                source,
+                offset + column,
+                "IR fields require whitespace separators",
+            ));
+        }
+    }
+    ciq_prg::symbols::source::tokens(line)
+        .map_err(|error| Diagnostic::at(source, offset, error.to_string()))
+}
+
 pub(crate) fn parse_function_ir_context(
     source: &str,
     context: Option<crate::api::ApiContext>,
@@ -151,27 +176,7 @@ pub(crate) fn parse_function_ir_context(
     let mut rows = Vec::new();
     let mut offset = 0;
     for line in source.split_inclusive('\n') {
-        let mut quoted = false;
-        let mut escaped = false;
-        for (column, c) in line.char_indices() {
-            if escaped {
-                escaped = false;
-            } else if quoted && c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                quoted = !quoted;
-            } else if !quoted && c == '#' {
-                break;
-            } else if !quoted && c == ',' {
-                return Err(Diagnostic::at(
-                    source,
-                    offset + column,
-                    "IR fields require whitespace separators",
-                ));
-            }
-        }
-        let fields = ciq_prg::symbols::source::tokens(line)
-            .map_err(|error| Diagnostic::at(source, offset, error.to_string()))?;
+        let fields = fields(source, line, offset)?;
         if !fields.is_empty() {
             rows.push((offset, fields));
         }

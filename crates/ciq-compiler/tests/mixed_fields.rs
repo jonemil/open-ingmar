@@ -95,13 +95,9 @@ fn private_static_binding_keeps_initialization_dependencies() {
 }
 
 #[test]
-fn allocation_backed_class_defaults_are_rejected_until_metadata_matches_sdk() {
+fn class_defaults_preserve_metadata_without_changing_qualified_lookup() {
     let source = r#"class Root{static var slot as Toybox.Lang.Number=11;}class Leaf extends Root{var slot as Toybox.Lang.String="leaf";function read() as Toybox.Lang.String{return Leaf.slot;}}"#;
-    let error = compile_sources(&[source]).unwrap_err().to_string();
-    assert!(
-        error.contains("allocation-backed instance defaults"),
-        "{error}"
-    );
+    common::pipeline(checking::compile_sources(&[source]).unwrap());
     let numeric = "class Root{static var slot as Toybox.Lang.Number=11;}class Leaf extends Root{var slot as Toybox.Lang.Number=22;function read() as Toybox.Lang.Number{return Leaf.slot;}}";
     common::pipeline(checking::compile_sources(&[numeric]).unwrap());
 }

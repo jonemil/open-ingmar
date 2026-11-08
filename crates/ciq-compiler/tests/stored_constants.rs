@@ -7,7 +7,7 @@ fn stored_class_constants_keep_all_binary_and_saved_stages() {
     )])
     .unwrap();
     let text = unit.to_ir_text();
-    assert!(text.contains(".field-constant TEXT string"));
+    assert!(text.contains(".field-metadata TEXT string readonly string"));
     assert!(text.contains("__ciq_initialize_fields"));
     let options = ciq_compiler::application::ConsoleApplication {
         id: 0xe20d80cce2c14eb09170d456824b4281u128.to_be_bytes(),
@@ -33,9 +33,10 @@ fn constant_writes_and_allocation_metadata_are_checked() {
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
-    let unit =
-        compile_sources(&["class C{const X=1;function value() as Toybox.Lang.Number{return X;}}"])
-            .unwrap();
+    let unit = compile_sources(&[
+        "class C{const X=(1);function value() as Toybox.Lang.Number{return X;}}",
+    ])
+    .unwrap();
     let text = unit.to_ir_text();
     let removed = text
         .lines()

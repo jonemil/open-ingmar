@@ -1,0 +1,23 @@
+allocate
+literal
+fixed
+true
+true
+true
+true
+true
+computed
+grouped
+7
+grouped const
+null
+null
+null
+true
+true
+true
+allocate
+changed
+literal
+allocate
+computed

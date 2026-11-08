@@ -2307,9 +2307,10 @@ reads inside the same initializer still use the ordinary body view. Interface
 witnesses use lexical field declarations. Initialization effects follow the
 bound storage/selector, including private static slots behind an instance view.
 
-Class-qualified reads of allocation-backed instance defaults are rejected until
-their SDK metadata representation is supported; current allocation writes alone
-do not establish equivalent class-definition reads.
+Class-qualified reads observe metadata independently of allocation writes.
+A non-null checked contract does not promise a materialized class-definition
+value; Null defaults and String/wide-scalar placeholders retain the
+[frontend runtime behavior](../frontend/README.md#field-lookup-views).
 
 Unit construction validates override contracts and access against the
 [frontend hierarchy profile](../frontend/README.md#source-superclasses).
@@ -2410,10 +2411,20 @@ instead track every exact body as specified above. Field contracts retain these
 same alternatives; explicit union assertions retain their target identities
 without checking runtime compatibility.
 
+`FieldKind::Metadata { value_type, initial, readonly }` retains an instance
+literal default independently of its checked value contract and mutability.
+Saved text uses `.field-metadata name tag mutable|readonly kind value`.
+Number, Float bits, Boolean, Char code points, Symbol names, and String text
+supply literal metadata. Strings bind DATA records symbolically. Long/Double
+kinds accept only a zero payload and require one allocation write with the
+actual value. They are placeholders, not numeric zero defaults. Other metadata
+literals require no allocation assignment. Invalid literals and disjoint
+contracts are rejected in source, typed-unit construction, and saved IR.
+
 `FieldKind::Constant { value_type }` / `.field-constant name tag` retains a
 readonly field binding under an ordinary value contract. DATA starts as Null;
-the reserved instance method `__ciq_initialize_fields` assigns every constant
-exactly once during allocation. It takes no parameters, returns Void, and has no
+the reserved instance method `__ciq_initialize_fields` assigns every field of
+this kind exactly once during allocation. It takes no parameters, returns Void, and has no
 native-base initialization. It may read earlier initialized fields, but cannot
 read incomplete fields, expose an incomplete receiver, or call potentially
 shutting-down bodies while required fields remain incomplete. Ordinary methods, including user `initialize()`,
@@ -2421,7 +2432,8 @@ cannot rebind constants. Container contents remain mutable. Mutable structural
 interface fields require mutable implementation bindings.
 
 The reserved allocation method must exist exactly when allocation writes are
-required by constants, initialized mutable fields, or runtime class enum members.
+required by constants, initialized mutable fields, wide-scalar metadata
+placeholders, or runtime class enum members.
 Unit validation rejects explicit source/IR calls and known-selector Method binding to
 it. Source identifiers cannot use its reserved name. Application generation
 provides an internal DATA method slot for the allocation hook's ordinary call;

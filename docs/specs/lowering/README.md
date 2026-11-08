@@ -711,15 +711,17 @@ call after allocation. Private field references retain declaring-class selectors
 public/protected fields use their ordinary member symbols.
 Shadows preserve those symbols and each declaration's access/readonly metadata;
 ordinary self and explicit receiver lookup supply the runtime distinction.
-Number/Symbol literal defaults remain in DATA, and expression writes remain in
-the declaring allocation hook. A child's literal default is not replayed after
+Literal metadata defaults remain in DATA. String defaults use type `0x03`
+references to named DATA strings; wide-scalar literals retain tagged zero payloads
+and receive their actual values in the declaring allocation hook. Other
+expression writes remain in that hook. A child's literal default is not replayed after
 the parent hook. Static parent-bound field contracts emit no conversion or
 forced lookup in the parent's DATA record.
 Mixed-field contracts use the frontend's receiver-specific view without changing
 these instructions. Own-class qualification keeps class lookup; lexical private
 bindings keep their owning selectors. Neither is rewritten to force a value
-matching its static contract. Allocation-backed instance metadata reads remain
-unsupported until their defaults can be represented faithfully.
+matching its static contract. Class-qualified metadata reads do not run allocation
+hooks; Null or unmaterialized heap-backed defaults retain their SDK behavior.
 
 Inherited calls use ordinary self/object member lookup and `invokem`; class DATA
 parent links provide runtime dispatch. No copied ancestor body, manual dispatch

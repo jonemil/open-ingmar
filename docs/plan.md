@@ -35,10 +35,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Represent SDK instance-field metadata defaults in IR and PRG generation,
-  then enable class-qualified reads of allocation-backed instance defaults.
-  Compare literal String DATA references and constructor-time values; current
-  allocation-only String defaults give different class-definition reads.
 - [ ] Implement SDK-accepted access-level and static/instance method shadowing:
   preserve the parent's public/instance lookup slot when the child declares a
   protected/private or static member with the same name.

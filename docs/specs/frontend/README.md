@@ -902,11 +902,14 @@ source instances, or other supported field values through typed runtime
 expressions. Their inferred contracts follow ordinary field restrictions.
 Array literals receive ordinary Array element contracts so mutation changes
 contents without rebinding a positional field view. A stored alias shares its
-initializer's reference; another instance evaluates its own initializer.
+initializer's reference; runtime expressions run again for each instance, while
+literal defaults are materialized from metadata.
 
-Ordinary class constants use `self.NAME`, a bare owner reference, or a proven source
-instance; `Class.NAME` is rejected. Reads evaluate the receiver once and access
-its actual field. Source-class union alternatives may contain differing values
+Ordinary class constants use `self.NAME`, a bare owner reference, or a proven
+source instance. Outside the declaring class, `Class.NAME` is rejected. Own-class
+qualification inside an instance body follows the
+[field lookup views](#field-lookup-views) and reads metadata. Instance reads
+evaluate the receiver once and access its actual field. Source-class union alternatives may contain differing values
 under compatible field contracts. Readonly fields cannot satisfy mutable
 structural-interface field requirements.
 
@@ -1257,8 +1260,8 @@ literals, calls, and object construction, start as Null and
 execute on every allocation, before user constructor arguments and `initialize()`.
 A later allocation updates the values observed through existing instances and
 class-qualified reads. Calling user `initialize()` directly does not repeat
-these expressions. Ordinary class `const` bindings remain per-instance and reject
-class-qualified reads.
+these expressions. Ordinary class `const` bindings remain per-instance; their
+own-class metadata reads follow the [field lookup views](#field-lookup-views).
 
 Class enum reads retain their inferred anonymous or declared nominal contract,
 including before allocation when the runtime default may be Null. No implicit allocation or
@@ -1945,11 +1948,14 @@ visible readonly descendant shadows of the same storage kind. Static bodies
 retain their declaring contract. Explicit receiver stores use only the receiver's
 instance-view declaration, including when the receiver is a local alias of self.
 
-Own-class qualification of an allocation-backed instance field remains rejected.
-The compiler does not yet represent all SDK class-metadata defaults, so returning
-its current Null metadata would silently differ from SDK behavior. Direct
-Number/Symbol/Null metadata defaults and class-shared qualified fields retain
-the rules above.
+Own-class qualification reads class metadata without allocating an instance or
+running its initializer. Expression defaults can therefore read as Null despite
+a non-null declared contract. String and wide-scalar metadata can expose
+unmaterialized values: SDK 9.2.0 raises System Error for the specimen's String
+read and Invalid Value for numeric use of its Long placeholder. Generation
+preserves those defaults and ordinary class lookup; it does not convert them
+into instance reads or manufacture a value satisfying the checked contract.
+See the [metadata evidence](../../investigations/compiler-root-objects.md#instance-field-metadata-defaults).
 
 Construction accepts Object-rooted chains with default-initialized ancestor
 instance fields and empty public zero-argument ancestor `initialize()` methods.
@@ -2160,8 +2166,8 @@ class. These tags do not authorize a cast or an undeclared property.
 ### Number instance fields
 
 Source classes may declare up to 256 fields. An unannotated Number literal
-provides a metadata default and an Any contract; parentheses around the literal
-are accepted. An explicit Number annotation retains the fixed Number contract.
+provides a metadata default and an Any contract. An explicit Number annotation
+retains the fixed Number contract. Grouped literals use allocation writes instead.
 Other declaration forms follow the
 [initializer rules](#field-declaration-initializers) below. The field-count limit
 defines our subset, not a device memory limit.
@@ -2225,13 +2231,17 @@ source/structural member contracts without assuming that another field read has
 the same value. Initializer evidence does not authorize a forged saved-IR read
 view or a typed mutable interface field.
 
-Number and Symbol literals retain metadata defaults for both dynamic and typed
-slots; a Number literal needs an exact Number annotation for the typed metadata
-form. Permitted Null defaults also use metadata. Other expressions run
-through the reserved allocation initializer for every instance, before user
-`initialize()` and before constructor argument effects. Application instances
-use the same hook. Containers and source objects are constructed afresh for
-each allocation; subsequent aliases retain ordinary reference identity.
+Ungrouped Number, Symbol, Boolean, Char, Float, and String literals retain
+metadata defaults for mutable and readonly instance slots. A default's runtime
+tag is independent of its declared contract; unannotated mutable fields retain
+Any. Permitted Null defaults also use metadata. Long/Double literals retain a
+typed zero payload in metadata and receive their actual values during allocation;
+the zero payload is not a readable numeric zero. Grouped literals and other
+expressions have Null metadata and run through the reserved allocation
+initializer for every instance, before user `initialize()` and before constructor
+argument effects. Application instances use the same hook. Containers and source
+objects are constructed afresh for each allocation; subsequent aliases retain
+ordinary reference identity.
 
 Literal defaults precede runtime expressions; each phase retains declaration
 order across mutable fields, constants, and enum members. The
@@ -2303,8 +2313,8 @@ still produce a type assignable to the field. Operators and native methods
 follow the ordinary scalar rules. Char declarations require API 1.3.0; the other
 scalar classes require 1.0.0. Base classes retain their own availability.
 
-Typed fields start as Null metadata slots. A non-null declaration without an
-initializer requires assignment in `initialize` under the
+Typed fields without declaration defaults start as Null metadata slots. A
+non-null declaration without an initializer requires assignment in `initialize` under the
 [required-field prefix rules](#source-reference-fields). Nullable fields may
 omit a default or use literal `null`. Other expressions follow the
 [declaration initializer rules](#field-declaration-initializers).

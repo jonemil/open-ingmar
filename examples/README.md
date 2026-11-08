@@ -120,6 +120,8 @@ and future Rust toolchain experiments.
 - [compiler-field-shadowing](compiler-field-shadowing/README.md):
   field redeclarations, differing contracts, access changes, readonly shadows,
   and metadata defaults versus allocation expressions.
+- [compiler-field-metadata](compiler-field-metadata/README.md): literal tags,
+  String defaults, allocation placeholders, and class-definition reads.
 - [compiler-mixed-fields](compiler-mixed-fields/README.md):
   instance/static lookup views, own-class qualification, scoped private binding,
   readonly stores, and declaration-based structural witnesses.

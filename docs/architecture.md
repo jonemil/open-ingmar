@@ -145,8 +145,10 @@ The same order determines pre-assignment Null views during type inference and
 body construction; unit validation rechecks those views and summarizes reads
 and owner activation across calls. Shared initializer assignment proofs use CFG
 dataflow, tracking unwritten/written paths independently of physical block order.
-Class declaration expressions retain checked field contracts and an allocation
-initializer; constants are readonly and initialized variables permit later stores.
+Class defaults retain checked field contracts independently of metadata tags.
+Literal instance defaults live in DATA; wide-scalar placeholders and expression
+defaults retain allocation writes. Constants are readonly and initialized
+variables permit later stores.
 Their per-field CFG assignment/readiness proofs reuse the global/module
 initialization checker. Class enums reuse that runtime
 initializer but retain shared slots, literal metadata defaults, and class-qualified

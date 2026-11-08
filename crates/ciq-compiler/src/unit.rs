@@ -773,9 +773,94 @@ impl ScalarFieldType {
     }
 }
 
+/// A literal class-metadata default. Wide scalars have a tagged zero payload,
+/// not a readable numeric value; allocation supplies the actual Long or Double.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FieldDefault {
+    Number(i32),
+    Float(u32),
+    Boolean(bool),
+    Char(u32),
+    String(String),
+    Symbol(String),
+    LongPlaceholder,
+    DoublePlaceholder,
+}
+
+impl FieldDefault {
+    fn value_type(&self) -> ReturnType {
+        match self {
+            Self::Number(_) => ReturnType::Integer,
+            Self::Float(_) => ReturnType::Float,
+            Self::Boolean(_) => ReturnType::Boolean,
+            Self::Char(_) => ReturnType::Char,
+            Self::String(_) => ReturnType::String,
+            Self::Symbol(_) => ReturnType::Symbol,
+            Self::LongPlaceholder => ReturnType::Long,
+            Self::DoublePlaceholder => ReturnType::Double,
+        }
+    }
+    pub(crate) fn allocation_write(&self) -> bool {
+        matches!(self, Self::LongPlaceholder | Self::DoublePlaceholder)
+    }
+    /// Extract the metadata payload from a scalar literal AST. The caller must
+    /// check declaration default eligibility before grouping information is lost.
+    pub(crate) fn literal(expression: &parser::Expression) -> Option<Self> {
+        use parser::ExpressionKind as E;
+        Some(match &expression.kind {
+            E::Integer(n) => Self::Number(*n),
+            E::Float(bits) => Self::Float(*bits),
+            E::Boolean(value) => Self::Boolean(*value),
+            E::Char(value) => Self::Char(*value),
+            E::String(value) => Self::String(value.clone()),
+            E::Symbol(value) => Self::Symbol(value.clone()),
+            E::Long(_) => Self::LongPlaceholder,
+            E::Double(_) => Self::DoublePlaceholder,
+            E::Positive(inner) if matches!(inner.kind, E::Integer(_)) => {
+                return Self::literal(inner);
+            }
+            _ => return None,
+        })
+    }
+    fn text(&self) -> String {
+        match self {
+            Self::Number(n) => format!("number {n}"),
+            Self::Float(bits) => format!("float 0x{bits:08x}"),
+            Self::Boolean(value) => format!("boolean {value}"),
+            Self::Char(value) => format!("char 0x{value:x}"),
+            Self::String(value) => format!("string {value:?}"),
+            Self::Symbol(value) => format!("symbol :{value}"),
+            Self::LongPlaceholder => "long 0".into(),
+            Self::DoublePlaceholder => "double 0".into(),
+        }
+    }
+}
+
+fn parse_field_default(tag: &str, value: &str) -> Option<FieldDefault> {
+    Some(match tag {
+        "number" => FieldDefault::Number(value.parse().ok()?),
+        "float" => FieldDefault::Float(u32::from_str_radix(value.strip_prefix("0x")?, 16).ok()?),
+        "boolean" => FieldDefault::Boolean(value.parse().ok()?),
+        "char" => FieldDefault::Char(u32::from_str_radix(value.strip_prefix("0x")?, 16).ok()?),
+        "string" => FieldDefault::String(value.strip_prefix('"')?.into()),
+        "symbol" => FieldDefault::Symbol(value.strip_prefix(':')?.into()),
+        "long" if value == "0" => FieldDefault::LongPlaceholder,
+        "double" if value == "0" => FieldDefault::DoublePlaceholder,
+        _ => return None,
+    })
+}
+
 /// A supported field's default and initialization requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldKind {
+    /// A literal instance default with an independent declared contract.
+    /// Long/Double placeholders require exactly one allocation assignment;
+    /// other literals are copied from metadata without an allocation write.
+    Metadata {
+        value_type: ReturnType,
+        initial: FieldDefault,
+        readonly: bool,
+    },
     /// A mutable class-shared slot with a checked declared or dynamic contract.
     /// Its default and statics initializer run independently of instance allocation.
     StaticVariable {
@@ -857,6 +942,23 @@ pub enum FieldKind {
 }
 
 impl FieldKind {
+    fn validate_metadata(&self) -> Result<(), String> {
+        if let Self::Metadata {
+            value_type,
+            initial,
+            ..
+        } = self
+        {
+            if Self::value_contract(value_type.clone()).is_none()
+                || !crate::native::accepts(&value_type.api_type(), &initial.value_type().api_type())
+                || matches!(initial, FieldDefault::Char(value) if char::from_u32(*value).is_none())
+                || matches!(initial, FieldDefault::Symbol(name) if !ciq_prg::symbols::source::valid_alias(name))
+            {
+                return Err("metadata default does not satisfy its field contract".into());
+            }
+        }
+        Ok(())
+    }
     /// Whether this member is stored in the class statics record rather than instances.
     pub(crate) fn class_shared(&self) -> bool {
         matches!(
@@ -882,10 +984,16 @@ impl FieldKind {
     pub(crate) fn readonly(&self) -> bool {
         matches!(
             self,
-            Self::Constant { .. } | Self::StaticConstant { .. } | Self::Enum { .. }
+            Self::Constant { .. }
+                | Self::StaticConstant { .. }
+                | Self::Enum { .. }
+                | Self::Metadata { readonly: true, .. }
         )
     }
     fn allocation_write(&self) -> bool {
+        if let Self::Metadata { initial, .. } = self {
+            return initial.allocation_write();
+        }
         matches!(
             self,
             Self::Constant { .. }
@@ -1015,6 +1123,10 @@ impl FieldKind {
     /// Return the literal Symbol name that application binding must resolve.
     pub(crate) fn symbol_default(&self) -> Option<&str> {
         match self {
+            Self::Metadata {
+                initial: FieldDefault::Symbol(name),
+                ..
+            } => Some(name),
             Self::Symbol { initial, .. } => initial.as_deref(),
             Self::DynamicSymbol(name) => Some(name),
             _ => None,
@@ -1033,7 +1145,8 @@ pub struct InstanceField {
 impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
-            FieldKind::StaticVariable { value_type, .. }
+            FieldKind::Metadata { value_type, .. }
+            | FieldKind::StaticVariable { value_type, .. }
             | FieldKind::StaticConstant { value_type, .. }
             | FieldKind::Enum { value_type, .. }
             | FieldKind::Constant { value_type }
@@ -1331,14 +1444,6 @@ impl CompilationUnit {
         static_method: bool,
     ) -> Option<(&ClassDeclaration, &InstanceField)> {
         let own = owner == Owner::Class(class);
-        if own
-            && !static_method
-            && self
-                .field(class, member)
-                .is_some_and(|(_, f)| !f.kind.class_shared() && f.kind.allocation_write())
-        {
-            return None;
-        }
         self.body_field(class, member, own && static_method)
             .filter(|(_, f)| own && !static_method || f.kind.class_shared())
     }
@@ -1763,6 +1868,14 @@ impl CompilationUnit {
         }
         for class in &mut classes {
             for field in &mut class.fields {
+                field
+                    .kind
+                    .validate_metadata()
+                    .map_err(|message| UnitError {
+                        declaration: None,
+                        operation: None,
+                        message,
+                    })?;
                 if let FieldKind::Enum {
                     value_type,
                     initial,
@@ -2069,6 +2182,10 @@ impl CompilationUnit {
             }
             let mut field_names = BTreeSet::new();
             for field in &class.fields {
+                field
+                    .kind
+                    .validate_metadata()
+                    .map_err(|message| fail(Some(at), None, message))?;
                 if let FieldKind::Array { ref element } = field.kind {
                     if crate::ArrayElement::from_api_type(&element.api_type())
                         != Some(element.clone())
@@ -2912,9 +3029,7 @@ impl CompilationUnit {
                     Operation::ClassFieldRead { class, field, .. }
                     | Operation::ClassFieldBegin { class, field, .. } => {
                         let (declaring, _) = self.qualified_field(class, field, owner, function.is_static_method())
-                            .ok_or_else(|| fail(Some(index), Some(operation), if owner == Owner::Class(class) && !function.is_static_method() && self.field(class, field).is_some_and(|(_, f)| !f.kind.class_shared() && f.kind.allocation_write()) {
-                                "class-qualified allocation-backed instance defaults are not supported".into()
-                            } else { "class-qualified field lookup requires an available receiver view".into() }))?;
+                            .ok_or_else(|| fail(Some(index), Some(operation), "class-qualified field lookup requires an available receiver view".into()))?;
                         self.check_field_access(owner, &declaring.name, field)
                             .map_err(|m| fail(Some(index), Some(operation), m))?;
                     }
@@ -4978,6 +5093,17 @@ impl CompilationUnit {
             }
             for field in &class.fields {
                 text.push_str(&match &field.kind {
+                    FieldKind::Metadata {
+                        value_type,
+                        initial,
+                        readonly,
+                    } => format!(
+                        ".field-metadata {} {} {} {}\n",
+                        field.name,
+                        crate::type_text::result_tag(value_type),
+                        if *readonly { "readonly" } else { "mutable" },
+                        initial.text()
+                    ),
                     FieldKind::StaticVariable {
                         value_type,
                         initial,
@@ -5321,6 +5447,16 @@ pub(crate) fn compile_sources_mapped(
                             value_type: result,
                             initial,
                         }
+                    } else if let Some(initial) = declaration
+                        .literal_default
+                        .then(|| FieldDefault::literal(&declaration.initializer))
+                        .flatten()
+                    {
+                        FieldKind::Metadata {
+                            value_type: result,
+                            initial,
+                            readonly: !declaration.mutable,
+                        }
                     } else if declaration.mutable {
                         FieldKind::Initialized { value_type: result }
                     } else {
@@ -5330,6 +5466,14 @@ pub(crate) fn compile_sources_mapped(
             }
             for index in order {
                 let declaration = &class.bindings[index];
+                if !declaration.static_binding
+                    && !declaration.enumeration
+                    && declaration.literal_default
+                    && FieldDefault::literal(&declaration.initializer)
+                        .is_some_and(|initial| !initial.allocation_write())
+                {
+                    continue;
+                }
                 let target = if declaration.static_binding
                     || (declaration.enumeration && declaration.literal_default)
                 {
@@ -6220,7 +6364,11 @@ fn parse_unit_ir_context(
                 let mut instance_fields = Vec::new();
                 let mut ended = false;
                 while let Some(&(method_at, line)) = rows.get(i) {
-                    let parts = fields(line);
+                    let parts = if line.split_whitespace().next() == Some(".field-metadata") {
+                        crate::ir_text::fields(text, line, method_at)?
+                    } else {
+                        fields(line)
+                    };
                     if parts.is_empty() {
                         i += 1;
                         continue;
@@ -6248,6 +6396,7 @@ fn parse_unit_ir_context(
                         matches!(
                             part.as_str(),
                             ".field-enum"
+                                | ".field-metadata"
                                 | ".field-constant"
                                 | ".field-initialized"
                                 | ".field-value"
@@ -6270,6 +6419,7 @@ fn parse_unit_ir_context(
                         )
                     }) {
                         if (parts.len() != 3
+                            && !(parts[0] == ".field-metadata" && parts.len() == 6)
                             && !(matches!(
                                 parts[0].as_str(),
                                 ".field-symbol"
@@ -6286,7 +6436,41 @@ fn parse_unit_ir_context(
                                 "expected a three-part field declaration before methods, at most 256 fields",
                             ));
                         }
-                        let kind = if matches!(
+                        let kind = if parts[0] == ".field-metadata" {
+                            if parts.len() != 6 {
+                                return Err(Diagnostic::at(
+                                    text,
+                                    method_at,
+                                    "expected field metadata contract, mutability, type, and value",
+                                ));
+                            }
+                            let value_type = crate::type_text::call_result(&parts[2])
+                                .map_err(|e| Diagnostic::at(text, method_at, e))?;
+                            let readonly = match parts[3].as_str() {
+                                "readonly" => true,
+                                "mutable" => false,
+                                _ => {
+                                    return Err(Diagnostic::at(
+                                        text,
+                                        method_at,
+                                        "invalid metadata mutability",
+                                    ));
+                                }
+                            };
+                            let initial =
+                                parse_field_default(&parts[4], &parts[5]).ok_or_else(|| {
+                                    Diagnostic::at(
+                                        text,
+                                        method_at,
+                                        "invalid field metadata literal",
+                                    )
+                                })?;
+                            FieldKind::Metadata {
+                                value_type,
+                                initial,
+                                readonly,
+                            }
+                        } else if matches!(
                             parts[0].as_str(),
                             ".field-enum" | ".field-static-constant" | ".field-static-variable"
                         ) {

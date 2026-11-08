@@ -9,7 +9,7 @@ fn declaration_initializers_preserve_types_owners_and_complete_pipeline() {
     ];
     let unit = compile_sources(&sources).unwrap();
     let text = unit.to_ir_text();
-    assert!(text.contains(".field-initialized text any"));
+    assert!(text.contains(".field-metadata text any mutable string"));
     assert!(text.contains(".field-initialized items number-array"));
     common::application(
         &unit,
@@ -20,14 +20,17 @@ fn declaration_initializers_preserve_types_owners_and_complete_pipeline() {
     );
     common::pipeline(compile_sources(&[sources[1], sources[0]]).unwrap());
     for bad in [
-        text.replace(".field-initialized text any", ".field-constant text any"),
+        text.replace(
+            ".field-metadata text any mutable",
+            ".field-metadata text any readonly",
+        ),
         text.replace(
             ".field-initialized items number-array",
             ".field-initialized items string",
         ),
-        text.replace(".field-initialized text any\n", ""),
+        text.replace(".field-metadata text any mutable string \"field\"\n", ""),
         text.lines()
-            .filter(|line| !line.starts_with(".assign-self text "))
+            .filter(|line| !line.starts_with(".assign-self items "))
             .collect::<Vec<_>>()
             .join("\n"),
     ] {

@@ -73,7 +73,31 @@ fn storage_field(
     unit: &CompilationUnit,
     class: &str,
 ) -> FieldDeclaration {
+    if let crate::FieldKind::Metadata { initial, .. } = &declaration.kind {
+        use crate::FieldDefault as D;
+        let (kind, value) = match initial {
+            D::Number(n) => (1, Reference::Raw(*n as u32)),
+            D::Float(bits) => (2, Reference::Raw(*bits)),
+            D::String(_) => (
+                3,
+                Reference::String(field_string_alias(class, &declaration.name)),
+            ),
+            D::Symbol(name) => (8, Reference::Raw(ids[name])),
+            D::Boolean(value) => (9, Reference::Raw(u32::from(*value))),
+            D::LongPlaceholder => (14, Reference::Raw(0)),
+            D::DoublePlaceholder => (15, Reference::Raw(0)),
+            D::Char(value) => (19, Reference::Raw(*value)),
+        };
+        return field(
+            ids[&unit.member_symbol(class, &declaration.name)],
+            (if declaration.kind.readonly() { 0x10 } else { 0 })
+                | unit.member_visibility(class, &declaration.name).flags(),
+            kind,
+            value,
+        );
+    }
     let (kind, value) = match &declaration.kind {
+        crate::FieldKind::Metadata { .. } => unreachable!(),
         crate::FieldKind::StaticVariable {
             initial: crate::ClassFieldInitialization::Number(n),
             ..
@@ -126,6 +150,14 @@ fn storage_field(
         } | unit.member_visibility(class, &declaration.name).flags(),
         kind,
         Reference::Raw(value),
+    )
+}
+fn field_string_alias(class: &str, field: &str) -> String {
+    format!(
+        "__ciq_field_string_{}_{}_{}",
+        class.len(),
+        crate::names::module_key(class),
+        field
     )
 }
 fn method(id: u32, flags: u8, label: &str) -> FieldDeclaration {
@@ -1036,6 +1068,23 @@ pub fn build_console_application(
         f.value = Reference::Raw(positions[&alias]);
     }
     let mut fragments = classes.into_iter().map(Fragment::Class).collect::<Vec<_>>();
+    fragments.extend(unit.classes().iter().flat_map(|class| {
+        class.fields.iter().filter_map(|field| {
+            if let crate::FieldKind::Metadata {
+                initial: crate::FieldDefault::String(value),
+                ..
+            } = &field.kind
+            {
+                Some(Fragment::String(data::StringDeclaration {
+                    alias: field_string_alias(&class.name, &field.name),
+                    value: value.clone(),
+                    at: None,
+                }))
+            } else {
+                None
+            }
+        })
+    }));
     fragments.extend(assembly.items().iter().filter_map(|i| match i {
         Item::String(s) => Some(Fragment::String(s.clone())),
         Item::Array(a) => Some(Fragment::Array(a.clone())),

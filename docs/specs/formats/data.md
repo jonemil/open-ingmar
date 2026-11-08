@@ -200,6 +200,23 @@ readonly Number constant uses `0x10`. These observations constrain generated
 metadata; they do not define every possible flag combination. See the
 [visibility evidence](../../investigations/compiler-root-objects.md#member-visibility).
 
+Instance literal defaults observed with SDK 9.2.0 use these field tags:
+
+| Tag | Payload |
+|---|---|
+| `0x01` | Number bits |
+| `0x02` | Float bits |
+| `0x03` | DATA String record reference |
+| `0x08` | Symbol ID |
+| `0x09` | Boolean zero/one |
+| `0x13` | Char Unicode scalar |
+| `0x0e`, `0x0f` | Long/Double zero placeholder; allocation CODE supplies the value |
+
+Grouped literals and expression defaults use Null (`0x00`, zero payload).
+These are metadata defaults, not a complete VM value representation: a
+class-qualified read need not materialize the value as allocation does. See the
+[metadata evidence](../../investigations/compiler-root-objects.md#instance-field-metadata-defaults).
+
 Type `0x06` identifies a method. An observed value with high byte `0x10`
 identifies ordinary CODE, with its lower 24 bits as the code offset. When the
 unique ordinary CODE section can be fully decoded, the listing checks whether

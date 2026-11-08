@@ -4672,7 +4672,31 @@ pub(crate) fn declarations<'a>(
                 if parser.peek()? == Kind::Word("var") {
                     for mut binding in parser.constant_declarations()? {
                         visibility.push((binding.name.clone(), access));
-                        let kind = if !binding.has_initializer {
+                        let literal =
+                            crate::FieldDefault::literal(&binding.initializer).filter(|initial| {
+                                !initial.allocation_write()
+                                    && !matches!(
+                                        initial,
+                                        crate::FieldDefault::Number(_)
+                                            | crate::FieldDefault::Symbol(_)
+                                    )
+                            });
+                        let kind = if binding.has_initializer && !binding.literal_default {
+                            if binding.annotation.is_none() {
+                                binding.annotation = Some(crate::ReturnType::Any);
+                            }
+                            None
+                        } else if binding.has_initializer && literal.is_some() {
+                            let initial = literal.unwrap();
+                            Some(crate::FieldKind::Metadata {
+                                value_type: binding
+                                    .annotation
+                                    .clone()
+                                    .unwrap_or(crate::ReturnType::Any),
+                                initial,
+                                readonly: false,
+                            })
+                        } else if !binding.has_initializer {
                             Some(
                                 crate::FieldKind::from_result(
                                     binding.annotation.clone().unwrap_or(crate::ReturnType::Any),

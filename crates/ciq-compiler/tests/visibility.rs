@@ -53,7 +53,7 @@ fn access_metadata_survives_all_saved_stages_and_prg_generation() {
     assert_eq!(
         fields
             .iter()
-            .filter(|f| f.key & 0xff == 0x10 && f.kind == 0)
+            .filter(|f| f.key & 0xff == 0x10 && f.kind == 1)
             .count(),
         1
     );

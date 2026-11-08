@@ -25,8 +25,10 @@ fn shadows_preserve_static_contracts_and_complete_saved_application() {
     );
     assert_eq!(
         class("TypedLeaf").fields[0].kind,
-        ciq_compiler::FieldKind::Initialized {
-            value_type: ciq_compiler::ReturnType::String
+        ciq_compiler::FieldKind::Metadata {
+            value_type: ciq_compiler::ReturnType::String,
+            initial: ciq_compiler::FieldDefault::String("leaf".into()),
+            readonly: false,
         }
     );
     assert_eq!(
