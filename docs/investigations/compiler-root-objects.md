@@ -551,6 +551,39 @@ method shapes. The specimen's erased calls retain ordinary selectors and return
 11 through both String and Number witnesses. These results concern method
 witnesses; structural field access keeps its separate public/mutable checks.
 
+## Static and instance method redeclarations
+
+**Observed, 2026-11-13:** SDK/simulator 9.2.0, `fr265`, minimum API 3.0.0,
+target API 5.2.0, `-O 0`. The
+[static-method specimen](../../examples/compiler-static-method-shadowing/README.md)
+matches all 19 SDK/generated lines and reconstructs both PRGs with structured
+CODE/DATA. Instance calls retain Root's instance method behind a static child.
+An own private static selector can still execute behind an instance-checked
+Number signature, returning String. Own-class qualification retains that class
+lookup. External `StaticLeaf.pick(0)` and `PrivateLeaf.pick(0)` fail SDK checking
+because the instance view selects an instance method, despite the static child.
+
+A separate declaration probe confirms that a static parent imposes no override
+signature on static or instance children: `SharedRoot.pick(Number) as Number`
+accepts either child `pick(String) as String`. By contrast, a nonprivate static
+child behind an instance parent must retain the instance signature. With
+Root.instance(Number), Middle.static(Number), and Leaf.instance(String), the
+SDK accepts all three: the nearest static ancestor stops older override checks.
+Private child signatures remain independent. These observations extend the
+previous access-shadowing probes; they are not inferred from field behavior.
+
+Initialization markers keep ordinary instance methods cold behind static
+children. The private static self call activates its statics; class-qualified
+calls do likewise. Allocating InstanceLeaf activates SharedRoot's statics through
+the source-parent allocation hook, producing 300 before its instance calls.
+The compiler's effect summaries therefore include source-parent static hooks.
+
+Add `System.println(SharedLeaf.forward());` before exit to reproduce the inherited
+static limitation: both SDK and generated programs report
+`Error: Symbol Not Found Error` for `pick`, even though SharedLeaf declares it. The ordinary hidden
+receiver and lookup instructions are preserved; no parent-qualified workaround
+or artificial value conversion is inserted.
+
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

@@ -115,8 +115,9 @@ the existing instance-field IR and reuse its validation and VM lowering.
 visibility before source contract inference. Unit/saved-IR validation reuses that
 projection. Selector binding and initialization effects remain separate from
 checking a field's receiver-specific contract. The same module owns caller-aware
-method declaration selection for source and saved-unit validation. Method effect
-summaries follow emitted self/explicit lookup independently of checked signatures;
+method declaration selection for source and saved-unit validation, with shared
+access/receiver-kind descriptors and lexical versus instance views. Method effect
+summaries follow emitted self/explicit/qualified lookup independently of checked signatures;
 private declarations and ordinary runtime selectors need not select the same body.
 
 Shared `Declarations` collect typedef and binding environments across files.

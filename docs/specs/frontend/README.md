@@ -955,9 +955,10 @@ forbidden after initialization; referenced container contents remain mutable.
 read the same slot. Canonical/root-qualified class paths and source module
 aliases retain ordinary lookup and shadowing rules. Class-qualified reads do
 not allocate an instance. Reading the class value alone does not initialize
-statics. First shared-member access initializes them once. Merely allocating an
-instance does not; instance field expressions or `initialize()` can themselves
-access shared members and thereby activate statics.
+statics. First shared-member access initializes them once. Allocating an instance
+does not by itself run its own statics initializer. Field expressions,
+source-parent allocation hooks, or `initialize()` can access shared members and
+activate statics under the [inherited lookup rules](#inherited-static-members).
 
 Direct Number literals use metadata defaults. Other initializers run in the
 class statics hook: literal-default expressions precede runtime expressions,
@@ -1095,16 +1096,18 @@ Static fields, constants, class enum members, and methods participate in source
 superclass lookup, excluding private ancestor declarations. Access and contracts
 come from the selected declaration; class-qualified operations retain the
 requested subclass rather than rewriting it to that declaration's owner.
-Static-field redeclarations follow the [shadowing rules](#static-field-redeclarations);
-static-method overrides remain unsupported.
+Static-field redeclarations follow the [shadowing rules](#static-field-redeclarations).
+Method redeclarations use the [method lookup rules](#method-lookup-and-access),
+including independent signature families behind static parents.
 
 Each class with own or inherited statics has a separate static receiver record,
 even if it declares no own static members. The record contains only that class's
 own storage and methods. Inherited class-qualified field reads resolve the
 parent-owned slot; containers in that slot are shared. Lookup may initialize
 each visited class's statics, starting at the requested subclass. Each hook
-runs once. Object-rooted subclass allocation can include ancestor static storage
-without initializing it merely because an instance was allocated.
+runs once. Instance allocation leaves its own statics cold unless an allocation
+body accesses them. Resolving a source parent's allocation hook can activate
+that parent's statics before the child's instance defaults run.
 
 An inherited static method receives the requested subclass's static receiver on
 a class call, or the supplied instance on an instance call. Its declaring-class
@@ -1895,27 +1898,44 @@ test preserves a known more-derived bound.
 
 #### Method lookup and access
 
-Method checking selects the closest declaration accessible from the caller's
-class scope. An external caller can retain a public parent slot behind a
-protected/private child declaration. Within the child, bare/self calls and
-explicit receiver calls select its accessible declaration. Private ancestor
-methods are not inherited. If no accessible method exists, a hidden declaration
-still produces an access error rather than falling back to an unrelated name.
+Within source hierarchies, method checking applies the caller's access and
+receiver view. Private ancestors are excluded; public parent slots can remain
+accessible behind less-visible child declarations. If no accessible method
+exists, a hidden declaration produces an access error rather than falling back
+to an unrelated name.
 
-A nonprivate instance override inherits each omitted parameter/result annotation
-from the nearest nonprivate ancestor, including across access changes and private
-intermediate declarations. Arity and decorated contracts must match; an Any
-ancestor slot permits a more specific annotation. A private child declaration has
-an independent signature and selector. Static/instance shadowing and static
-redeclarations remain unsupported.
+| Access | Checked method view |
+|---|---|
+| Explicit instance call | Closest accessible instance method, else closest accessible static method |
+| Bare/self call in an instance body | Instance view of the declaring class |
+| Bare/self call in a static body | Closest accessible declaration, which must be static |
+| Own-class qualification | Current body view; runtime lookup must select a static method |
+| Other-class qualification | Instance view, which must select a static method |
+| Interface witness | Closest declaration's signature, independently of access and receiver kind |
+
+A nonprivate child declaration inherits omitted annotations and must match the
+closest nonprivate ancestor's decorated signature when that ancestor is an
+instance method. This applies even when the child is static. An Any ancestor
+slot permits a more specific annotation. A static ancestor starts an independent
+signature family for either child receiver kind; a private child is independent
+too. A static intermediate declaration therefore stops inheritance of an older
+instance signature. Missing annotations resolve before body checking.
 
 Bodies remain owned by their declaring class. Bare/self calls bind an own
-private selector; ordinary self lookup can dispatch to public/protected
-implementations on descendants. Explicit receiver calls keep an ordinary selector:
+private selector, including a private static declaration behind an instance
+contract. Ordinary instance self lookup prefers instance implementations; static
+bodies retain their static receiver category. Explicit receiver calls keep an ordinary selector:
 protected implementations require the caller's protected scope, and private
 methods are not selected at runtime. Thus a private String-checked explicit call
 can invoke a public parent method returning Number. This is preserved SDK lookup,
 not a conversion or a runtime type guarantee.
+
+Class qualification retains class lookup and its initialization effects. In an
+instance body, `PrivateLeaf.pick()` may have the inherited Number contract but
+invoke the child's private static String method. External class qualification
+of that name is rejected because the checked instance view still selects an
+instance method. General class-qualified instance calls remain unsupported.
+See the [static method specimen](../../../examples/compiler-static-method-shadowing/README.md).
 
 Structural and native interface witnesses use the nearest method declaration's
 signature, including private/protected declarations. Signature matching does not

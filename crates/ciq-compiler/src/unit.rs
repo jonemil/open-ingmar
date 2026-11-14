@@ -34,6 +34,13 @@ enum Owner<'a> {
     Module(&'a str),
     Class(&'a str),
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MethodReceiver {
+    Value,
+    InstanceSelf,
+    StaticSelf,
+}
+
 impl<'a> Owner<'a> {
     fn name(self) -> &'a str {
         match self {
@@ -69,6 +76,7 @@ fn source_bindings<'a>(
     unit: &'a CompilationUnit,
     owner: Owner<'a>,
     operation: &'a Operation,
+    function: &Function,
 ) -> Vec<(Owner<'a>, &'a str)> {
     let caller = match owner {
         Owner::Class(c) => Some(c),
@@ -91,7 +99,11 @@ fn source_bindings<'a>(
     raw.into_iter()
         .map(|(owner, member)| match owner {
             Owner::Class(class) => unit
-                .visible_method(class, member, caller)
+                .method_view(class, member, caller, if function.is_static_method()
+                    && (matches!(operation, Operation::SelfCall { .. } | Operation::SelfCallStatement { .. })
+                        || matches!(operation, Operation::ClassCall { class, .. } | Operation::ClassCallStatement { class, .. } if caller == Some(class.as_str()))) {
+                    crate::inheritance::MethodView::Lexical
+                } else { crate::inheritance::MethodView::Instance })
                 .map_or((owner, member), |(c, f)| {
                     (Owner::Class(c.name.as_str()), f.name())
                 }),
@@ -106,8 +118,25 @@ fn source_callees<'a>(
     unit: &'a CompilationUnit,
     owner: Owner<'a>,
     operation: &'a Operation,
+    function: &Function,
 ) -> Vec<(Owner<'a>, &'a str)> {
-    let bindings = source_bindings(unit, owner, operation);
+    if let Operation::ClassCall { class, member, .. }
+    | Operation::ClassCallStatement { class, member, .. } = operation
+    {
+        return unit
+            .method_view(
+                class,
+                member,
+                match owner {
+                    Owner::Class(c) => Some(c),
+                    _ => None,
+                },
+                crate::inheritance::MethodView::Lexical,
+            )
+            .map(|(c, f)| vec![(Owner::Class(c.name.as_str()), f.name())])
+            .unwrap_or_default();
+    }
+    let bindings = source_bindings(unit, owner, operation, function);
     let bounds = match operation {
         Operation::ObjectCall { classes, .. } | Operation::ObjectCallStatement { classes, .. } => {
             classes.iter().map(String::as_str).collect::<Vec<_>>()
@@ -125,10 +154,13 @@ fn source_callees<'a>(
         operation,
         Operation::ObjectCall { .. } | Operation::ObjectCallStatement { .. }
     );
-    let mut targets = if explicit {
-        BTreeSet::new()
+    let mut targets = BTreeSet::new();
+    let receiver = if explicit {
+        MethodReceiver::Value
+    } else if function.is_static_method() {
+        MethodReceiver::StaticSelf
     } else {
-        bindings.iter().copied().collect::<BTreeSet<_>>()
+        MethodReceiver::InstanceSelf
     };
     for bound in bounds {
         let member = match operation {
@@ -146,7 +178,7 @@ fn source_callees<'a>(
                     Owner::Class(c) => Some(c),
                     _ => None,
                 },
-                !explicit,
+                receiver,
             )
             .into_iter()
             .map(|(class, method)| (Owner::Class(class.name.as_str()), method.name())),
@@ -164,7 +196,7 @@ fn activation_callees<'a>(
     function: &'a Function,
     bodies: &[(Owner<'a>, &'a Function)],
 ) -> Vec<(Owner<'a>, &'a str)> {
-    let mut calls = effect_callees(unit, owner, operation);
+    let mut calls = effect_callees(unit, owner, operation, function);
     if let Some((class, _)) = class_store(operation, function) {
         if owner != Owner::Class(class) {
             calls.push((Owner::Class(class), STATIC_INITIALIZER));
@@ -214,8 +246,30 @@ fn activation_callees<'a>(
         } => {
             for class in classes {
                 if unit
-                    .method(class, member)
-                    .is_some_and(|(_, f)| f.is_static_method())
+                    .runtime_methods(
+                        class,
+                        member,
+                        match owner {
+                            Owner::Class(c) => Some(c),
+                            _ => None,
+                        },
+                        MethodReceiver::Value,
+                    )
+                    .iter()
+                    .any(|(_, f)| f.is_static_method())
+                {
+                    static_targets.extend(unit.static_lookup(class, member, true));
+                }
+            }
+        }
+        Operation::SelfCall { member, .. } | Operation::SelfCallStatement { member, .. }
+            if !function.is_static_method() =>
+        {
+            if let Owner::Class(class) = owner {
+                if unit
+                    .runtime_methods(class, member, Some(class), MethodReceiver::InstanceSelf)
+                    .iter()
+                    .any(|(_, f)| f.is_static_method())
                 {
                     static_targets.extend(unit.static_lookup(class, member, true));
                 }
@@ -384,17 +438,18 @@ fn effect_callees<'a>(
     unit: &'a CompilationUnit,
     owner: Owner<'a>,
     operation: &'a Operation,
+    function: &Function,
 ) -> Vec<(Owner<'a>, &'a str)> {
-    let mut calls = source_callees(unit, owner, operation);
+    let mut calls = source_callees(unit, owner, operation, function);
     if let Operation::SourceBegin { class, .. } | Operation::SourceNew { class, .. } = operation {
         calls.push((Owner::Class(class), FIELD_INITIALIZER));
         if let Some(identity) = unit.member_index.classes.get(class) {
-            calls.extend(
-                identity
-                    .ancestors
-                    .iter()
-                    .map(|parent| (Owner::Class(parent.as_str()), FIELD_INITIALIZER)),
-            );
+            calls.extend(identity.ancestors.iter().flat_map(|parent| {
+                [
+                    (Owner::Class(parent.as_str()), FIELD_INITIALIZER),
+                    (Owner::Class(parent.as_str()), STATIC_INITIALIZER),
+                ]
+            }));
         }
         calls.push((Owner::Class(class), STATIC_INITIALIZER));
     }
@@ -563,7 +618,7 @@ fn comparator_callees<'a>(
     ) else {
         return Vec::new();
     };
-    unit.runtime_methods(&class, "compare", None, false)
+    unit.runtime_methods(&class, "compare", None, MethodReceiver::Value)
         .into_iter()
         .map(|(c, f)| (Owner::Class(c.name.as_str()), f.name()))
         .collect()
@@ -1349,7 +1404,7 @@ fn class_shared_requirements<'a>(
         for (owner, body) in bodies {
             let summary = reads.get_mut(&(*owner, body.name())).unwrap();
             for op in body.operations() {
-                for callee in effect_callees(unit, *owner, &op.operation)
+                for callee in effect_callees(unit, *owner, &op.operation, body)
                     .into_iter()
                     .chain(activation_callees(
                         unit,
@@ -1543,6 +1598,20 @@ impl CompilationUnit {
         member: &str,
         caller: Option<&str>,
     ) -> Option<(&ClassDeclaration, &Function)> {
+        self.method_view(
+            class,
+            member,
+            caller,
+            crate::inheritance::MethodView::Instance,
+        )
+    }
+    fn method_view(
+        &self,
+        class: &str,
+        member: &str,
+        caller: Option<&str>,
+        view: crate::inheritance::MethodView,
+    ) -> Option<(&ClassDeclaration, &Function)> {
         let hierarchy = &self.member_index.classes;
         let owner = crate::inheritance::visible_method(
             &self.member_index.method_access,
@@ -1553,11 +1622,17 @@ impl CompilationUnit {
             caller
                 .and_then(|c| hierarchy.get(c))
                 .map_or(&[], |c| c.ancestors.as_slice()),
+            view,
         )?;
         self.method(owner, member)
     }
     pub(crate) fn method_symbol(&self, class: &str, member: &str, caller: Option<&str>) -> String {
-        if let Some((owner, _)) = self.visible_method(class, member, caller) {
+        if let Some((owner, _)) = self.method_view(
+            class,
+            member,
+            caller,
+            crate::inheritance::MethodView::Lexical,
+        ) {
             if self.member_visibility(&owner.name, member) == crate::Visibility::Private {
                 return crate::visibility::private_symbol(&owner.name, member);
             }
@@ -1647,13 +1722,16 @@ impl CompilationUnit {
         bound: &str,
         member: &str,
         caller: Option<&str>,
-        self_lookup: bool,
+        receiver: MethodReceiver,
     ) -> Vec<(&ClassDeclaration, &Function)> {
-        if self_lookup {
-            if let Some((class, method)) = self.visible_method(bound, member, caller) {
-                if method.is_static_method()
-                    || self.member_visibility(&class.name, member) == crate::Visibility::Private
-                {
+        if receiver != MethodReceiver::Value {
+            if let Some((class, method)) = self.method_view(
+                bound,
+                member,
+                caller,
+                crate::inheritance::MethodView::Lexical,
+            ) {
+                if self.member_visibility(&class.name, member) == crate::Visibility::Private {
                     return vec![(class, method)];
                 }
             }
@@ -1665,25 +1743,27 @@ impl CompilationUnit {
             .filter(|c| self.is_subclass(&c.name, bound))
         {
             let identity = &self.member_index.classes[&class.name];
-            for owner in std::iter::once(&class.name).chain(&identity.ancestors) {
-                let Some((declaration, method)) =
-                    self.method(owner, member).filter(|(d, _)| d.name == *owner)
-                else {
-                    continue;
-                };
-                let access = self.member_visibility(owner, member);
-                if access == crate::Visibility::Private
-                    || (access == crate::Visibility::Protected
-                        && !self_lookup
-                        && !caller.is_some_and(|c| self.is_subclass(c, owner)))
-                {
-                    continue;
-                }
-                targets.insert((
-                    self.member_index.classes[&declaration.name].name.clone(),
-                    method.name().to_owned(),
-                ));
-                break;
+            let candidates = std::iter::once(&class.name)
+                .chain(&identity.ancestors)
+                .filter_map(|owner| self.method(owner, member).filter(|(d, _)| d.name == *owner))
+                .filter(|(owner, _)| {
+                    let access = self.member_visibility(&owner.name, member);
+                    access != crate::Visibility::Private
+                        && (access != crate::Visibility::Protected
+                            || receiver != MethodReceiver::Value
+                            || caller.is_some_and(|c| self.is_subclass(c, &owner.name)))
+                })
+                .collect::<Vec<_>>();
+            let selected = if receiver == MethodReceiver::StaticSelf {
+                candidates.iter().find(|(_, f)| f.is_static_method())
+            } else {
+                candidates
+                    .iter()
+                    .find(|(_, f)| !f.is_static_method())
+                    .or_else(|| candidates.first())
+            };
+            if let Some((declaration, method)) = selected {
+                targets.insert((declaration.name.clone(), method.name().to_owned()));
             }
         }
         targets
@@ -2437,24 +2517,19 @@ impl CompilationUnit {
                 if method.name() == "initialize" || field_initializer(method.name()) {
                     continue;
                 }
-                if let Some((owner, inherited)) =
-                    self.visible_method(parent, method.name(), Some(&class.name))
-                {
+                if let Some((owner, inherited)) = self.method_view(
+                    parent,
+                    method.name(),
+                    Some(&class.name),
+                    crate::inheritance::MethodView::Lexical,
+                ) {
                     let access = self.member_visibility(&owner.name, inherited.name());
                     if access == crate::Visibility::Private {
                         continue;
                     }
                     if inherited.is_static_method()
-                        || method.is_static_method() != inherited.is_static_method()
-                    {
-                        return Err(fail(
-                            None,
-                            None,
-                            "inherited static/instance method shadowing is not implemented".into(),
-                        ));
-                    }
-                    if self.member_visibility(&class.name, method.name())
-                        == crate::Visibility::Private
+                        || self.member_visibility(&class.name, method.name())
+                            == crate::Visibility::Private
                     {
                         continue;
                     }
@@ -2572,7 +2647,12 @@ impl CompilationUnit {
                             .is_some_and(|(_, f)| f.kind.class_shared()),
                         Operation::SelfCall { member, .. }
                         | Operation::SelfCallStatement { member, .. } => !self
-                            .method(&declaration.name, member)
+                            .method_view(
+                                &declaration.name,
+                                member,
+                                Some(&declaration.name),
+                                crate::inheritance::MethodView::Lexical,
+                            )
                             .is_some_and(|(_, f)| f.is_static_method()),
                         _ => false,
                     };
@@ -2803,7 +2883,7 @@ impl CompilationUnit {
                         if let Operation::ClassFieldRead { class, field, .. } = &located.operation {
                             required.insert(self.static_field_key(class, field));
                         }
-                        for callee in effect_callees(self, owner, &located.operation)
+                        for callee in effect_callees(self, owner, &located.operation, function)
                             .into_iter()
                             .chain(activation_callees(
                                 self,
@@ -3056,7 +3136,7 @@ impl CompilationUnit {
                 .map_err(|message| fail(Some(index), None, message.into()))?;
             for (operation, located) in function.operations().iter().enumerate() {
                 let op = &located.operation;
-                for (target, member) in source_bindings(self, owner, op) {
+                for (target, member) in source_bindings(self, owner, op, function) {
                     if let Owner::Class(class) = target {
                         self.check_member_access(owner, class, member)
                             .map_err(|m| fail(Some(index), Some(operation), m))?;
@@ -4050,17 +4130,29 @@ impl CompilationUnit {
                 if let Operation::ClassCall { class, member, .. }
                 | Operation::ClassCallStatement { class, member, .. } = &located.operation
                 {
-                    if !self
-                        .visible_method(
-                            class,
-                            member,
-                            match owner {
-                                Owner::Class(c) => Some(c),
-                                _ => None,
-                            },
-                        )
-                        .map(|(_, f)| f)
-                        .is_some_and(|f| f.is_static_method())
+                    let caller = match owner {
+                        Owner::Class(c) => Some(c),
+                        _ => None,
+                    };
+                    let selected = self.method_view(
+                        class,
+                        member,
+                        caller,
+                        if caller == Some(class) && function.is_static_method() {
+                            crate::inheritance::MethodView::Lexical
+                        } else {
+                            crate::inheritance::MethodView::Instance
+                        },
+                    );
+                    let runtime = self.method_view(
+                        class,
+                        member,
+                        caller,
+                        crate::inheritance::MethodView::Lexical,
+                    );
+                    if !runtime.is_some_and(|(_, f)| f.is_static_method())
+                        || (caller != Some(class)
+                            && !selected.is_some_and(|(_, f)| f.is_static_method()))
                     {
                         return Err(fail(
                             Some(index),
@@ -4069,7 +4161,7 @@ impl CompilationUnit {
                         ));
                     }
                 }
-                for key in source_bindings(self, owner, &located.operation) {
+                for key in source_bindings(self, owner, &located.operation, function) {
                     if field_initializer(key.1) || key.1.starts_with("__ciq_initialize_shared_") {
                         return Err(fail(
                             Some(index),
@@ -5897,11 +5989,14 @@ fn prepare_sources<'a>(
             for method in &class.methods {
                 calls.method_access.insert(
                     (class.name.clone(), method.name.clone()),
-                    class
-                        .visibility
-                        .iter()
-                        .find(|(name, _)| name == &method.name)
-                        .map_or(crate::Visibility::Public, |(_, v)| *v),
+                    crate::inheritance::MethodSpec {
+                        access: class
+                            .visibility
+                            .iter()
+                            .find(|(name, _)| name == &method.name)
+                            .map_or(crate::Visibility::Public, |(_, v)| *v),
+                        is_static: method.is_static,
+                    },
                 );
             }
             calls.class_bases.insert(class.name.clone(), class.base);

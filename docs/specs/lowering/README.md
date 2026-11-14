@@ -505,6 +505,11 @@ reuse existing VM lookup/invocation instructions and DATA records.
 ### Shared storage
 
 Static method CODE uses the ordinary hidden context and argument convention.
+Mixed method kinds keep ordinary lookup: instance calls use instance precedence,
+static bodies use their static receiver, and qualified calls retain class lookup.
+Private self/qualified selectors bind lexically even when a parent instance
+method supplies the checked contract. No conversion or direct parent call is
+inserted to force the runtime value to match that contract.
 Application metadata places user static methods in the class statics record
 with key low byte `0x50`, excluding them from instance records. A method-only
 class still needs a statics record. A subclass with only inherited statics also
@@ -731,7 +736,8 @@ parent links provide runtime dispatch. No copied ancestor body, manual dispatch
 branch, or new VM opcode is needed. Private self calls bind to the selected
 method's declaring-class selector, so a child helper cannot capture a parent's
 private call. Explicit receiver calls retain ordinary selectors and VM access
-scope, preserving public ancestor slots behind private/protected children. Semantic IR retains the receiver's static bound for checking;
+scope, preserving public ancestor slots behind private/protected children.
+Semantic IR retains the receiver's static bound for checking;
 it does not replace a virtual call with a direct parent CODE address.
 
 

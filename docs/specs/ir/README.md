@@ -2321,14 +2321,19 @@ also supplies Method/interface contracts; effect analysis additionally includes
 possible runtime overrides without cloning inherited bodies.
 
 Method calls keep source names and existing receiver headers. Source and unit
-checking share caller-aware declaration selection: a public ancestor can remain
-accessible behind a less-visible child. Nonprivate overrides retain decorated
-contracts across access changes; private child signatures stay independent.
-Saved IR rechecks access and signature claims against those same declarations.
+checking share caller-aware declaration selection and receiver views. Instance
+checking prefers accessible instance declarations across the source hierarchy;
+static body checking uses the closest accessible declaration. Nonprivate
+redeclared methods inherit decorated contracts only from a closest nonprivate
+instance ancestor. A static ancestor or private child starts a new family.
+Saved IR rechecks access, receiver kind, and signature claims against these rules.
 
-Effect summaries follow emitted lookup separately. Self calls retain private
-bindings or public/protected virtual targets. Explicit receiver calls keep an
-ordinary selector even when their checked contract came from a private method;
+Effect summaries follow emitted lookup separately. Self calls retain lexical
+private bindings, including static bindings behind an instance contract, or
+receiver-specific public/protected targets. Qualified calls follow their runtime
+static body independently of the checked instance signature. Allocation summaries
+include statics activated by source-parent allocation hooks. Explicit receiver
+calls keep an ordinary selector even when their checked contract came from a private method;
 their effects include the actual accessible nonprivate implementations. Method
 witnesses use lexical declaration signatures without a public-visibility filter.
 See [method lookup](../frontend/README.md#method-lookup-and-access).

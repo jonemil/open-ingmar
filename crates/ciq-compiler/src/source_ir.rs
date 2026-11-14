@@ -4591,7 +4591,7 @@ pub(crate) struct CallContext {
     pub(crate) constants: std::rc::Rc<BTreeMap<String, crate::constants::Immediate>>,
     pub(crate) unchecked: bool,
     signatures: BTreeMap<(String, String), CallSignature>,
-    pub(crate) method_access: BTreeMap<(String, String), crate::Visibility>,
+    pub(crate) method_access: BTreeMap<(String, String), crate::inheritance::MethodSpec>,
     pub(crate) class_bases: BTreeMap<String, crate::ClassBase>,
     pub(crate) class_ancestors: BTreeMap<String, Vec<String>>,
     parameter_types: Vec<crate::ParameterType>,
@@ -5319,11 +5319,14 @@ impl CallContext {
         member: &str,
     ) -> crate::source_calls::Targets {
         crate::source_calls::targets(receiver, member, |class| {
-            self.get(&(class.name.clone(), member.into()))
-                .map(|signature| crate::StructuralMethod {
-                    parameters: signature.parameters.clone(),
-                    result: signature.result.clone(),
-                })
+            self.get_view(
+                &(class.name.clone(), member.into()),
+                crate::inheritance::MethodView::Instance,
+            )
+            .map(|signature| crate::StructuralMethod {
+                parameters: signature.parameters.clone(),
+                result: signature.result.clone(),
+            })
         })
     }
     /// Resolve inherited Object members only when the source class has no override.
@@ -5336,6 +5339,21 @@ impl CallContext {
             && self.get(&(class.into(), member.into())).is_none()
     }
     fn get(&self, key: &(String, String)) -> Option<&CallSignature> {
+        let own = key.0 == "self" || self.current_class.as_ref().is_some_and(|c| c.name == key.0);
+        self.get_view(
+            key,
+            if own && self.static_context {
+                crate::inheritance::MethodView::Lexical
+            } else {
+                crate::inheritance::MethodView::Instance
+            },
+        )
+    }
+    fn get_view(
+        &self,
+        key: &(String, String),
+        view: crate::inheritance::MethodView,
+    ) -> Option<&CallSignature> {
         let class = if key.0 == "self" {
             self.current_class.as_ref().map(|c| c.name.as_str())
         } else {
@@ -5352,6 +5370,7 @@ impl CallContext {
                 caller
                     .and_then(|c| self.class_ancestors.get(c))
                     .map_or(&[], Vec::as_slice),
+                view,
             ) {
                 return self.signatures.get(&(owner.into(), key.1.clone()));
             }

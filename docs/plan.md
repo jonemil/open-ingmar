@@ -35,9 +35,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Implement SDK-accepted static/instance method shadowing and static method
-  redeclarations: preserve the parent's instance lookup slot behind a static
-  child method, including private selectors and receiver-specific signatures.
 - [ ] Support class/superclass-qualified instance method and initializer calls,
   including own-class qualification, receiver, argument order, and
   field-initialization effects.

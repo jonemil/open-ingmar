@@ -130,7 +130,7 @@ pub(crate) fn field_views(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MemberIndex {
     pub(crate) methods: BTreeMap<(String, String), (usize, usize)>,
-    pub(crate) method_access: BTreeMap<(String, String), crate::Visibility>,
+    pub(crate) method_access: BTreeMap<(String, String), MethodSpec>,
     pub(crate) fields: BTreeMap<(String, String), (usize, usize)>,
     pub(crate) instance_fields: BTreeMap<(String, String), (usize, usize)>,
     pub(crate) classes: BTreeMap<String, SourceClass>,
@@ -214,7 +214,13 @@ pub(crate) fn member_index(
                 c.methods.iter().map(|m| {
                     let key = (c.name.clone(), m.name().to_owned());
                     let access = visibility.get(&key).copied().unwrap_or_default();
-                    (key, access)
+                    (
+                        key,
+                        MethodSpec {
+                            access,
+                            is_static: m.is_static_method(),
+                        },
+                    )
                 })
             })
             .collect(),
@@ -224,45 +230,66 @@ pub(crate) fn member_index(
     })
 }
 
-/// Select the closest method accessible to the caller, preserving an inherited
-/// public slot behind a less-visible declaration. Private ancestors stay local.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MethodSpec {
+    pub(crate) access: crate::Visibility,
+    pub(crate) is_static: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MethodView {
+    /// Closest accessible declaration, for static bodies and selector binding.
+    Lexical,
+    /// Prefer instance declarations throughout the visible hierarchy.
+    Instance,
+}
+
+/// Select a method contract under the caller's access and receiver view.
+/// Instance views prefer instance declarations across the visible hierarchy;
+/// lexical views select the closest accessible declaration. Private ancestors stay local.
 /// If no candidate is accessible, retain the closest one for access diagnostics.
 pub(crate) fn visible_method<'a>(
-    declarations: &'a BTreeMap<(String, String), crate::Visibility>,
+    declarations: &'a BTreeMap<(String, String), MethodSpec>,
     class: &str,
     member: &str,
     caller: Option<&str>,
     ancestors: &[String],
     caller_ancestors: &[String],
+    view: MethodView,
 ) -> Option<&'a str> {
     use crate::Visibility;
     let mut fallback = None;
+    let mut shared = None;
     for owner in std::iter::once(class).chain(ancestors.iter().map(String::as_str)) {
         if owner != class && (member == "initialize" || crate::unit::field_initializer(member)) {
             continue;
         }
-        let Some(((owner, _), access)) = declarations.get_key_value(&(owner.into(), member.into()))
+        let Some(((owner, _), spec)) = declarations.get_key_value(&(owner.into(), member.into()))
         else {
             continue;
         };
-        if owner != class && *access == Visibility::Private {
+        let access = spec.access;
+        if owner != class && access == Visibility::Private {
             continue;
         }
         fallback.get_or_insert(owner.as_str());
-        if *access == Visibility::Public
+        if access == Visibility::Public
             || caller == Some(owner.as_str())
-            || (*access == Visibility::Protected && caller_ancestors.contains(owner))
+            || (access == Visibility::Protected && caller_ancestors.contains(owner))
         {
-            return Some(owner);
+            if view == MethodView::Lexical || !spec.is_static {
+                return Some(owner);
+            }
+            shared.get_or_insert(owner.as_str());
         }
     }
-    fallback
+    shared.or(fallback)
 }
 
-/// Fill undecorated source overrides from the nearest inherited contract before
-/// compiling bodies. Nonprivate methods retain inherited contracts across access
-/// changes; private declarations create independent signatures and selectors.
-/// Static/instance shadowing remains a separately rejected lookup profile.
+/// Resolve omitted override annotations before compiling source bodies.
+/// The closest nonprivate ancestor constrains a nonprivate declaration only
+/// when that ancestor is an instance method. Static ancestors and private
+/// children start independent signature families.
 pub(crate) fn prepare_overrides(
     sources: &[&str],
     parsed: &mut [crate::parser::ParsedUnit],
@@ -291,13 +318,13 @@ pub(crate) fn prepare_overrides(
                 .find(|(name, _)| name == &method.name)
                 .map_or(Visibility::Public, |(_, v)| *v);
             if method.name != "initialize" && !crate::unit::field_initializer(&method.name) {
-                if let Some((signature, parent_access, is_static)) = types[&class.name]
+                if let Some((signature, _, is_static)) = types[&class.name]
                     .ancestors
                     .iter()
                     .filter_map(|p| declarations.get(&(p.clone(), method.name.clone())))
                     .find(|(_, access, _)| *access != Visibility::Private)
                 {
-                    if *parent_access != Visibility::Private {
+                    if !*is_static && access != Visibility::Private {
                         let fail = |message| crate::SourceDiagnostic {
                             source,
                             diagnostic: crate::Diagnostic::at(
@@ -306,39 +333,30 @@ pub(crate) fn prepare_overrides(
                                 message,
                             ),
                         };
-                        if *is_static || method.is_static != *is_static {
-                            return Err(fail(
-                                "inherited static/instance method shadowing is not implemented",
-                            ));
-                        }
-                        if access != Visibility::Private
-                            && method.parameters.len() != signature.parameters.len()
-                        {
+                        if method.parameters.len() != signature.parameters.len() {
                             return Err(fail("override arity differs from inherited method"));
                         }
-                        if access != Visibility::Private {
-                            for (slot, parent) in
-                                method.parameter_types.iter_mut().zip(&signature.parameters)
-                            {
-                                if let Some(actual) = slot {
-                                    if !override_parameter(actual, parent) {
-                                        return Err(fail(
-                                            "override parameter differs from inherited contract",
-                                        ));
-                                    }
-                                } else {
-                                    *slot = Some(parent.clone());
-                                }
-                            }
-                            if let Some(actual) = &method.result_type {
-                                if !override_result(actual, &signature.result) {
+                        for (slot, parent) in
+                            method.parameter_types.iter_mut().zip(&signature.parameters)
+                        {
+                            if let Some(actual) = slot {
+                                if !override_parameter(actual, parent) {
                                     return Err(fail(
-                                        "override result differs from inherited contract",
+                                        "override parameter differs from inherited contract",
                                     ));
                                 }
                             } else {
-                                method.result_type = Some(signature.result.clone());
+                                *slot = Some(parent.clone());
                             }
+                        }
+                        if let Some(actual) = &method.result_type {
+                            if !override_result(actual, &signature.result) {
+                                return Err(fail(
+                                    "override result differs from inherited contract",
+                                ));
+                            }
+                        } else {
+                            method.result_type = Some(signature.result.clone());
                         }
                     }
                 }
