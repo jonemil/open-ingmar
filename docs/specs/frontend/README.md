@@ -1722,7 +1722,8 @@ View/BehaviorDelegate spellings. An omitted base selects Lang.Object. The
 and member behavior. Supported [field contracts](#instance-fields) and
 [static method dispatch](#static-methods) remain separate. Nested classes are
 unsupported.
-Object-rooted classes may be empty; other classes require at least one method.
+Object-, View-, and BehaviorDelegate-rooted classes may be empty; AppBase classes
+require a supported member.
 Class identities must be unique within their containing namespace; classes
 cannot be reopened. Reject class/module/function/shared-binding collisions in
 the same owner. Different modules may declare classes with the same short name.
@@ -2013,7 +2014,8 @@ preserves those defaults and ordinary class lookup; it does not convert them
 into instance reads or manufacture a value satisfying the checked contract.
 See the [metadata evidence](../../investigations/compiler-root-objects.md#instance-field-metadata-defaults).
 
-Construction accepts Object-rooted chains whose ordinary initializer establishes
+Construction accepts Object-, View-, and BehaviorDelegate-rooted source chains
+whose ordinary initializer establishes
 every required instance field, including ancestor declarations. Ancestor ordinary
 initializers may have bodies, parameters, and any access; allocation does not
 invoke them.
@@ -2026,10 +2028,10 @@ self calls while descendant initialization is unproven. Allocation defaults
 cannot read constructor-required fields, including inherited ones. Ancestor
 static storage is permitted under the inherited-static lookup rules above.
 The allocated class uses its own ordinary initializer, synthesized as empty
-when absent for Object-rooted classes. A parent initializer runs only when
-explicitly called. Source-based View/AppBase/delegate construction remains
-outside this profile. Allocation hooks do not implicitly call a parent's
-`initialize()`.
+when absent for constructible classes. A parent initializer runs only when
+explicitly called. Source AppBase construction remains outside this profile.
+Allocation hooks invoke the source parent hook, or the native hook at the root;
+they do not implicitly call a parent's ordinary `initialize()`.
 
 Constructor readiness follows explicit own/ancestor initializer calls on the
 same object. Direct self assignments discharge the declaring field's requirement;
@@ -2177,12 +2179,20 @@ evidence](../../investigations/compiler-source-signatures.md).
 ### Source initialization
 
 A declared class may supply `function initialize(...)`. It must return Void.
-Object-rooted classes have no native base call; other classes call the native
-base initializer exactly once as their first statement. AppBase initializers
-take no parameters; View/delegate initializers accept the ordinary supported
-parameter contracts and limit. These are subset restrictions, not general
-language rules. Subsequent supported statements may print or call source
-methods. Initialization cannot be selected as the generated onStart entry.
+Object-rooted classes have no native base call. The bounded AppBase profile
+requires exactly one first native base call and no initializer parameters.
+View/delegate initializers accept ordinary supported parameters and need no
+native base call. Matching native calls may be late, repeated, or conditional;
+required-field readiness and the straight-line initialization prefix still
+apply. Initialization cannot be selected as the generated onStart entry.
+
+Object-, View-, and BehaviorDelegate-rooted classes without an initializer gain
+an empty public zero-argument Void initializer. It does not inherit a source
+parent's arity or invoke a native/parent ordinary initializer. Source parents'
+allocation defaults still run, parent before child, through their separate
+allocation hooks. A source child may explicitly invoke an ancestor initializer
+under the ordinary qualified-call and constructor-readiness rules. See the
+[native-constructor specimen](../../../examples/compiler-native-constructors/README.md).
 
 AppBase base calls are `AppBase.initialize()`,
 `Application.AppBase.initialize()`, fully qualified
@@ -2202,13 +2212,12 @@ instance and no explicit arguments/result. It identifies a native superclass,
 not a source callee or executable import index. Lowering selects `getselfv
 AppBase; getsv initialize; invokemz; popv`. The application builder binds native
 aliases and directs the initializer's single DATA method record to source CODE.
-AppBase retains its default initializer when source omits one. Constructed
-source Views require an explicit initializer. Default lifecycle/View bodies are
-used only where source does not supply them.
+AppBase retains its default initializer when source omits one. Default
+lifecycle/View bodies are used only where source does not supply them.
 
 BehaviorDelegate initializers use `BehaviorDelegate.initialize()` or a
-recognized qualified/aliased spelling, following the same native-base-first
-rule.
+recognized qualified/aliased spelling. Like View, these native calls are
+optional within a source initializer and must match the terminal native base.
 
 ## Instance fields
 

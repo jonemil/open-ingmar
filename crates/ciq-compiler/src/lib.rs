@@ -3802,18 +3802,10 @@ impl Function {
                     let ty = base.constructed_type().ok_or_else(|| {
                         fail("native base has no supported source construction profile")
                     })?;
-                    if base == ClassBase::LangObject {
-                        if let Some(context) = context {
-                            context
-                                .check_class(api::core(), base.api_name())
-                                .map_err(|message| fail(&message))?;
-                        }
-                    } else {
-                        native::constructor(
-                            NativeClass::from_name(base.api_name()).unwrap(),
-                            context,
-                        )
-                        .map_err(|message| fail(&message))?;
+                    if let Some(context) = context {
+                        context
+                            .check_class(api::core(), base.api_name())
+                            .map_err(|message| fail(&message))?;
                     }
                     validate_call_arguments(arguments, &types).map_err(fail)?;
                     types.insert(result, ValueType::from_api_type(&ty).unwrap());

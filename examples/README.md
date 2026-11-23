@@ -122,6 +122,8 @@ and future Rust toolchain experiments.
   and metadata defaults versus allocation expressions.
 - [compiler-field-metadata](compiler-field-metadata/README.md): literal tags,
   String defaults, allocation placeholders, and class-definition reads.
+- [compiler-native-constructors](compiler-native-constructors/README.md):
+  View/delegate defaults, source-parent allocation, and optional native base calls.
 - [compiler-ancestor-constructors](compiler-ancestor-constructors/README.md):
   parent constructor assignments, inherited required fields, and virtual-call
   readiness through a three-class chain.

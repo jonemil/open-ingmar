@@ -1995,6 +1995,9 @@ It accepts the usual optional source span. Other base names or additional fields
 are rejected. Function validation requires an instance receiver and preserves
 the call's effect order; unit validation additionally enforces the
 [source initializer contract](../frontend/README.md#source-initialization).
+View/delegate native calls are optional, may repeat, and need not be first.
+AppBase retains its bounded first-call rule. Every call must match the enclosing
+class's terminal native base; ordinary constructor readiness still applies.
 Source, typed, and text paths use the same operation and VM lowering.
 
 ### Comparison interface contracts
@@ -2285,7 +2288,8 @@ source ancestors. `.new-source` carries that same source chain before its
 separate native-base operand; `.begin-source` selects only the named class.
 Allocation, self, casts/tests, signatures, fields, joins, and nested container
 contracts are checked against the same graph. Native/text paths preserve the
-same ancestry. Object-rooted allocation proves required instance fields ready
+same ancestry. Object-, View-, and BehaviorDelegate-rooted allocation proves
+required instance fields ready
 across the source chain, from defaults and ordinary constructor assignments.
 Ancestor ordinary initializers need not be empty or zero-argument: allocation
 never calls them implicitly. Ancestor allocation hooks must not expose the
@@ -2659,16 +2663,25 @@ the private allocation with empty-stack CFG edges. Supported bases are
 required and defines the native value projection: Object, View, or
 BehaviorDelegate. Source class identity remains separate from that projection.
 Construction is order-sensitive. Function validation checks the identifier,
-supported construction profile, and API availability (Object: 1.0.0; native
-View.initialize: 2.1.0; BehaviorDelegate.initialize: 1.0.0). Object has no
+supported construction profile, and native class availability. An explicit
+`.base-initialize` independently checks its method API (View.initialize: 2.1.0;
+BehaviorDelegate.initialize: 1.0.0); a source View with an empty initializer only
+needs the View class, available since 1.0.0. Direct `.new-native` retains its
+native initializer requirement. Object has no
 native base-initialization operation. Unit text records `.class Name
 Lang.Object`; its explicit IR initializer is Void and contains no native
 base call. Unit validation requires the named class's declared base to equal the
-operation's base, with a matching explicit initializer whose parameter contracts
+operation's base, with a matching initializer whose parameter contracts
 match the arguments. A standalone function retains this unresolved declaration
 obligation and cannot supply complete application metadata by itself. AppBase
 construction is reserved for application startup; it is not accepted by this
 operation.
+
+Source collection supplies an empty zero-argument Void initializer when a
+constructible class omits one, including View/delegate source subclasses. Saved
+units contain that ordinary method explicitly; they do not imply inherited arity
+or insert omitted native calls on reload. Source-parent allocation hooks still
+run before child defaults and user arguments.
 
 `.constant` defines a FontDefinition enum value. Validation checks the catalogue
 identity, type, and API level; lowering emits its numeric value 3. It is not an

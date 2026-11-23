@@ -657,6 +657,34 @@ function and module M, with the alias used by subsequent classes. Our parser
 requires file imports before declarations. Visibility in earlier declarations
 and the corresponding `import` ordering remain unverified.
 
+## Native-rooted defaults and source-parent allocation
+
+**Observed, 2026-11-23:** SDK/simulator 9.2.0, `fr265`, minimum API 3.0.0,
+target API 5.2.0, `-O 0`. The
+[native-constructor specimen](../../examples/compiler-native-constructors/README.md)
+matches all 20 SDK/generated lines, with structured CODE/DATA reconstruction.
+Use the minimal-console scaffold and [console checker][check] with its expected
+output.
+
+Empty View/delegate classes and source children receive an empty zero-argument
+ordinary initializer. Parameterized parent bodies do not run implicitly. SDK
+DATA points omitted initializers to `argc 1; return`; source-parent `<init>`
+hooks still execute parent defaults before child defaults and argument effects.
+The specimen distinguishes that allocation chain from explicit parent calls.
+
+For each of View and BehaviorDelegate, separate SDK probes accept an explicit
+empty initializer, a native base call after printing, two consecutive base
+calls, a conditional base call, and a source-parent initializer call without
+a direct native call. The tracked specimen executes those call forms together;
+the separate duplicate-View probe also runs successfully. This removes a former
+subset restriction rather than adding implicit native calls.
+
+Availability follows the existing catalogue distinction between the View class
+(1.0.0) and its ordinary initialize method (2.1.0). Source allocation with an
+empty own initializer needs only the class; an explicit native base call checks
+the method's level. Source/saved-IR tests cover both boundaries. Execution on
+older firmware was not tested; the runtime specimen uses the stated device/API.
+
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md
 [check]: ../../scripts/README.md#console-specimen-check

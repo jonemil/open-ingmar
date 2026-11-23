@@ -3065,14 +3065,16 @@ impl CompilationUnit {
                 if (declaration.base == ClassBase::ApplicationAppBase
                     && function.parameter_count() != 0)
                     || function.return_type() != crate::ReturnType::Void
-                    || (if declaration.base == ClassBase::LangObject {
-                        base_calls != 0
-                    } else {
-                        base_calls != 1 || !first.is_some_and(|op| matches!(op.operation, Operation::NativeBaseInitialize { base } if base == declaration.base))
-                    })
+                    || match declaration.base {
+                        ClassBase::LangObject => base_calls != 0,
+                        ClassBase::ApplicationAppBase => base_calls != 1
+                            || !first.is_some_and(|op| matches!(op.operation, Operation::NativeBaseInitialize { base } if base == declaration.base)),
+                        ClassBase::WatchUiView | ClassBase::WatchUiBehaviorDelegate => function.operations().iter()
+                            .any(|op| matches!(op.operation, Operation::NativeBaseInitialize { base } if base != declaration.base)),
+                    }
                 {
                     return Err(fail(Some(index), None,
-                        "source initialize requires Void; Object has no native base call, other bases require one first; AppBase takes no parameters".into()));
+                        "source initialize requires Void and matching native base calls; Object has none, AppBase requires one first and takes no parameters".into()));
                 }
                 constructors::Proof {
                     unit: self,
@@ -3989,9 +3991,6 @@ impl CompilationUnit {
                 {
                     if let Some(identity) = hierarchy.get(class).filter(|c| !c.ancestors.is_empty())
                     {
-                        if identity.base != ClassBase::LangObject {
-                            return Err(fail(Some(index),Some(operation),"source subclass construction currently requires an Object-rooted chain".into()));
-                        }
                         for ancestor in &identity.ancestors {
                             let parent = self.classes.iter().find(|c| c.name == *ancestor).unwrap();
                             if parent
@@ -5495,7 +5494,7 @@ impl std::error::Error for SourceDiagnostic {}
 /// them in their declaration's native-name environment. Rejects duplicate,
 /// unresolved, cyclic, or unsupported targets, including unused aliases.
 /// Returned IR contains expanded contracts rather than alias declarations.
-/// Supplies an empty zero-argument Void initializer for Object-rooted classes
+/// Supplies an empty zero-argument Void initializer for constructible classes
 /// without one, preserving it as an ordinary method in the returned unit.
 /// All user callees must be present. Rejects empty units and more than 256
 /// functions; existing syntax/type/control-flow bounds apply per function.
@@ -5923,10 +5922,10 @@ fn prepare_sources<'a>(
                 .map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    // Normalize Object's default initializer before collecting signatures, so
+    // Normalize constructible classes' defaults before collecting signatures, so
     // source calls and saved IR use the same ordinary method contract.
     for class in parsed_sources.iter_mut().flat_map(|p| &mut p.classes) {
-        if class.base == ClassBase::LangObject
+        if class.base.constructed_type().is_some()
             && !class.methods.iter().any(|m| m.name == "initialize")
         {
             class.methods.push(parser::ParsedFunction {

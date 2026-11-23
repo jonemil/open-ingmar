@@ -163,6 +163,10 @@ independently of allocation. Application generation gives each statics record
 its containing module as lexical parent and places shared slots there,
 leaving ordinary fields in instance metadata. Source construction uses private allocation/completion
 builders to preserve allocation before user argument effects.
+Source-parent allocation hooks are shared across Object-, View-, and
+BehaviorDelegate-rooted chains; only a root invokes the native allocation hook.
+Constructible classes without ordinary initializers receive an explicit empty
+method before signature collection, keeping source and saved IR consistent.
 
 `unit/constructors.rs` checks straight-line constructor readiness across explicit
 parent calls, sharing the pending declarations of the allocated object. It

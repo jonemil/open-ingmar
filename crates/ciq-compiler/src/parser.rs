@@ -4798,7 +4798,7 @@ pub(crate) fn declarations<'a>(
                 .keys()
                 .any(|key| key.starts_with(&format!("{name}.")));
             if methods.is_empty()
-                && class_base != crate::ClassBase::LangObject
+                && class_base.constructed_type().is_none()
                 && !has_aliases
                 && !has_constants
             {

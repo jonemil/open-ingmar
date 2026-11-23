@@ -548,26 +548,26 @@ pub fn build_console_application(
         .iter()
         .filter(|class| class.base.constructed_type().is_some())
     {
+        if let Some(parent) = &source_class.superclass {
+            items.extend([
+                Item::Label(format!(
+                    "__ciq_ctor_{}",
+                    crate::names::module_key(&source_class.name)
+                )),
+                instruction(
+                    Opcode::Getselfv,
+                    vec![sym(&format!(
+                        "__ciq_class_{}",
+                        crate::names::module_key(parent)
+                    ))],
+                ),
+                instruction(Opcode::Getsv, vec![sym("__ciq_app_init")]),
+                instruction(Opcode::Invokemz, vec![]),
+                instruction(Opcode::Return, vec![]),
+            ]);
+            continue;
+        }
         if source_class.base == crate::ClassBase::LangObject {
-            if let Some(parent) = &source_class.superclass {
-                items.extend([
-                    Item::Label(format!(
-                        "__ciq_ctor_{}",
-                        crate::names::module_key(&source_class.name)
-                    )),
-                    instruction(
-                        Opcode::Getselfv,
-                        vec![sym(&format!(
-                            "__ciq_class_{}",
-                            crate::names::module_key(parent)
-                        ))],
-                    ),
-                    instruction(Opcode::Getsv, vec![sym("__ciq_app_init")]),
-                    instruction(Opcode::Invokemz, vec![]),
-                    instruction(Opcode::Return, vec![]),
-                ]);
-                continue;
-            }
             items.extend([
                 Item::Label(format!(
                     "__ciq_ctor_{}",

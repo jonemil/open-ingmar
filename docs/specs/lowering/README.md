@@ -716,7 +716,7 @@ A source subclass's `extends` header and superclass-valued field refer to the
 direct parent's DATA class alias, with ordinary class relocation. Its terminal
 native projection still governs API checks/imports. VM class tests retain the
 runtime inheritance chain; subtype annotations emit no conversion. Source
-construction follows the bounded Object-rooted ancestor profile in the
+construction follows the bounded source-ancestor profile in the
 [frontend contract](../frontend/README.md#source-superclasses), so no parent
 initialization effects or member layouts are silently omitted.
 

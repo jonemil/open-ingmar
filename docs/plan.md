@@ -35,8 +35,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Establish SDK default/inherited initializer rules for View,
-  BehaviorDelegate, and source subclasses, then implement accepted forms.
 - [ ] Support nested classes and outer-instance construction/member lookup;
   distinguish an explicit outer receiver from captured lexical names.
 - [ ] Implement SDK-valid direct `new Lang.Object()` construction; determine its

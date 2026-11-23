@@ -199,10 +199,12 @@ fn single_function_source_cannot_guess_an_unresolved_class_base() {
 }
 
 #[test]
-fn default_object_initializers_are_explicit_in_ir_and_keep_field_requirements() {
+fn default_source_initializers_are_explicit_in_ir_and_keep_field_requirements() {
     for declaration in [
         "class C {}",
         "class C extends Toybox.Lang.Object {}",
+        "class C extends Toybox.WatchUi.View {}",
+        "class C extends Toybox.WatchUi.BehaviorDelegate {}",
         "class C { var n=7; var text as Toybox.Lang.String or Null; function value() as Toybox.Lang.Number {return self.n;} }",
     ] {
         let source = format!("{declaration} function f() as C {{return new C();}}");
@@ -239,7 +241,6 @@ fn default_object_initializers_are_explicit_in_ir_and_keep_field_requirements() 
         "class C {var text as Toybox.Lang.String;}",
         "class C {var target as C;}",
         "class C {var initialize=1;}",
-        "class C extends Toybox.WatchUi.View {function value() as Toybox.Lang.Number {return 1;}} function f() as Toybox.WatchUi.View {return new C();}",
         "module Empty {}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");

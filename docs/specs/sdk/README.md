@@ -316,12 +316,13 @@ initializer; contextual empty Array arguments use its declared parameter types.
 The existing 254-argument/frame limit applies. Native `new WatchUi.View()` still
 takes no arguments. Its initializer must satisfy the [native-base
 contract](../frontend/README.md#source-initialization). Unit validation rejects
-unresolved names, modules, AppBase construction, and missing initializers. The
+unresolved names, modules, AppBase construction, and missing initializers in
+saved IR. Source omission produces an empty zero-argument initializer. The
 result has the non-null native View contract; source identity is retained in
 construction and source contracts, independently of VM storage. It may supply
 the slot in `getInitialView()`. Calls on proven source instances follow the
 [source-instance profile](../frontend/README.md#calls-on-constructed-source-objects);
-field access on another instance remains unsupported.
+field access follows the [source field contracts](../frontend/README.md#source-instance-field-access).
 
 View callbacks inherit these contracts, including when annotations are omitted:
 
