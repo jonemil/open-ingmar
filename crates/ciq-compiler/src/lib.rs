@@ -1978,9 +1978,11 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
-    /// Invoke a declared static method through its canonical class definition.
-    /// Lookup selects static storage before arguments; a capture preserves that
-    /// lookup across control-flow staging.
+    /// Invoke a method through its canonical class definition. An instance body
+    /// can qualify its own class or an ancestor while retaining the current
+    /// object. An own static body's initialize call retains its static receiver;
+    /// other calls require a static method. Lookup precedes arguments, and a
+    /// capture preserves its callable/context across control-flow staging.
     ClassCall {
         capture: Option<BuilderId>,
         result: ValueId,
@@ -1989,7 +1991,7 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
-    /// Invoke a declared static method for effects and discard its VM result.
+    /// Invoke a class-qualified method for effects and discard its VM result.
     ClassCallStatement {
         capture: Option<BuilderId>,
         class: String,

@@ -1461,10 +1461,9 @@ instance. Reading a namespace does not copy it.
 Known declaration-qualified calls and field access retain their existing static
 resolution. Reading a namespace value through `self.Child` is not yet supported;
 receiver traversal must not be replaced with direct declaration lookup.
-Arbitrary member dispatch through namespace-valued variables and direct
-class-qualified method calls are not enabled by this representation.
-Direct declared class paths
-retain their separate checked field access. SDK static storage is
+Arbitrary member dispatch through namespace-valued variables is not enabled by
+this representation. Direct declared class paths retain their separate checked
+field and [method access](#method-lookup-and-access). SDK static storage is
 distinct from the class-definition value; see the
 [static receiver evidence](../../investigations/compiler-root-objects.md#static-storage-and-receivers).
 Namespace receivers can
@@ -1909,7 +1908,8 @@ to an unrelated name.
 | Explicit instance call | Closest accessible instance method, else closest accessible static method |
 | Bare/self call in an instance body | Instance view of the declaring class |
 | Bare/self call in a static body | Closest accessible declaration, which must be static |
-| Own-class qualification | Current body view; runtime lookup must select a static method |
+| Own-class qualification | Current body view; instance bodies retain the current object |
+| Ancestor qualification in an instance body | Instance view of that ancestor; retains the current object |
 | Other-class qualification | Instance view, which must select a static method |
 | Interface witness | Closest declaration's signature, independently of access and receiver kind |
 
@@ -1934,8 +1934,25 @@ Class qualification retains class lookup and its initialization effects. In an
 instance body, `PrivateLeaf.pick()` may have the inherited Number contract but
 invoke the child's private static String method. External class qualification
 of that name is rejected because the checked instance view still selects an
-instance method. General class-qualified instance calls remain unsupported.
+instance method. An instance body can qualify an instance method with its own
+class or a source ancestor, including canonical, module-aliased, and root paths.
+The call selects the method through that class but retains the current object;
+virtual calls inside the selected body still dispatch on that object. Static
+bodies and unrelated callers cannot use this form to call an instance method.
 See the [static method specimen](../../../examples/compiler-static-method-shadowing/README.md).
+
+Qualified `initialize(arguments)` is an ordinary method call. It checks the
+selected declaration's access and arguments, preserves receiver lookup before
+left-to-right argument effects, and does not rerun allocation defaults.
+Calls whose arguments cross control-flow joins retain the selected callable and
+context. Pending required fields prevent qualified instance calls just as they
+prevent self calls; a static callee does not expose the instance.
+The SDK additionally accepts `OwnClass.initialize(...)` in an own static body.
+This form passes through the static receiver without allocation; it does not
+produce a source instance. Instance-only field reads in that initializer can
+therefore fail at runtime. Other-class and parent qualification from a static
+body cannot invoke an instance initializer.
+See the [qualified-call specimen](../../../examples/compiler-qualified-instance-calls/README.md).
 
 Structural and native interface witnesses use the nearest method declaration's
 signature, including private/protected declarations. Signature matching does not
@@ -1996,7 +2013,8 @@ into instance reads or manufacture a value satisfying the checked contract.
 See the [metadata evidence](../../investigations/compiler-root-objects.md#instance-field-metadata-defaults).
 
 Construction accepts Object-rooted chains with default-initialized ancestor
-instance fields and empty public zero-argument ancestor `initialize()` methods.
+instance fields. Ancestor ordinary initializers may have bodies, parameters,
+and any access; allocation does not invoke them.
 Allocation hooks run parent before child, applying each declaring class's own
 expression defaults once. Literal metadata defaults exist before these hooks;
 a parent expression can therefore overwrite a child's literal default, while
@@ -2005,9 +2023,11 @@ are allocated separately for each instance. An ancestor allocation hook cannot e
 self calls while descendant initialization is unproven. Ancestor fields needing
 ordinary constructor assignments remain rejected; ancestor static storage is
 permitted under the inherited-static lookup rules above.
-The allocated class can use its own ordinary initializer; parent-qualified
-calls and source-based View/AppBase/delegate construction remain outside this
-profile. Allocation hooks do not implicitly call a parent's `initialize()`.
+The allocated class uses its own ordinary initializer, synthesized as empty
+when absent for Object-rooted classes. A parent initializer runs only when
+explicitly called. Source-based View/AppBase/delegate construction remains
+outside this profile. Allocation hooks do not implicitly call a parent's
+`initialize()`.
 
 Signature/access checks select the declaration from the receiver's static bound.
 Initialization safety summaries also include all possible overrides among known

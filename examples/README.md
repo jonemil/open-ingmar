@@ -122,6 +122,9 @@ and future Rust toolchain experiments.
   and metadata defaults versus allocation expressions.
 - [compiler-field-metadata](compiler-field-metadata/README.md): literal tags,
   String defaults, allocation placeholders, and class-definition reads.
+- [compiler-qualified-instance-calls](compiler-qualified-instance-calls/README.md):
+  own/parent qualification, retained receiver, argument staging, and explicit
+  initializer calls without repeated allocation defaults.
 - [compiler-static-method-shadowing](compiler-static-method-shadowing/README.md):
   instance precedence, static/private binding, independent signature families,
   and initialization order.

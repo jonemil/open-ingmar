@@ -35,9 +35,9 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Support class/superclass-qualified instance method and initializer calls,
-  including own-class qualification, receiver, argument order, and
-  field-initialization effects.
+- [ ] Prove initialization of constructor-required ancestor fields through
+  explicit parent initializer calls. Check reads/exposure before those calls
+  and virtual calls from parent initializers before descendant fields are ready.
 - [ ] Establish SDK default/inherited initializer rules for View,
   BehaviorDelegate, and source subclasses, then implement accepted forms.
 - [ ] Support nested classes and outer-instance construction/member lookup;

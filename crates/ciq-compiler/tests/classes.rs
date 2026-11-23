@@ -82,12 +82,13 @@ fn class_ownership_receiver_and_text_pipeline_preserve_complete_prg() {
 
 #[test]
 fn self_calls_respect_owner_members_and_check_signatures() {
+    let qualified = compile_sources(&["class C extends Application.AppBase { function start() as Void { C.f(); } function f() as Void {} }"]).unwrap();
+    assert_eq!(parse_unit_ir(&qualified.to_ir_text()).unwrap(), qualified);
     for source in [
         "class C extends Application.AppBase { function start() as Void { self.missing(); } }",
         "class C extends Application.AppBase { function start() as Void { self.f(); } function f(x as Toybox.Lang.Number) as Void {} }",
         "class C extends Application.AppBase { function start() as Toybox.Lang.Number { return self.f(); } function f() as Void {} }",
         "class C extends Application.AppBase { function start() as Toybox.Lang.Number { return M.f(); } function f() as Toybox.Lang.Number { return 1; } }",
-        "class C extends Application.AppBase { function start() as Void { C.f(); } function f() as Void {} }",
         "module M { function f() as Void {} } class C extends Application.AppBase { function start() as Void { self.f(); } }",
         "function f() as Toybox.Lang.Number { return 1; } class C extends Application.AppBase { var f=1; function start() as Toybox.Lang.Number { return self.f(); } }",
         "class C extends Application.AppBase { function f() as Void { D.f(); } } class D extends Application.AppBase { function f() as Void {} }",

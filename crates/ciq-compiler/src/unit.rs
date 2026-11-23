@@ -1626,6 +1626,52 @@ impl CompilationUnit {
         )?;
         self.method(owner, member)
     }
+    /// Check whether qualification can retain this body's instance receiver.
+    fn has_instance_class_receiver(
+        &self,
+        class: &str,
+        owner: Owner<'_>,
+        function: &Function,
+    ) -> bool {
+        function.is_instance_method()
+            && matches!(owner, Owner::Class(caller) if caller == class
+                || self.member_index.classes[caller].ancestors.iter().any(|c| c == class))
+    }
+
+    /// Identify qualified calls that expose the current instance to a body.
+    /// Static callees use their own storage and do not expose pending fields.
+    fn instance_class_call(
+        &self,
+        owner: Owner<'_>,
+        function: &Function,
+        operation: &Operation,
+    ) -> bool {
+        let call = if let Operation::CallBegin { builder } = operation {
+            &function
+                .operations()
+                .iter()
+                .find(|op| op.operation.call_capture() == Some(*builder))
+                .expect("validated capture completion")
+                .operation
+        } else {
+            operation
+        };
+        let (Operation::ClassCall { class, member, .. }
+        | Operation::ClassCallStatement { class, member, .. }) = call
+        else {
+            return false;
+        };
+        self.has_instance_class_receiver(class, owner, function)
+            && self
+                .method_view(
+                    class,
+                    member,
+                    Some(owner.name()),
+                    crate::inheritance::MethodView::Lexical,
+                )
+                .is_some_and(|(_, method)| method.is_instance_method())
+    }
+
     pub(crate) fn method_symbol(&self, class: &str, member: &str, caller: Option<&str>) -> String {
         if let Some((owner, _)) = self.method_view(
             class,
@@ -2938,6 +2984,16 @@ impl CompilationUnit {
                                 .into(),
                         ));
                     }
+                    if function.name() != STATIC_INITIALIZER
+                        && (incomplete || !unreadable.is_empty())
+                        && self.instance_class_call(owner, function, &located.operation)
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "initialize required fields before qualified instance calls".into(),
+                        ));
+                    }
                     let message = match &located.operation {
                         Operation::SelfFieldAssign { field, .. }
                             if !pending.contains(field.as_str()) =>
@@ -3005,6 +3061,15 @@ impl CompilationUnit {
                     })
                     .collect::<BTreeSet<_>>();
                 for (operation, located) in function.operations().iter().enumerate() {
+                    if !pending.is_empty()
+                        && self.instance_class_call(owner, function, &located.operation)
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "initialize all required fields before qualified instance calls".into(),
+                        ));
+                    }
                     if !pending.is_empty()
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
@@ -3949,11 +4014,10 @@ impl CompilationUnit {
                         }
                         for ancestor in &identity.ancestors {
                             let parent = self.classes.iter().find(|c| c.name == *ancestor).unwrap();
-                            if self.member_visibility(&parent.name, "initialize")
-                                != crate::Visibility::Public
-                                || parent.fields.iter().any(|f| {
-                                    !f.kind.class_shared() && f.kind.requires_initialization()
-                                })
+                            if parent
+                                .fields
+                                .iter()
+                                .any(|f| !f.kind.class_shared() && f.kind.requires_initialization())
                                 || parent
                                     .methods
                                     .iter()
@@ -3965,21 +4029,15 @@ impl CompilationUnit {
                                                 Operation::SelfValue { .. }
                                                     | Operation::SelfCall { .. }
                                                     | Operation::SelfCallStatement { .. }
+                                            ) || self.instance_class_call(
+                                                Owner::Class(&parent.name),
+                                                f,
+                                                &op.operation,
                                             )
                                         })
                                     })
-                                || !parent
-                                    .methods
-                                    .iter()
-                                    .find(|f| f.name() == "initialize")
-                                    .is_some_and(|f| {
-                                        f.parameter_count() == 0
-                                            && f.operations().iter().all(|op| {
-                                                matches!(op.operation, Operation::ReturnVoid)
-                                            })
-                                    })
                             {
-                                return Err(fail(Some(index),Some(operation),"source ancestors require initialized instance fields, non-escaping allocation hooks, and empty public zero-argument initializers".into()));
+                                return Err(fail(Some(index),Some(operation),"source ancestors require initialized instance fields and non-escaping allocation hooks".into()));
                             }
                         }
                     }
@@ -4150,14 +4208,21 @@ impl CompilationUnit {
                         caller,
                         crate::inheritance::MethodView::Lexical,
                     );
-                    if !runtime.is_some_and(|(_, f)| f.is_static_method())
+                    let instance_receiver =
+                        self.has_instance_class_receiver(class, owner, function);
+                    let static_initializer_call = function.is_static_method()
+                        && caller == Some(class)
+                        && member == "initialize";
+                    if (!runtime.is_some_and(|(_, f)| f.is_static_method())
                         || (caller != Some(class)
-                            && !selected.is_some_and(|(_, f)| f.is_static_method()))
+                            && !selected.is_some_and(|(_, f)| f.is_static_method())))
+                        && !instance_receiver
+                        && !static_initializer_call
                     {
                         return Err(fail(
                             Some(index),
                             Some(operation),
-                            "class calls require a declared static method".into(),
+                            "class calls require a static method or the current instance's class/ancestor".into(),
                         ));
                     }
                 }

@@ -83,8 +83,6 @@ fn inherited_storage_can_supply_public_structural_fields() {
 fn unsupported_parent_initialization_and_receiver_escape_stay_explicit() {
     for parent in [
         "var value as Toybox.Lang.Number;function initialize(){value=1;}",
-        "var value=1;function initialize(){Toybox.System.println(10);}",
-        "var value=1;function initialize(n as Toybox.Lang.Number){}",
         "var value=self;",
         "var value=f();function f() as Toybox.Lang.Number{return 1;}",
     ] {

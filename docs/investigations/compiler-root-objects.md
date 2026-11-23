@@ -586,6 +586,46 @@ or artificial value conversion is inserted.
 
 [hiding]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#datahiding
 
+## Qualified instance methods and initializers
+
+**Observed, 2026-11-23:** SDK/simulator 9.2.0, `fr265`, minimum API 3.0.0,
+target API 5.2.0, `-O 0`. The
+[qualified-call specimen](../../examples/compiler-qualified-instance-calls/README.md)
+matches all 21 SDK/generated lines and reconstructs both PRGs with structured
+CODE/DATA. Build the SDK source with the minimal-console scaffold and use the
+[console checker][check] for the recorded expected output.
+
+Within Leaf, `Leaf.pick(...)` selects its override, while `M.Root.pick(...)`
+selects the parent method; both read the current Leaf object's field. A parent
+`forward()` calling `virtual()` reaches Leaf's override. Root is in a separate
+module, and the branched argument checks preservation of the callable/context
+across staging. Explicit parent and own-class initializer calls change the same
+object without repeating the allocation markers 10 and 20.
+
+Separate SDK probes reject `Root.pick(5)` from an unrelated AppBase instance,
+the same qualified instance calls from a static Leaf body, and private parent
+methods. Protected parent methods and a module alias are accepted. Own private
+qualification executes in the tracked specimen. Module aliases and root-qualified
+parent paths also preserve the same output in a separate run.
+
+Own-class `initialize` in a static body is an SDK exception to the ordinary
+instance-method restriction: `static function run() { Root.initialize(); }`
+compiles while the corresponding `Root.pick()` does not. The tracked specimen's
+field-free initializer executes with that supplied static receiver. With
+`var field as Number = 10` and `initialize() { System.println(field); }`, the SDK
+instead raises `Symbol Not Found Error` for `field`; generated output reproduces
+the same error with the numeric selector because it lacks SDK debug names.
+Other-class and ancestor-qualified instance initializers in static bodies are
+rejected.
+
+SDK accepts `class Root { function initialize(n as Lang.Number) { ... } }`
+with `class Leaf extends Root {}` and `new Leaf()`. A marker in Root's
+initializer does not run: the default child initializer is empty, rather than
+an inherited invocation with missing arguments. A private unused parent
+initializer also compiles. These observations justify removing ancestor
+initializer body/arity/access restrictions independently of the remaining
+constructor-required ancestor-field restriction.
+
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md
 [check]: ../../scripts/README.md#console-specimen-check

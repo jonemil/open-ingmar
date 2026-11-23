@@ -2133,20 +2133,28 @@ values. Aliases, storage, container contracts, and saved parameter/result tags
 retain this origin until a declared annotation widens it or Any erases it.
 Object and the same source-class annotations accept it as an unchecked view of
 the supplied receiver; unannotated values remain opaque. Units require every
-origin in a contract to name a declared class, including nested contracts. An instance call supplies the instance;
-a statics initializer or class-qualified call supplies static storage. These
-views must not be replaced
-with a class-definition value or a forged `.self class=...` operation.
+origin in a contract to name a declared class, including nested contracts. An
+instance call supplies the instance; a statics initializer or class-qualified
+static call supplies static storage. These views must not be replaced with a
+class-definition value or a forged `.self class=...` operation.
 
 `ClassCall` / `.call-class %result CLASS MEMBER [result=TYPE] %arguments...`
-invokes an effective static method through the requested canonical class. `ClassCallStatement`
+invokes a method through the requested canonical class. `ClassCallStatement`
 / `.call-class-discard CLASS MEMBER %arguments...` discards its result, including
-Void. Unit validation requires that static declaration and checks its arity,
-argument and result contracts. Instance dispatch remains a separate operation.
+Void. An instance body may qualify its own class or a source ancestor to select
+an instance method while retaining its current object. Other callers require a
+static method under the frontend's checked lookup view. Unit validation checks
+access, arity, argument/result contracts, and receiver availability. Virtual calls
+inside the selected body retain normal dispatch on the current object.
+An own static body may also call its own `initialize`, preserving its static
+receiver without allocation or an instance-type guarantee.
 Class calls accept `capture=&builder` from `.begin-call`, with the same private
 lifetime and completion rules as module/global calls. Class lookup activates
-static storage before argument effects, at the capture when present. Neither
-`lookup=lexical` nor `via=` is valid on these canonical class calls.
+the selected class's statics before argument effects, at the capture when present.
+An ordinary qualified initializer call does not rerun allocation hooks. Required
+field checks treat qualified instance calls and their captures as receiver
+exposure, while effect summaries include the selected body and its transitive
+calls. Neither `lookup=lexical` nor `via=` is valid on these canonical class calls.
 
 Methods remain in `ClassDeclaration.methods`; `Function::is_static_method`
 controls metadata placement. Typed clients can construct the same model through
@@ -2277,9 +2285,10 @@ separate native-base operand; `.begin-source` selects only the named class.
 Allocation, self, casts/tests, signatures, fields, joins, and nested container
 contracts are checked against the same graph. Native/text paths preserve the
 same ancestry. An Object-rooted source subclass can currently allocate only
-through ancestors whose instance fields have allocation defaults and whose ordinary
-initializers are public, empty, and zero-argument. Ancestor allocation hooks
-must not expose the receiver before descendant state is initialized.
+through ancestors whose instance fields have allocation defaults. Ancestor
+ordinary initializers need not be empty or zero-argument: allocation never calls
+them implicitly. Ancestor allocation hooks must not expose the receiver before
+descendant state is initialized.
 Constructor-required ancestor fields remain rejected; ancestor static storage
 is allowed.
 
@@ -2331,7 +2340,7 @@ Saved IR rechecks access, receiver kind, and signature claims against these rule
 Effect summaries follow emitted lookup separately. Self calls retain lexical
 private bindings, including static bindings behind an instance contract, or
 receiver-specific public/protected targets. Qualified calls follow their runtime
-static body independently of the checked instance signature. Allocation summaries
+body independently of the checked instance signature. Allocation summaries
 include statics activated by source-parent allocation hooks. Explicit receiver
 calls keep an ordinary selector even when their checked contract came from a private method;
 their effects include the actual accessible nonprivate implementations. Method

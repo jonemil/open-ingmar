@@ -537,7 +537,12 @@ Object/source-class annotations and explicit casts emit no conversion or runtime
 check. Instance dispatch and binding reuse existing member lookup/invocation,
 preserving the supplied receiver. Self calls reuse `getselfv` and ordinary
 invocation. Class-qualified calls select the canonical class with the existing
-class lookup, then use `getsv` to obtain the static callable/context. Zero-argument
+class lookup, then use `getsv` to obtain the callable/context. For own-class and
+ancestor-qualified instance methods, that context retains the current object;
+the lookup selects the requested class's body without replacing self or forcing
+a direct CODE call. Explicit ordinary initializer calls use the same sequence
+and do not repeat allocation defaults. An own static body's ordinary initializer
+call likewise preserves the supplied static receiver without `newc`. Zero-argument
 calls use `invokemz`; argument calls retain the context with `frpush` and use
 `invokem`. `.begin-call` saves callable and context in two private slots before
 staged arguments and releases them on completion, just as for module/global
