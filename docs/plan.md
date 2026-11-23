@@ -35,9 +35,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Prove initialization of constructor-required ancestor fields through
-  explicit parent initializer calls. Check reads/exposure before those calls
-  and virtual calls from parent initializers before descendant fields are ready.
 - [ ] Establish SDK default/inherited initializer rules for View,
   BehaviorDelegate, and source subclasses, then implement accepted forms.
 - [ ] Support nested classes and outer-instance construction/member lookup;
@@ -243,6 +240,9 @@ Requires the Lang.Exception constructor and subclass contracts
 
 ## Lexical compatibility and annotations
 
+- [ ] Accept file-level `using` aliases after declarations, as the SDK does;
+  establish their visibility in earlier declarations and the ordering rules
+  for `import` before extending the parser.
 - [ ] Match the SDK's raw supplementary Char literal truncation and unpaired
   String-surrogate replacement, replacing the current explicit restrictions.
 - [ ] Resolve negative-literal postfix parsing against the SDK and remove the

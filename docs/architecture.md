@@ -17,6 +17,7 @@ owning files for the definition to read or change.
 | Source ambiguity reporting | [type_check.rs] | [Checking policy] |
 | IR model and body checks | [lib.rs] | [IR validation] |
 | Declarations and unit checks | [unit.rs], [source_fields.rs], [visibility.rs], [inheritance.rs] | [Declarations] |
+| Constructor readiness and parent calls | [unit/constructors.rs] | [Declarations] |
 | CFG and frame flow | [control_flow.rs], [local_flow.rs], [type_flow.rs] | [IR control flow] |
 | Field views | [field_flow.rs] | [Storage] |
 | Record identities and views | [records.rs], [record_flow.rs] | [Records] |
@@ -163,6 +164,12 @@ its containing module as lexical parent and places shared slots there,
 leaving ordinary fields in instance metadata. Source construction uses private allocation/completion
 builders to preserve allocation before user argument effects.
 
+`unit/constructors.rs` checks straight-line constructor readiness across explicit
+parent calls, sharing the pending declarations of the allocated object. It
+reuses unit member selection and shutdown summaries; source and saved IR use the
+same proof. Allocation-hook validation also excludes reads of inherited fields
+that still require ordinary constructor assignment.
+
 Function bodies retain a single ordinary/instance/static receiver category.
 Class declarations hold both kinds of member bodies; application generation
 places static methods in statics records. Static self is an opaque receiver
@@ -304,6 +311,7 @@ library.
 [source_types.rs]: ../crates/ciq-compiler/src/source_types.rs
 [lib.rs]: ../crates/ciq-compiler/src/lib.rs
 [unit.rs]: ../crates/ciq-compiler/src/unit.rs
+[unit/constructors.rs]: ../crates/ciq-compiler/src/unit/constructors.rs
 [inheritance.rs]: ../crates/ciq-compiler/src/inheritance.rs
 [visibility.rs]: ../crates/ciq-compiler/src/visibility.rs
 [source_fields.rs]: ../crates/ciq-compiler/src/source_fields.rs

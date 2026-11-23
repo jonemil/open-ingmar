@@ -2152,8 +2152,9 @@ Class calls accept `capture=&builder` from `.begin-call`, with the same private
 lifetime and completion rules as module/global calls. Class lookup activates
 the selected class's statics before argument effects, at the capture when present.
 An ordinary qualified initializer call does not rerun allocation hooks. Required
-field checks treat qualified instance calls and their captures as receiver
-exposure, while effect summaries include the selected body and its transitive
+field checks treat ordinary qualified instance calls and their captures as
+receiver exposure; fixed initializer calls use the construction proof below.
+Effect summaries include the selected body and its transitive
 calls. Neither `lookup=lexical` nor `via=` is valid on these canonical class calls.
 
 Methods remain in `ClassDeclaration.methods`; `Function::is_static_method`
@@ -2284,13 +2285,25 @@ source ancestors. `.new-source` carries that same source chain before its
 separate native-base operand; `.begin-source` selects only the named class.
 Allocation, self, casts/tests, signatures, fields, joins, and nested container
 contracts are checked against the same graph. Native/text paths preserve the
-same ancestry. An Object-rooted source subclass can currently allocate only
-through ancestors whose instance fields have allocation defaults. Ancestor
-ordinary initializers need not be empty or zero-argument: allocation never calls
-them implicitly. Ancestor allocation hooks must not expose the receiver before
-descendant state is initialized.
-Constructor-required ancestor fields remain rejected; ancestor static storage
-is allowed.
+same ancestry. Object-rooted allocation proves required instance fields ready
+across the source chain, from defaults and ordinary constructor assignments.
+Ancestor ordinary initializers need not be empty or zero-argument: allocation
+never calls them implicitly. Ancestor allocation hooks must not expose the
+receiver before descendant state is initialized or read constructor-required
+fields. Ancestor static storage is allowed.
+
+Unit validation follows fixed own/ancestor `.call-class-discard ... initialize`
+calls with one pending-field set for the actual object. Captures execute no
+assignments until completion. Requirements use declaring-class/field identities,
+and self writes discharge only the selected binding. Reads, receiver exposure,
+virtual calls, and possible shutdown are checked against the still-pending
+fields, including descendant state while inspecting a parent body. A declared
+initializer must establish its own fields; `.new-source` additionally requires
+all ancestor fields ready. Recursive calls cannot discharge pending requirements.
+This proof accepts a straight-line prefix; branches and jumps with pending
+fields remain rejected. It is derived from declarations and bodies after reload,
+not stored as trusted IR metadata. See the
+[frontend rules](../frontend/README.md#source-superclasses).
 
 Each class stores only its own fields and method bodies. Unit construction derives
 lexical and instance field-owner indexes from headers, storage kinds, and access.

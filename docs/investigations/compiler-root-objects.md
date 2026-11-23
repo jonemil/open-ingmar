@@ -626,6 +626,37 @@ initializer also compiles. These observations justify removing ancestor
 initializer body/arity/access restrictions independently of the remaining
 constructor-required ancestor-field restriction.
 
+## Constructor-required ancestor fields
+
+**Observed, 2026-11-23:** SDK/simulator 9.2.0, `fr265`, minimum API 3.0.0,
+target API 5.2.0, `-O 0`. The
+[ancestor-constructor specimen](../../examples/compiler-ancestor-constructors/README.md)
+matches all 21 SDK/generated lines with structured CODE/DATA reconstruction.
+Use the minimal-console scaffold and [console checker][check] with that source
+and its expected output.
+
+Root's required Number/private String and Middle's required Array are assigned
+by explicit parent initializer calls on the Leaf object. Child reads and a
+local self alias work after those assignments. Repeating Root.initialize changes
+the same object without replaying the allocation marker. VirtualLeaf initializes
+its own field before calling a parent constructor that invokes its override.
+PreparedLeaf assigns the root's fields before invoking an intermediate
+initializer that reads them; the proof must retain that caller-established
+readiness rather than assume each parent body starts from an empty object.
+
+For the negative probe, replace `child = 4; VirtualRoot.initialize();` with
+`VirtualRoot.initialize(); child = 4;` in the specimen. The SDK compiles it, then
+raises `Unhandled Exception` / `UnexpectedTypeException` in the child override:
+arithmetic receives Null from the not-yet-assigned child field. Our checker
+rejects that order; this is a construction safety restriction, not an SDK source
+rejection. The accepted order demonstrates that parent virtual dispatch need
+not be replaced or suppressed.
+
+The initial SDK source also accepted `using M as Types;` after the global marker
+function and module M, with the alias used by subsequent classes. Our parser
+requires file imports before declarations. Visibility in earlier declarations
+and the corresponding `import` ordering remain unverified.
+
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md
 [check]: ../../scripts/README.md#console-specimen-check

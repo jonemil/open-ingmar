@@ -600,6 +600,12 @@ with the ordered argument values. Popping the initializer result leaves the
 completed instance. Staging arguments across branches does not move allocation
 after their effects.
 
+Constructor readiness is validated before lowering. Parent initializer calls
+retain ordinary class lookup and invocation on the current object; the proof
+does not insert missing parent calls, replay defaults, or replace virtual calls
+with direct CODE addresses. Existing instructions and DATA records cover
+constructor-assigned ancestor fields.
+
 Stored class constants use ordinary Null-initialized DATA slots and existing
 field writes; no readonly VM flag is assumed. The allocation hook retains native
 base setup, then invokes the reserved checked field initializer through its

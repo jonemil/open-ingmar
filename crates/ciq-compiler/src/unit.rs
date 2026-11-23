@@ -6,6 +6,8 @@ use std::{
     fmt,
 };
 
+mod constructors;
+
 pub(crate) const MAX_FUNCTIONS: usize = 256;
 
 /// Match a source method's arity, parameter contracts, and result against a
@@ -2920,6 +2922,14 @@ impl CompilationUnit {
                         .map_err(|error| fail(Some(index), error.operation, error.message))
                     })
                     .collect::<Result<BTreeMap<_, _>, _>>()?;
+                let constructor_required = constructors::Proof {
+                    unit: self,
+                    bodies: &bodies,
+                    exits: &exit_callers,
+                }
+                .required(&declaration.name);
+                let instance_unready =
+                    function.name() != STATIC_INITIALIZER && !constructor_required.is_empty();
                 for (operation, located) in function.operations().iter().enumerate() {
                     if function.name() == STATIC_INITIALIZER {
                         let mut required = BTreeSet::new();
@@ -2961,7 +2971,7 @@ impl CompilationUnit {
                         }
                     }
                     let incomplete = states.values().any(|states| states[operation].unwritten);
-                    if (incomplete || !unreadable.is_empty())
+                    if (incomplete || !unreadable.is_empty() || instance_unready)
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
                             || activation_callees(
@@ -2985,7 +2995,7 @@ impl CompilationUnit {
                         ));
                     }
                     if function.name() != STATIC_INITIALIZER
-                        && (incomplete || !unreadable.is_empty())
+                        && (incomplete || !unreadable.is_empty() || instance_unready)
                         && self.instance_class_call(owner, function, &located.operation)
                     {
                         return Err(fail(
@@ -2995,6 +3005,21 @@ impl CompilationUnit {
                         ));
                     }
                     let message = match &located.operation {
+                        Operation::SelfFieldRead { field, .. }
+                            if instance_unready
+                                && self
+                                    .bound_instance_field(
+                                        &declaration.name,
+                                        field,
+                                        Some(&declaration.name),
+                                    )
+                                    .is_some_and(|(owner, f)| {
+                                        constructor_required
+                                            .contains(&(owner.name.clone(), f.name.clone()))
+                                    }) =>
+                        {
+                            Some("field read before required initialization")
+                        }
                         Operation::SelfFieldAssign { field, .. }
                             if !pending.contains(field.as_str()) =>
                         {
@@ -3014,7 +3039,7 @@ impl CompilationUnit {
                         | Operation::SelfCall { .. }
                         | Operation::SelfCallStatement { .. }
                             if function.name() != STATIC_INITIALIZER
-                                && (incomplete || !unreadable.is_empty()) =>
+                                && (incomplete || !unreadable.is_empty() || instance_unready) =>
                         {
                             Some(
                                 "initialize required fields before exposing the initializer receiver",
@@ -3049,58 +3074,13 @@ impl CompilationUnit {
                     return Err(fail(Some(index), None,
                         "source initialize requires Void; Object has no native base call, other bases require one first; AppBase takes no parameters".into()));
                 }
-                let mut pending = declaration
-                    .fields
-                    .iter()
-                    .filter_map(|field| {
-                        if field.kind.requires_initialization() {
-                            Some(field.name.as_str())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<BTreeSet<_>>();
-                for (operation, located) in function.operations().iter().enumerate() {
-                    if !pending.is_empty()
-                        && self.instance_class_call(owner, function, &located.operation)
-                    {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            "initialize all required fields before qualified instance calls".into(),
-                        ));
-                    }
-                    if !pending.is_empty()
-                        && (requests_exit(&located.operation)
-                            || erased_callbacks(function, &located.operation)
-                            || activation_callees(
-                                self,
-                                owner,
-                                &located.operation,
-                                function,
-                                &bodies,
-                            )
-                            .iter()
-                            .any(|key| exit_callers.contains(key))
-                            || comparator_callees(self, function, &located.operation)
-                                .into_iter()
-                                .any(|key| exit_callers.contains(&key)))
-                    {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            "initialize required fields before calls that may request shutdown"
-                                .into(),
-                        ));
-                    }
-                    match &located.operation {
-                        Operation::SelfValue { .. } if !pending.is_empty() => return Err(fail(Some(index), Some(operation), "initialize all required fields before exposing self".into())),
-                        Operation::SelfFieldRead { field, .. } if pending.contains(field.as_str()) => return Err(fail(Some(index), Some(operation), "required field read before initialization".into())),
-                        Operation::SelfFieldAssign { field, .. } => { pending.remove(field.as_str()); }
-                        Operation::SelfCall { .. } | Operation::SelfCallStatement { .. } | Operation::Branch { .. } | Operation::Jump { .. } | Operation::ReturnVoid if !pending.is_empty() => return Err(fail(Some(index), Some(operation), "initialize all required fields before self calls, control flow, or return".into())),
-                        _ => {}
-                    }
+                constructors::Proof {
+                    unit: self,
+                    bodies: &bodies,
+                    exits: &exit_callers,
                 }
+                .check(&declaration.name, false)
+                .map_err(|(operation, message)| fail(Some(index), Some(operation), message))?;
             } else if base_calls != 0 {
                 return Err(fail(
                     Some(index),
@@ -4015,32 +3995,41 @@ impl CompilationUnit {
                         for ancestor in &identity.ancestors {
                             let parent = self.classes.iter().find(|c| c.name == *ancestor).unwrap();
                             if parent
-                                .fields
+                                .methods
                                 .iter()
-                                .any(|f| !f.kind.class_shared() && f.kind.requires_initialization())
-                                || parent
-                                    .methods
-                                    .iter()
-                                    .filter(|f| f.name() == FIELD_INITIALIZER)
-                                    .any(|f| {
-                                        f.operations().iter().any(|op| {
-                                            matches!(
-                                                op.operation,
-                                                Operation::SelfValue { .. }
-                                                    | Operation::SelfCall { .. }
-                                                    | Operation::SelfCallStatement { .. }
-                                            ) || self.instance_class_call(
-                                                Owner::Class(&parent.name),
-                                                f,
-                                                &op.operation,
-                                            )
-                                        })
+                                .filter(|f| f.name() == FIELD_INITIALIZER)
+                                .any(|f| {
+                                    f.operations().iter().any(|op| {
+                                        matches!(
+                                            op.operation,
+                                            Operation::SelfValue { .. }
+                                                | Operation::SelfCall { .. }
+                                                | Operation::SelfCallStatement { .. }
+                                        ) || self.instance_class_call(
+                                            Owner::Class(&parent.name),
+                                            f,
+                                            &op.operation,
+                                        )
                                     })
+                                })
                             {
-                                return Err(fail(Some(index),Some(operation),"source ancestors require initialized instance fields and non-escaping allocation hooks".into()));
+                                return Err(fail(
+                                    Some(index),
+                                    Some(operation),
+                                    "source ancestors require non-escaping allocation hooks".into(),
+                                ));
                             }
                         }
                     }
+                }
+                if let Operation::SourceNew { class, .. } = &located.operation {
+                    constructors::Proof {
+                        unit: self,
+                        bodies: &bodies,
+                        exits: &exit_callers,
+                    }
+                    .check(class, true)
+                    .map_err(|(_, message)| fail(Some(index), Some(operation), message))?;
                 }
                 if let Operation::SourceNew { class, base, .. }
                 | Operation::SourceBegin { class, base, .. } = &located.operation

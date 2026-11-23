@@ -1945,8 +1945,9 @@ Qualified `initialize(arguments)` is an ordinary method call. It checks the
 selected declaration's access and arguments, preserves receiver lookup before
 left-to-right argument effects, and does not rerun allocation defaults.
 Calls whose arguments cross control-flow joins retain the selected callable and
-context. Pending required fields prevent qualified instance calls just as they
-prevent self calls; a static callee does not expose the instance.
+context. Pending required fields prevent ordinary qualified instance calls just
+as they prevent self calls. Fixed initializer calls instead use the construction
+proof below; a static callee does not expose the instance.
 The SDK additionally accepts `OwnClass.initialize(...)` in an own static body.
 This form passes through the static receiver without allocation; it does not
 produce a source instance. Instance-only field reads in that initializer can
@@ -2012,22 +2013,41 @@ preserves those defaults and ordinary class lookup; it does not convert them
 into instance reads or manufacture a value satisfying the checked contract.
 See the [metadata evidence](../../investigations/compiler-root-objects.md#instance-field-metadata-defaults).
 
-Construction accepts Object-rooted chains with default-initialized ancestor
-instance fields. Ancestor ordinary initializers may have bodies, parameters,
-and any access; allocation does not invoke them.
+Construction accepts Object-rooted chains whose ordinary initializer establishes
+every required instance field, including ancestor declarations. Ancestor ordinary
+initializers may have bodies, parameters, and any access; allocation does not
+invoke them.
 Allocation hooks run parent before child, applying each declaring class's own
 expression defaults once. Literal metadata defaults exist before these hooks;
 a parent expression can therefore overwrite a child's literal default, while
 a child expression runs after parent expressions. Inherited arrays/containers
 are allocated separately for each instance. An ancestor allocation hook cannot expose self or make virtual
-self calls while descendant initialization is unproven. Ancestor fields needing
-ordinary constructor assignments remain rejected; ancestor static storage is
-permitted under the inherited-static lookup rules above.
+self calls while descendant initialization is unproven. Allocation defaults
+cannot read constructor-required fields, including inherited ones. Ancestor
+static storage is permitted under the inherited-static lookup rules above.
 The allocated class uses its own ordinary initializer, synthesized as empty
 when absent for Object-rooted classes. A parent initializer runs only when
 explicitly called. Source-based View/AppBase/delegate construction remains
 outside this profile. Allocation hooks do not implicitly call a parent's
 `initialize()`.
+
+Constructor readiness follows explicit own/ancestor initializer calls on the
+same object. Direct self assignments discharge the declaring field's requirement;
+private and shadowed declarations remain separate. A direct parent initializer
+can run while descendant fields are pending. Reads of pending fields, exposure
+of self, ordinary instance calls, and possible shutdown are rejected until their
+required state is ready. A virtual call in a parent initializer therefore
+requires descendant fields ready too; assigning child fields before that call
+can establish this. Capturing a parent initializer does not itself execute its
+assignments. Recursive initialization cannot prove pending fields ready.
+
+The initialization prefix remains straight-line: branches and jumps before all
+required fields are ready are rejected. Declared initializers must establish
+their own required fields; constructing a class additionally proves the whole
+source chain. An unused empty child declaration is allowed, but cannot allocate
+with uninitialized inherited fields. Saved IR rechecks the same proof without
+serialized readiness claims. See the
+[ancestor-constructor specimen](../../../examples/compiler-ancestor-constructors/README.md).
 
 Signature/access checks select the declaration from the receiver's static bound.
 Initialization safety summaries also include all possible overrides among known
