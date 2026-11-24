@@ -602,8 +602,11 @@ class in a type `0x07` field with key flags `0x50`, including private and
 overriding child declarations. The nested class's own DATA parent remains
 its lexical module or the global scope. Its allocation hook runs
 before user argument effects. `SourceNew` loads and clears that slot, retains
-the instance on the stack, selects `initialize` with `getsv`, then invokes it
-with the ordered argument values. Popping the initializer result leaves the
+the instance on the stack, then uses `getsv` to select the initializer on that
+instance. A single private initializer uses its class-specific selector.
+Dispatch across multiple child classes uses the shared `initialize` selector.
+The call receives the ordered argument values.
+Popping the initializer result leaves the
 completed instance. Staging arguments across branches does not move allocation
 after their effects.
 

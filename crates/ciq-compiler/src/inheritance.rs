@@ -66,6 +66,34 @@ pub(crate) fn nested_class<'a>(
     Some(owner)
 }
 
+/// Resolve the child selected by each declared runtime receiver in the nominal
+/// bounds. Every receiver must provide the entire path.
+pub(crate) fn nested_targets<'a>(
+    receiver: &crate::SourceUnion,
+    path: &str,
+    classes: impl Iterator<Item = (&'a str, &'a [String])>,
+    ancestors: impl Fn(&str) -> Option<&'a [String]>,
+) -> Option<BTreeSet<String>> {
+    if receiver.nullable()
+        || !receiver.native().is_empty()
+        || receiver
+            .classes()
+            .iter()
+            .any(|bound| ancestors(&bound.name).is_none())
+    {
+        return None;
+    }
+    classes
+        .filter(|(class, parents)| {
+            receiver
+                .classes()
+                .iter()
+                .any(|bound| bound.name == *class || parents.contains(&bound.name))
+        })
+        .map(|(class, _)| nested_class(class, path, &ancestors))
+        .collect()
+}
+
 /// Rebuild ancestry from unit declarations and check their native projections.
 /// Saved type contracts must agree with this graph rather than supplying parents.
 pub(crate) fn for_classes(

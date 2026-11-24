@@ -77,7 +77,7 @@ fn source_contracts_do_not_cast_generic_native_or_unrelated_references() {
     }
     for text in [
         "ciq-ir\n.function f parameters=1 parameter-types=source()\n.return-void\n.end\n",
-        "ciq-ir\n.function f result=source()\n.new-source %0 HelloView WatchUi.View\n.return %0\n.end\n",
+        "ciq-ir\n.function f result=source()\n.begin-source &0 source(HelloView@WatchUi.View)\n.new-source %0 source(HelloView@WatchUi.View) &0\n.return %0\n.end\n",
         "ciq-ir\n.function f parameters=1 parameter-types=view result=source(HelloView@WatchUi.View)\n.parameter %0 0\n.return %0\n.end\n",
         "ciq-ir\n.function f\n.call %0 M make result=source()\n.return %0\n.end\n",
     ] {

@@ -2284,9 +2284,9 @@ unknown parents, inconsistent projections, and ancestry claims that disagree.
 checks nominal upcasts without treating a common native base as a source proof.
 
 Source tags use `Class>Parent>Root@Native.Base`, with no `>` when there are no
-source ancestors. `.new-source` carries that same source chain before its
-separate native-base operand; `.begin-source` selects the named class, with an
-optional outer-instance operand and dotted selector path for nested lookup.
+source ancestors. `.begin-source` and `.new-source` carry the same non-null
+source tag or source-only union. Receiver-relative lookup adds the outer
+instance and dotted selector path to `.begin-source`.
 Allocation, self, casts/tests, signatures, fields, joins, and nested container
 contracts are checked against the same graph. Native/text paths preserve the
 same ancestry. Object-, View-, and BehaviorDelegate-rooted allocation proves
@@ -2652,32 +2652,31 @@ Symbol fields use [`.field-symbol`](../frontend/README.md#symbol-fields),
 retaining literal default names and explicit Symbol/nullability read contracts.
 Standalone method parsing leaves that unit obligation unresolved.
 
-`.begin-source &0 HelloView WatchUi.View` allocates a private source instance
+`.begin-source &0 source(HelloView@WatchUi.View)` allocates a private source instance
 before user argument evaluation. The optional value and selector path operands
 on `.begin-source` select a nested class through a non-null source receiver.
-Unit validation checks that the path selects the declared class for every
-source class compatible with the receiver contract.
-`.new-source %0 HelloView WatchUi.View &0 %1`
+Unit validation derives the full set of selected classes from the receiver
+contract and declaration graph. The saved target set must match it exactly.
+`.new-source %0 source(HelloView@WatchUi.View) &0 %1`
 consumes that builder, invokes user `initialize()` with one argument, and
 publishes the completed instance. Builder declarations are unique within the
-function, and each completion must match its class/native base and an active
+function, and each completion must match the target set and an active
 allocation on every incoming path. Builders cannot escape as values, be used as
 container builders, or remain incomplete at return. Argument branches preserve
 the private allocation with empty-stack CFG edges. Supported bases are
-`Lang.Object`, `WatchUi.View`, and `WatchUi.BehaviorDelegate`. The base is
-required and defines the native value projection: Object, View, or
-BehaviorDelegate. Source class identity remains separate from that projection.
-Construction is order-sensitive. Function validation checks the identifier,
-supported construction profile, and native class availability. An explicit
+`Lang.Object`, `WatchUi.View`, and `WatchUi.BehaviorDelegate`. The result's
+native projection combines each target's base, while its source contract
+retains the class identities. Function validation checks the supported
+construction profiles and native class availability. An explicit
 `.base-initialize` independently checks its method API (View.initialize: 2.1.0;
 BehaviorDelegate.initialize: 1.0.0); a source View with an empty initializer only
 needs the View class, available since 1.0.0. Direct `.new-native` retains its
 native initializer requirement. Object has no
 native base-initialization operation. Unit text records `.class Name
 Lang.Object`; its explicit IR initializer is Void and contains no native
-base call. Unit validation requires the named class's declared base to equal the
-operation's base, with a matching initializer whose parameter contracts
-match the arguments. A standalone function retains this unresolved declaration
+base call. Unit validation checks each target's ancestry and base against its
+class declaration and checks the arguments against each target's initializer.
+A standalone function retains this unresolved declaration
 obligation and cannot supply complete application metadata by itself. AppBase
 construction is reserved for application startup; it is not accepted by this
 operation.

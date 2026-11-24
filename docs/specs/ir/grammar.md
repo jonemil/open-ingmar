@@ -316,8 +316,8 @@ field-entry-metadata = "declared=" call-result-tag
 source-field-metadata = "field=" call-result-tag
 member-read-metadata = source-field-metadata | "view=" call-result-tag
 object-operation = ".new-native" value-id class-path
-                 | ".begin-source" builder-id class-path native-base [value-id class-path]
-                 | ".new-source" value-id source-chain native-base builder-id value-id*
+                 | ".begin-source" builder-id allocation-targets [value-id class-path]
+                 | ".new-source" value-id allocation-targets builder-id value-id*
                  | ".base-initialize" native-base
                  | ".tuple-new" value-id value-id*
                  | ".tuple-write" value-id value-id value-id value-id
@@ -454,6 +454,7 @@ enum-view = qualified-name "=" call-result-tag
 qualified-name = identifier
 source-union-tag = "source-union(" source-union-atom ("|" source-union-atom)+ ")"
 source-union-atom = source-tag | native-parameter-tag
+allocation-targets = source-tag | "source-union(" source-tag ("|" source-tag)+ ")"
 source-tag = "source(" source-identity ")"
 nullable-source-tag = "nullable-source(" source-identity ")"
 source-identity = source-chain "@" source-base

@@ -12,10 +12,7 @@ pub(crate) enum Contract {
     Call,
     Array(ArrayElement),
     ByteArray,
-    Source {
-        class: String,
-        base: crate::ClassBase,
-    },
+    Source(crate::SourceUnion),
     Dictionary(DictionaryType),
     Record(BTreeMap<String, crate::api::Type>),
 }
@@ -32,7 +29,7 @@ impl Contract {
             | Self::Shared
             | Self::Dictionary(_)
             | Self::Record(_)
-            | Self::Source { .. } => None,
+            | Self::Source(_) => None,
         }
     }
     pub(crate) fn dictionary(&self) -> Option<DictionaryType> {
@@ -199,22 +196,12 @@ pub(crate) fn validate(
     for (index, op) in operations.iter().enumerate() {
         if let Operation::SourceBegin {
             builder,
-            ref class,
-            base,
+            ref targets,
             ..
         } = op.operation
         {
             if declarations
-                .insert(
-                    builder,
-                    (
-                        Contract::Source {
-                            class: class.clone(),
-                            base,
-                        },
-                        0,
-                    ),
-                )
+                .insert(builder, (Contract::Source(targets.clone()), 0))
                 .is_some()
             {
                 return Err(fail(index, "duplicate construction builder declaration"));
@@ -295,11 +282,10 @@ pub(crate) fn validate(
                 }
                 Operation::SourceNew {
                     builder,
-                    ref class,
-                    base,
+                    ref targets,
                     ..
                 } => {
-                    if !matches!(declarations.get(&builder), Some((Contract::Source { class: owner, base: native }, _)) if owner == class && *native == base)
+                    if !matches!(declarations.get(&builder), Some((Contract::Source(allocated), _)) if allocated == targets)
                     {
                         return Err(fail(
                             index,

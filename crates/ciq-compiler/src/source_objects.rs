@@ -332,23 +332,9 @@ impl Origins {
                 }
             }
             Operation::SourceNew {
-                result,
-                class,
-                base,
-                ancestors,
-                ..
+                result, targets, ..
             } => {
-                self.values.insert(
-                    *result,
-                    Contract::single(
-                        crate::SourceClass {
-                            name: class.clone(),
-                            ancestors: ancestors.clone(),
-                            base: *base,
-                        },
-                        false,
-                    ),
-                );
+                self.values.insert(*result, targets.clone());
             }
             Operation::LocalDeclare { local, value_type } => {
                 let contract = value_type.source_contract();

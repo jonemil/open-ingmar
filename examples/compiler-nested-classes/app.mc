@@ -50,6 +50,12 @@ class RootOuter {
     class Marker {
         function get() as Lang.Number { return 61; }
     }
+
+    class Payload {
+        var value as Lang.Number;
+        function initialize(n as Lang.Number) { value = n; }
+        function get() as Lang.Number { return 60 + value; }
+    }
 }
 
 class ChildOuter extends RootOuter {
@@ -57,9 +63,19 @@ class ChildOuter extends RootOuter {
         function get() as Lang.Number { return 62; }
     }
 
+    class Payload {
+        var value as Lang.Number;
+        function initialize(n as Lang.Number) { value = n; }
+        function get() as Lang.Number { return 61 + value; }
+    }
+
     function make() as Marker {
         return new Marker();
     }
+}
+
+function throughBase(outer as RootOuter) as RootOuter.Payload or ChildOuter.Payload {
+    return new outer.Payload(3);
 }
 
 class MinimalConsoleApp extends Application.AppBase {
@@ -82,6 +98,8 @@ class MinimalConsoleApp extends Application.AppBase {
         var child = new ChildOuter();
         System.println((new child.Marker()).get());
         System.println(child.make().get());
+        System.println(throughBase(new RootOuter()).get());
+        System.println(throughBase(child).get());
         System.exit();
     }
 }

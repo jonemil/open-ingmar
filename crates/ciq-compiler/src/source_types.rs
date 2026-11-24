@@ -196,7 +196,9 @@ impl Types {
                     .and_then(|(ty, _)| crate::ValueType::from_api_type(&ty))
                     .map(|ty| ty.api_type()),
             ),
-            Operation::SourceNew { result, base, .. } => (*result, base.constructed_type()),
+            Operation::SourceNew {
+                result, targets, ..
+            } => (*result, Some(targets.api_type())),
             Operation::TupleAppend {
                 result,
                 array,

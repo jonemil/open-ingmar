@@ -4,8 +4,9 @@
 a subclass instance, the current receiver, and the qualified class. The inner
 method reads its module variable even though the outer class has a field of the
 same name. The specimen also covers inherited bare lookup, a multi-step path
-to a private child, and a child declaration that overrides an inherited
-selector. See [expected.txt](expected.txt).
+to a private child, and construction through a base-typed receiver whose
+subclass overrides the child selector. The last two lines show that the
+selected child's initializer receives the argument. See [expected.txt](expected.txt).
 
 ```sh
 mkdir -p scratch/compiler-nested-classes

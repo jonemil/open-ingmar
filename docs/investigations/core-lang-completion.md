@@ -707,6 +707,23 @@ selected its child even with a global `Inner` returning 99.
 Using a class-owned AppBase subclass as the manifest entry failed with
 `Entry point cannot have a class as its parent.`
 
+In the same scaffold, `new x.Inner(42)` through `x as Outer` compiled with
+`Outer.Inner.initialize(n as Lang.Number)` storing its argument and
+`Sub.Inner.initialize(s as Lang.String)` storing 43 without reading `s`.
+The simulator printed 43 for `Sub` and 42 for `Outer`. The SDK accepted this
+call through the base type. Open Ingmar requires every possible initializer
+contract to accept the argument. Removing `Outer.Inner` while retaining `Inner`
+on two subclasses produced `Cannot find symbol ':Inner' on type '$.Outer'.`
+
+Making `ChildOuter.Payload.initialize` private in the tracked specimen still
+compiled through a `RootOuter`-typed receiver. The SDK-built app printed
+through 63, then failed with `Could not find symbol 'initialize'` when the
+receiver was `ChildOuter`. In a variant with the same private initializer on
+`ChildOuter.Marker`, direct construction through a `ChildOuter`-typed receiver
+and bare construction in `ChildOuter` produced a visibility diagnostic.
+With both `Payload` initializers public, the SDK and generated programs print
+63 and 64 for the two receiver classes, respectively.
+
 ## Source namespace imports
 
 Experimentally observed, 2026-11-01: SDK 9.2.0, `fr265`, `-O 0`, minimum API

@@ -68,7 +68,6 @@ fn source_callee<'a>(owner: Owner<'a>, operation: &'a Operation) -> Option<(Owne
         Operation::SelfCall { member, .. } | Operation::SelfCallStatement { member, .. } => {
             Some((owner, member))
         }
-        Operation::SourceNew { class, .. } => Some((Owner::Class(class), "initialize")),
         _ => None,
     }
 }
@@ -85,6 +84,13 @@ fn source_bindings<'a>(
         _ => None,
     };
     let raw = match operation {
+        Operation::SourceNew { targets, .. } => {
+            return targets
+                .classes()
+                .iter()
+                .map(|class| (Owner::Class(class.name.as_str()), "initialize"))
+                .collect();
+        }
         Operation::ObjectCall {
             classes, member, ..
         }
@@ -338,10 +344,14 @@ fn activation_callees<'a>(
         }
         | Operation::ModuleCall { module, .. }
         | Operation::ModuleCallStatement { module, .. } => Some(module.as_str()),
+        Operation::SourceBegin {
+            targets,
+            outer: None,
+            ..
+        } => crate::names::scopes(&targets.classes()[0].name)
+            .skip(1)
+            .find(|scope| unit.modules.contains(*scope)),
         Operation::ClassValue { class, .. }
-        | Operation::SourceBegin {
-            class, outer: None, ..
-        }
         | Operation::ClassCall { class, .. }
         | Operation::ClassCallStatement { class, .. }
         | Operation::ClassFieldRead { class, .. }
@@ -445,17 +455,18 @@ fn effect_callees<'a>(
     function: &Function,
 ) -> Vec<(Owner<'a>, &'a str)> {
     let mut calls = source_callees(unit, owner, operation, function);
-    if let Operation::SourceBegin { class, .. } | Operation::SourceNew { class, .. } = operation {
-        calls.push((Owner::Class(class), FIELD_INITIALIZER));
-        if let Some(identity) = unit.member_index.classes.get(class) {
-            calls.extend(identity.ancestors.iter().flat_map(|parent| {
+    if let Operation::SourceBegin { targets, .. } | Operation::SourceNew { targets, .. } = operation
+    {
+        for class in targets.classes() {
+            calls.push((Owner::Class(&class.name), FIELD_INITIALIZER));
+            calls.extend(class.ancestors.iter().flat_map(|parent| {
                 [
                     (Owner::Class(parent.as_str()), FIELD_INITIALIZER),
                     (Owner::Class(parent.as_str()), STATIC_INITIALIZER),
                 ]
             }));
+            calls.push((Owner::Class(&class.name), STATIC_INITIALIZER));
         }
-        calls.push((Owner::Class(class), STATIC_INITIALIZER));
     }
     if let Operation::ClassFieldRead { class, field, .. } = operation {
         calls.extend(
@@ -3216,10 +3227,14 @@ impl CompilationUnit {
                 .map_err(|message| fail(Some(index), None, message.into()))?;
             for (operation, located) in function.operations().iter().enumerate() {
                 let op = &located.operation;
-                for (target, member) in source_bindings(self, owner, op, function) {
-                    if let Owner::Class(class) = target {
-                        self.check_member_access(owner, class, member)
-                            .map_err(|m| fail(Some(index), Some(operation), m))?;
+                // Construction checks access at each declared lookup bound in
+                // SourceBegin. SourceNew checks signatures for runtime targets.
+                if !matches!(op, Operation::SourceNew { .. }) {
+                    for (target, member) in source_bindings(self, owner, op, function) {
+                        if let Owner::Class(class) = target {
+                            self.check_member_access(owner, class, member)
+                                .map_err(|m| fail(Some(index), Some(operation), m))?;
+                        }
                     }
                 }
                 let receiver_classes = match op {
@@ -3998,33 +4013,76 @@ impl CompilationUnit {
                         }
                     }
                 }
-                if let Operation::SourceNew {
-                    class,
-                    ancestors,
-                    base,
-                    ..
-                } = &located.operation
-                {
-                    if hierarchy.get(class)
-                        != Some(&crate::SourceClass {
-                            name: class.clone(),
-                            ancestors: ancestors.clone(),
-                            base: *base,
-                        })
-                    {
-                        return Err(fail(
+                if let Operation::SourceBegin { targets, outer, .. } = &located.operation {
+                    if let Some((receiver, path)) = outer {
+                        let ancestors =
+                            |owner: &str| hierarchy.get(owner).map(|c| c.ancestors.as_slice());
+                        let selected = origins.contract(*receiver).and_then(|contract| {
+                            crate::inheritance::nested_targets(
+                                contract,
+                                path,
+                                hierarchy
+                                    .values()
+                                    .map(|c| (c.name.as_str(), c.ancestors.as_slice())),
+                                ancestors,
+                            )
+                        });
+                        if selected.is_none_or(|selected| {
+                            selected
+                                .iter()
+                                .map(String::as_str)
+                                .ne(targets.classes().iter().map(|class| class.name.as_str()))
+                        }) {
+                            return Err(fail(
                             Some(index),
                             Some(operation),
-                            "allocation ancestry disagrees with class declarations".into(),
+                            "outer receiver path does not match its declared nested construction alternatives".into(),
                         ));
+                        }
+                        for bound in origins.contract(*receiver).unwrap().classes() {
+                            let class =
+                                crate::inheritance::nested_class(&bound.name, path, ancestors)
+                                    .expect("validated nested construction path");
+                            self.check_member_access(owner, &class, "initialize")
+                                .map_err(|m| fail(Some(index), Some(operation), m))?;
+                        }
+                    } else {
+                        self.check_member_access(owner, &targets.classes()[0].name, "initialize")
+                            .map_err(|m| fail(Some(index), Some(operation), m))?;
                     }
                 }
-                if let Operation::SourceBegin { class, .. } | Operation::SourceNew { class, .. } =
-                    &located.operation
-                {
-                    if let Some(identity) = hierarchy.get(class).filter(|c| !c.ancestors.is_empty())
-                    {
-                        for ancestor in &identity.ancestors {
+                if let Operation::SourceNew { targets, .. } = &located.operation {
+                    for class in targets.classes() {
+                        if hierarchy.get(&class.name) != Some(class) {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                "allocation ancestry and native base must match a class declaration".into(),
+                            ));
+                        }
+                        let declaration =
+                            self.classes.iter().find(|c| c.name == class.name).unwrap();
+                        if !declaration.methods.iter().any(|f| f.name() == "initialize") {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                "source construction requires a declared initializer".into(),
+                            ));
+                        }
+                        if targets.classes().len() > 1
+                            && self.member_visibility(&class.name, "initialize")
+                                == crate::Visibility::Private
+                        {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                format!(
+                                    "nested construction cannot dispatch to private initializer {}.initialize",
+                                    class.name
+                                ),
+                            ));
+                        }
+                        for ancestor in &class.ancestors {
                             let parent = self.classes.iter().find(|c| c.name == *ancestor).unwrap();
                             if parent
                                 .methods
@@ -4052,85 +4110,13 @@ impl CompilationUnit {
                                 ));
                             }
                         }
-                    }
-                }
-                if let Operation::SourceNew { class, .. } = &located.operation {
-                    constructors::Proof {
-                        unit: self,
-                        bodies: &bodies,
-                        exits: &exit_callers,
-                    }
-                    .check(class, true)
-                    .map_err(|(_, message)| fail(Some(index), Some(operation), message))?;
-                }
-                if let Operation::SourceBegin {
-                    class,
-                    outer: Some((receiver, path)),
-                    ..
-                } = &located.operation
-                {
-                    let valid = origins.contract(*receiver).is_some_and(|contract| {
-                        contract.classes().iter().all(|receiver| {
-                            hierarchy
-                                .values()
-                                .filter(|candidate| {
-                                    candidate.name == receiver.name
-                                        || candidate.ancestors.contains(&receiver.name)
-                                })
-                                .all(|candidate| {
-                                    crate::inheritance::nested_class(
-                                        &candidate.name,
-                                        path,
-                                        |owner| {
-                                            hierarchy
-                                                .get(owner)
-                                                .map(|declared| declared.ancestors.as_slice())
-                                        },
-                                    )
-                                    .as_ref()
-                                        == Some(class)
-                                })
-                        })
-                    });
-                    if !valid {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            "outer receiver path must select one declared nested class across its source hierarchy".into(),
-                        ));
-                    }
-                }
-                if let Operation::SourceNew { class, base, .. }
-                | Operation::SourceBegin { class, base, .. } = &located.operation
-                {
-                    let declaration = self
-                        .classes
-                        .iter()
-                        .find(|declaration| declaration.name == *class)
-                        .ok_or_else(|| {
-                            fail(
-                                Some(index),
-                                Some(operation),
-                                format!("unresolved source construction class {class}"),
-                            )
-                        })?;
-                    if declaration.base != *base {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            "source construction base does not match the class declaration".into(),
-                        ));
-                    }
-                    if !declaration
-                        .methods
-                        .iter()
-                        .any(|method| method.name() == "initialize")
-                    {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            "source construction requires a declared initializer".into(),
-                        ));
+                        constructors::Proof {
+                            unit: self,
+                            bodies: &bodies,
+                            exits: &exit_callers,
+                        }
+                        .check(&class.name, true)
+                        .map_err(|(_, message)| fail(Some(index), Some(operation), message))?;
                     }
                 }
                 let (arguments, value_call) = match &located.operation {

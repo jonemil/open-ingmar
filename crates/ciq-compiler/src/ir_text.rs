@@ -767,52 +767,40 @@ pub(crate) fn parse_function_ir_context(
                     value: parse_value(&fields[2])?,
                 },
                 Directive::BeginSource => {
-                    if !matches!(width, 4 | 6) {
+                    if !matches!(width, 3 | 5) {
                         return Err(fail(
                             *at,
-                            "expected .begin-source builder class base [outer selector-path]",
+                            "expected .begin-source builder source-targets [outer selector-path]",
                         ));
                     }
                     Operation::SourceBegin {
                         builder: parse_builder(&fields[1])?,
-                        class: fields[2].clone(),
-                        outer: if width == 6 {
-                            Some((parse_value(&fields[4])?, fields[5].clone()))
+                        targets: crate::type_text::call_result(&fields[2])
+                            .ok()
+                            .and_then(|ty| ty.source_contract())
+                            .ok_or_else(|| fail(*at, "invalid source allocation targets"))?,
+                        outer: if width == 5 {
+                            Some((parse_value(&fields[3])?, fields[4].clone()))
                         } else {
                             None
-                        },
-                        base: match fields[3].as_str() {
-                            "Lang.Object" => crate::ClassBase::LangObject,
-                            "WatchUi.View" => crate::ClassBase::WatchUiView,
-                            "WatchUi.BehaviorDelegate" => crate::ClassBase::WatchUiBehaviorDelegate,
-                            "Application.AppBase" => crate::ClassBase::ApplicationAppBase,
-                            _ => return Err(fail(*at, "unsupported source construction base")),
                         },
                     }
                 }
                 Directive::NewSource => {
-                    if width < 5 {
+                    if width < 4 {
                         return Err(fail(
                             *at,
-                            "expected .new-source result class base builder [arguments]",
+                            "expected .new-source result source-targets builder [arguments]",
                         ));
                     }
-                    let identity =
-                        crate::SourceClass::parse(&format!("{}@{}", fields[2], fields[3]))
-                            .ok_or_else(|| fail(*at, "invalid source allocation identity"))?;
                     Operation::SourceNew {
-                        ancestors: identity.ancestors,
                         result: parse_value(&fields[1])?,
-                        builder: parse_builder(&fields[4])?,
-                        class: identity.name,
-                        base: match fields[3].as_str() {
-                            "Lang.Object" => crate::ClassBase::LangObject,
-                            "WatchUi.View" => crate::ClassBase::WatchUiView,
-                            "WatchUi.BehaviorDelegate" => crate::ClassBase::WatchUiBehaviorDelegate,
-                            "Application.AppBase" => crate::ClassBase::ApplicationAppBase,
-                            _ => return Err(fail(*at, "unsupported source construction base")),
-                        },
-                        arguments: fields[5..width]
+                        builder: parse_builder(&fields[3])?,
+                        targets: crate::type_text::call_result(&fields[2])
+                            .ok()
+                            .and_then(|ty| ty.source_contract())
+                            .ok_or_else(|| fail(*at, "invalid source allocation targets"))?,
+                        arguments: fields[4..width]
                             .iter()
                             .map(|field| parse_value(field))
                             .collect::<Result<_, _>>()?,

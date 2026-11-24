@@ -1656,8 +1656,7 @@ pub enum Operation {
     /// The instance cannot escape until SourceNew.
     SourceBegin {
         builder: BuilderId,
-        class: String,
-        base: ClassBase,
+        targets: SourceUnion,
         outer: Option<(ValueId, String)>,
     },
     /// Invoke a private source allocation's user initializer and expose the
@@ -1665,10 +1664,8 @@ pub enum Operation {
     SourceNew {
         result: ValueId,
         builder: BuilderId,
-        class: String,
-        ancestors: Vec<String>,
-        /// Native base projection; unit validation checks the class declaration.
-        base: ClassBase,
+        /// Possible initialized instances, matching the private allocation.
+        targets: SourceUnion,
         arguments: Vec<ValueId>,
     },
     /// Invoke a catalogue-resolved Void member on a value receiver for effects.
@@ -3770,12 +3767,16 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::SourceBegin {
-                    ref class,
-                    base,
+                    ref targets,
                     ref outer,
                     ..
                 } => {
-                    validate_call_names(Some(class), "class").map_err(fail)?;
+                    if targets.nullable()
+                        || !targets.native().is_empty()
+                        || (outer.is_none() && targets.classes().len() != 1)
+                    {
+                        return Err(fail("invalid source allocation targets"));
+                    }
                     if let Some((receiver, path)) = outer {
                         if !crate::names::module_path(path) {
                             return Err(fail("invalid nested class selector path"));
@@ -3789,44 +3790,31 @@ impl Function {
                             ));
                         }
                     }
-                    let ty = base
-                        .constructed_type()
-                        .ok_or_else(|| fail("unsupported source allocation base"))?;
-                    if let Some(context) = context {
-                        context
-                            .check_type(api::core(), &ty)
-                            .map_err(|message| fail(&message))?;
+                    for class in targets.classes() {
+                        let ty = class
+                            .base
+                            .constructed_type()
+                            .ok_or_else(|| fail("unsupported source allocation base"))?;
+                        if let Some(context) = context {
+                            context
+                                .check_type(api::core(), &ty)
+                                .map_err(|message| fail(&message))?;
+                        }
                     }
                     (None, outer.iter().map(|(receiver, _)| *receiver).collect())
                 }
                 Operation::SourceNew {
                     result,
-                    ref class,
-                    ref ancestors,
-                    base,
+                    ref targets,
                     ref arguments,
                     ..
                 } => {
-                    validate_call_names(Some(class), "class").map_err(fail)?;
-                    let identity = SourceClass {
-                        name: class.clone(),
-                        ancestors: ancestors.clone(),
-                        base,
-                    };
-                    if SourceClass::parse(&identity.to_string()).as_ref() != Some(&identity) {
-                        return Err(fail("invalid allocation ancestry"));
-                    }
-
-                    let ty = base.constructed_type().ok_or_else(|| {
-                        fail("native base has no supported source construction profile")
-                    })?;
-                    if let Some(context) = context {
-                        context
-                            .check_class(api::core(), base.api_name())
-                            .map_err(|message| fail(&message))?;
-                    }
                     validate_call_arguments(arguments, &types).map_err(fail)?;
-                    types.insert(result, ValueType::from_api_type(&ty).unwrap());
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(&targets.api_type())
+                            .ok_or_else(|| fail("unsupported source allocation result"))?,
+                    );
                     (Some(result), arguments.clone())
                 }
                 Operation::NativeCallStatement {
@@ -5584,13 +5572,12 @@ impl Function {
                 } => format!(".constant %{} {module} {member}", result.0),
                 Operation::SourceBegin {
                     builder,
-                    ref class,
-                    base,
+                    ref targets,
                     ref outer,
                 } => format!(
-                    ".begin-source &{} {class} {}{}",
+                    ".begin-source &{} {}{}",
                     builder.0,
-                    base.text(),
+                    targets.text(),
                     outer
                         .as_ref()
                         .map_or_else(String::new, |(value, path)| format!(" %{} {path}", value.0))
@@ -5598,9 +5585,7 @@ impl Function {
                 Operation::SourceNew {
                     result,
                     builder,
-                    ref class,
-                    ref ancestors,
-                    base,
+                    ref targets,
                     ref arguments,
                 } => {
                     let args = arguments
@@ -5608,15 +5593,9 @@ impl Function {
                         .map(|value| format!(" %{}", value.0))
                         .collect::<String>();
                     format!(
-                        ".new-source %{} {} {} &{}{args}",
+                        ".new-source %{} {} &{}{args}",
                         result.0,
-                        SourceClass {
-                            name: class.clone(),
-                            ancestors: ancestors.clone(),
-                            base
-                        }
-                        .path_text(),
-                        base.text(),
+                        targets.text(),
                         builder.0
                     )
                 }

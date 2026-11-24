@@ -13,11 +13,12 @@ fn forward_source_construction_carries_the_declared_native_base() {
         .unwrap();
     assert!(initial.operations().iter().any(|located| matches!(
         &located.operation,
-        Operation::SourceNew { class, base: ClassBase::WatchUiView, .. }
-            if class == "HelloView"
+        Operation::SourceNew { targets, .. }
+            if targets.classes().len() == 1 && targets.classes()[0].name == "HelloView"
+                && targets.classes()[0].base == ClassBase::WatchUiView
     )));
     let text = unit.to_ir_text();
-    assert!(text.contains("HelloView WatchUi.View"));
+    assert!(text.contains("source(HelloView@WatchUi.View)"));
     assert_eq!(unit, parse_unit_ir(&text).unwrap());
 }
 
@@ -30,7 +31,10 @@ fn unit_rejects_a_constructor_projection_that_disagrees_with_its_class() {
         .lines()
         .map(|line| {
             if line.starts_with(".new-source ") || line.starts_with(".begin-source ") {
-                line.replace("HelloView WatchUi.View", "MinimalConsoleApp WatchUi.View")
+                line.replace(
+                    "source(HelloView@WatchUi.View)",
+                    "source(MinimalConsoleApp@WatchUi.View)",
+                )
             } else if line.starts_with(".function getInitialView ") {
                 line.replace("tuple(source(HelloView@WatchUi.View))", "tuple(view)")
             } else {
@@ -48,15 +52,15 @@ fn standalone_constructor_requires_an_explicit_supported_projection() {
     let prefix = "ciq-ir\n.function f\n";
     let suffix = "\n.return %0\n.end\n";
     let valid = format!(
-        "{prefix}.begin-source &0 HelloView WatchUi.View\n.new-source %0 HelloView WatchUi.View &0{suffix}"
+        "{prefix}.begin-source &0 source(HelloView@WatchUi.View)\n.new-source %0 source(HelloView@WatchUi.View) &0{suffix}"
     );
     let function = parse_function_ir(&valid).unwrap();
     assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     for constructor in [
         ".new-source %0 HelloView",
-        ".new-source %0 HelloView Application.AppBase",
-        ".new-source %0 HelloView Graphics.Dc",
-        ".new-source %0 HelloView Unknown",
+        ".begin-source &0 source(HelloView@Application.AppBase)\n.new-source %0 source(HelloView@Application.AppBase) &0",
+        ".begin-source &0 source(HelloView@Graphics.Dc)\n.new-source %0 source(HelloView@Graphics.Dc) &0",
+        ".begin-source &0 source(HelloView@Unknown)\n.new-source %0 source(HelloView@Unknown) &0",
     ] {
         assert!(parse_function_ir(&format!("{prefix}{constructor}{suffix}")).is_err());
     }

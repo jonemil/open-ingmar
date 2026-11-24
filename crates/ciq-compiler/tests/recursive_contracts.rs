@@ -166,7 +166,7 @@ fn appbase_references_do_not_authorize_construction() {
     }
     let native = "ciq-ir\n.function f result=app-base\n.new-native %0 Toybox.Application.AppBase\n.return %0\n.end\n";
     assert!(ciq_compiler::parse_function_ir(native).is_err());
-    let source = "ciq-ir\n.function f result=source(App@Application.AppBase)\n.new-source %0 App Application.AppBase\n.return %0\n.end\n";
+    let source = "ciq-ir\n.function f result=source(App@Application.AppBase)\n.begin-source &0 source(App@Application.AppBase)\n.new-source %0 source(App@Application.AppBase) &0\n.return %0\n.end\n";
     assert!(ciq_compiler::parse_function_ir(source).is_err());
 }
 

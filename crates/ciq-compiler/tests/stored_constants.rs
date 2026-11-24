@@ -67,12 +67,12 @@ fn constant_writes_and_allocation_metadata_are_checked() {
 #[test]
 fn private_source_allocations_require_matching_completion() {
     for body in [
-        ".begin-source &0 C Lang.Object\n.return-void",
-        ".new-source %0 C Lang.Object &0\n.return %0",
-        ".begin-source &0 C Lang.Object\n.new-source %0 D Lang.Object &0\n.return %0",
-        ".begin-source &0 C Lang.Object\n.new-source %0 C WatchUi.View &0\n.return %0",
-        ".begin-source &0 C Lang.Object\n.new-source %0 C Lang.Object &0\n.discard %0\n.new-source %1 C Lang.Object &0\n.return %1",
-        ".begin-source &0 C Lang.Object\n.array-finish %0 &0\n.return %0",
+        ".begin-source &0 source(C@Lang.Object)\n.return-void",
+        ".new-source %0 source(C@Lang.Object) &0\n.return %0",
+        ".begin-source &0 source(C@Lang.Object)\n.new-source %0 source(D@Lang.Object) &0\n.return %0",
+        ".begin-source &0 source(C@Lang.Object)\n.new-source %0 source(C@WatchUi.View) &0\n.return %0",
+        ".begin-source &0 source(C@Lang.Object)\n.new-source %0 source(C@Lang.Object) &0\n.discard %0\n.new-source %1 source(C@Lang.Object) &0\n.return %1",
+        ".begin-source &0 source(C@Lang.Object)\n.array-finish %0 &0\n.return %0",
     ] {
         let text = format!("ciq-ir\n.function f\n{body}\n.end\n");
         assert!(ciq_compiler::parse_function_ir(&text).is_err(), "{text}");

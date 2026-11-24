@@ -86,7 +86,10 @@ fn source_and_saved_ir_cannot_bypass_constructor_and_drawing_contracts() {
     let unit = compile_sources(&[APP, VIEW]).unwrap();
     let text = unit.to_ir_text();
     for changed in [
-        text.replace("HelloView WatchUi.View span=", "Missing WatchUi.View span="),
+        text.replace(
+            "source(HelloView@WatchUi.View) span=",
+            "source(Missing@WatchUi.View) span=",
+        ),
         text.replace("WatchUi.View", "Application.AppBase"),
         text.replace("parameter-types=dc", "parameter-types=integer"),
         text.lines()

@@ -644,10 +644,18 @@ fn inspect(
                 ]);
             }
             Operation::SourceNew {
-                class, arguments, ..
+                targets, arguments, ..
             } => {
-                if let Some(parameters) = signatures.get(&(class.clone(), "initialize".into())) {
-                    boundaries.extend(parameters.iter().cloned().zip(arguments.iter().copied()));
+                for class in targets.classes() {
+                    if let Some(parameters) =
+                        signatures.get(&(class.name.clone(), "initialize".into()))
+                    {
+                        for boundary in parameters.iter().cloned().zip(arguments.iter().copied()) {
+                            if !boundaries.contains(&boundary) {
+                                boundaries.push(boundary);
+                            }
+                        }
+                    }
                 }
             }
             Operation::SelfCall {

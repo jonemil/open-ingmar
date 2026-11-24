@@ -398,7 +398,7 @@ pub(crate) fn lower_bound<'a>(
             }
             Operation::SourceBegin {
                 builder,
-                ref class,
+                ref targets,
                 ref outer,
                 ..
             } => {
@@ -439,7 +439,7 @@ pub(crate) fn lower_bound<'a>(
                     }
                     items.extend(selectors.map(|member| instruction(Opcode::Getsv, vec![member])));
                 } else {
-                    class_lookup(class, &definitions, &mut items);
+                    class_lookup(&targets.classes()[0].name, &definitions, &mut items);
                 }
                 items.extend([
                     instruction(Opcode::Newc, vec![]),
@@ -1060,24 +1060,25 @@ fn expression(
                 }
                 Operation::SourceNew {
                     builder,
-                    class,
+                    targets,
                     arguments,
                     ..
                 } => {
+                    let classes = targets.classes();
+                    let selector = if classes.len() == 1 {
+                        definitions.initializers.get(&classes[0].name).map_or_else(
+                            || "__ciq_native_initialize".into(),
+                            |member| format!("__ciq_member_{member}"),
+                        )
+                    } else {
+                        "__ciq_native_initialize".into()
+                    };
                     items.extend([
                         instruction(Opcode::Lgetv, vec![Operand::Bits(builders[builder])]),
                         instruction(Opcode::Npush, vec![]),
                         instruction(Opcode::Lputv, vec![Operand::Bits(builders[builder])]),
                         instruction(Opcode::Dup, vec![Operand::Bits(0)]),
-                        instruction(
-                            Opcode::Getsv,
-                            vec![Operand::Symbol(
-                                definitions.initializers.get(class).map_or_else(
-                                    || "__ciq_native_initialize".into(),
-                                    |member| format!("__ciq_member_{member}"),
-                                ),
-                            )],
-                        ),
+                        instruction(Opcode::Getsv, vec![Operand::Symbol(selector)]),
                         instruction(Opcode::Dup, vec![Operand::Bits(1)]),
                     ]);
                     tasks.push(Task::FinishConstructor(arguments.len()));

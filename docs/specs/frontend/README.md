@@ -1797,8 +1797,15 @@ Inner methods have their own `self` and lexical module. They cannot capture
 the outer class's fields or constants by name. Public and private nested
 declarations use the same selector and may be constructed from outside the
 enclosing class. A subclass of the enclosing class may declare its own child
-with the same name. Instance construction requires the path to identify the
-same nested class for all possible source subclasses of the receiver type.
+with the same name. For instance construction, each source class admitted by
+the receiver contract and its declared subclasses must provide the full path.
+Every selected child must accept the argument count and contracts. The result
+retains all selected child identities, including their native bases, through
+local storage and saved IR. A qualified class target has a single result
+identity. Constructor visibility is checked against the child selected by
+each declared receiver bound. Construction with multiple runtime targets
+requires each child to expose the shared initializer selector. Private
+initializers use class-specific selectors.
 
 `receiver.method(arguments)` resolves members across the receiver's retained
 source classes and native alternatives. The receiver may be a construction,

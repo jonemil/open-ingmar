@@ -35,9 +35,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Support nested construction when a base-typed receiver can select
-  different child classes. Check every possible initializer contract and
-  preserve the resulting source-class alternatives through saved IR.
 - [ ] Implement SDK-valid direct `new Lang.Object()` construction; determine its
   initialization/metadata contract with an authored specimen.
 - [ ] Permit receiver exposure, branches, and early exits in initializers when

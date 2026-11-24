@@ -2,7 +2,7 @@
 use crate::{
     BlockId, Diagnostic, Function, LocalId, LocatedOperation, Operation, Span, ValueId, parser,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, PartialEq, Eq)]
 enum ConstructionType {
@@ -52,6 +52,33 @@ fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
         }
         _ => None,
     }
+}
+
+/// Contextualize literals only where the available signatures agree.
+fn shared_argument_context(
+    signatures: &[Vec<crate::ParameterType>],
+) -> Vec<Option<ConstructionType>> {
+    signatures
+        .first()
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .map(|(index, first)| {
+            let ty = signatures
+                .iter()
+                .filter_map(|s| s.get(index))
+                .find(|ty| **ty != crate::ParameterType::Any)
+                .unwrap_or(first);
+            if signatures.iter().all(|s| {
+                s.get(index)
+                    .is_some_and(|other| other == ty || *other == crate::ParameterType::Any)
+            }) {
+                construction_type(&ty.api_type())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 /// Resolve an unqualified call through owner members and global declarations.
@@ -2320,7 +2347,7 @@ impl Builder<'_> {
     /// recursive expression dispatch so the source nesting budget stays usable.
     fn source_construction(
         &mut self,
-        mut class: String,
+        class: String,
         spelling: String,
         arguments: Vec<parser::Expression>,
         span: Span,
@@ -2350,28 +2377,6 @@ impl Builder<'_> {
                 },
                 locals,
             )?;
-            let receiver_class = crate::source_objects::class(
-                &self.operations,
-                receiver,
-                self.calls.parameter_types.clone(),
-            )
-            .ok_or_else(|| {
-                Diagnostic::at(
-                    self.source,
-                    span.start,
-                    "nested construction requires a source instance receiver",
-                )
-            })?;
-            class = self
-                .calls
-                .nested_class(&receiver_class, member)
-                .ok_or_else(|| {
-                    Diagnostic::at(
-                        self.source,
-                        span.start,
-                        "receiver has no nested construction class",
-                    )
-                })?;
             outer = Some((receiver, member.to_owned()));
         } else if shadowed {
             return Err(Diagnostic::at(
@@ -2379,42 +2384,86 @@ impl Builder<'_> {
                 span.start,
                 "source construction class is shadowed",
             ));
-        } else if !rooted && !spelling.contains('.') && !self.calls.static_context {
-            if let Some(target) = self
+        } else if !rooted
+            && !spelling.contains('.')
+            && !self.calls.static_context
+            && self
                 .calls
                 .current_class
                 .as_ref()
                 .and_then(|owner| self.calls.nested_class(&owner.name, &spelling))
-            {
-                class = target;
-                let receiver = self.value(
-                    parser::Expression {
-                        kind: E::SelfValue,
-                        span,
-                    },
-                    locals,
-                )?;
-                outer = Some((receiver, spelling));
-            }
+                .is_some()
+        {
+            let receiver = self.value(
+                parser::Expression {
+                    kind: E::SelfValue,
+                    span,
+                },
+                locals,
+            )?;
+            outer = Some((receiver, spelling));
         }
-        let base = self.calls.class_bases.get(&class).copied().ok_or_else(|| {
-            Diagnostic::at(
-                self.source,
-                span.start,
-                "source constructor requires a declared class",
-            )
-        })?;
+        let names = if let Some((receiver, path)) = &outer {
+            let contract = self
+                .types
+                .join_contract(*receiver)
+                .and_then(|ty| ty.source_contract());
+            let ancestors = |owner: &str| self.calls.class_ancestors.get(owner).map(Vec::as_slice);
+            contract.and_then(|contract| crate::inheritance::nested_targets(
+                &contract,
+                path,
+                self.calls.class_ancestors.iter().map(|(name, parents)| (name.as_str(), parents.as_slice())),
+                ancestors,
+            )).ok_or_else(|| Diagnostic::at(self.source, span.start,
+                "nested construction requires a non-null source receiver with the full selector path on every alternative",
+            ))?
+        } else {
+            BTreeSet::from([class])
+        };
+        let classes = names
+            .into_iter()
+            .map(|name| {
+                let ancestors =
+                    self.calls
+                        .class_ancestors
+                        .get(&name)
+                        .cloned()
+                        .ok_or_else(|| {
+                            Diagnostic::at(
+                                self.source,
+                                span.start,
+                                "source constructor requires a declared class",
+                            )
+                        })?;
+                let base = self.calls.class_bases[&name];
+                Ok(crate::SourceClass {
+                    name,
+                    ancestors,
+                    base,
+                })
+            })
+            .collect::<Result<Vec<_>, Diagnostic>>()?;
+        let targets = crate::SourceUnion::new(classes, false)
+            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+        let signatures = targets
+            .classes()
+            .iter()
+            .filter_map(|class| {
+                self.calls
+                    .get(&(class.name.clone(), "initialize".into()))
+                    .map(|signature| signature.parameters.clone())
+            })
+            .collect::<Vec<_>>();
+        let expected = shared_argument_context(&signatures);
         let builder = crate::BuilderId(self.local_id(span)?.0);
         self.push(
             Operation::SourceBegin {
                 builder,
-                class: class.clone(),
-                base,
+                targets: targets.clone(),
                 outer,
             },
             Some(span),
         );
-        let expected = self.call_argument_context(&class, "initialize");
         let arguments = self.snapshot_arguments(arguments, locals, &expected)?;
         let arguments = arguments
             .into_iter()
@@ -2425,14 +2474,7 @@ impl Builder<'_> {
             Operation::SourceNew {
                 result,
                 builder,
-                ancestors: self
-                    .calls
-                    .class_ancestors
-                    .get(&class)
-                    .cloned()
-                    .unwrap_or_default(),
-                class,
-                base,
+                targets,
                 arguments,
             },
             Some(span),
@@ -2840,27 +2882,8 @@ impl Builder<'_> {
         if let Some(contract) = self.types.local_contract(local) {
             let targets = self.calls.member_targets(contract, member);
             let signatures = targets.parameters(member);
-            if let Some(first) = signatures.first() {
-                return first
-                    .iter()
-                    .enumerate()
-                    .map(|(i, first_type)| {
-                        let ty = signatures
-                            .iter()
-                            .filter_map(|s| s.get(i))
-                            .find(|ty| **ty != crate::ParameterType::Any)
-                            .unwrap_or(first_type);
-                        signatures
-                            .iter()
-                            .all(|s| {
-                                s.get(i).is_some_and(|other| {
-                                    other == ty || *other == crate::ParameterType::Any
-                                })
-                            })
-                            .then(|| construction_type(&ty.api_type()))
-                            .flatten()
-                    })
-                    .collect();
+            if !signatures.is_empty() {
+                return shared_argument_context(&signatures);
             }
         }
         self.types
