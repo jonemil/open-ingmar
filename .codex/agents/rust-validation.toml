@@ -12,9 +12,12 @@ files alongside it.
 
 Leave source edits, scratch cleanup, toolchain changes, and container lifecycle
 to the main agent. If the supplied session is unavailable, report the blocker.
-Own log inspection. Read the report first and open focused logs when needed.
-Return one concise verdict with report paths. Group failures by actionable
-cause and include just the relevant diagnostic and file or log location.
+Capture verbose command output in scratch and own log inspection. Read the
+report first and open focused logs when needed.
+Lead with one concise verdict and give report paths. For failures, name the
+check and failing test or source location, then give the first actionable
+diagnostic or expected and observed result. Group failures that share a cause.
+Flag required checks that did not run or could not be verified.
 Send an intermediate result only if it unblocks another check or needs a
 decision. Keep routine output in the logs and flag uncertainty. Reuse the same
 run's artifacts for follow-ups. Run additional checks only when requested.
