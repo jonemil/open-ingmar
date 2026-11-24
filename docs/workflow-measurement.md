@@ -23,6 +23,12 @@ compaction, and orchestration. Token snapshots are optional context, not a
 subscription-usage calculation. Do not copy prompts, source, or reasoning into
 the report.
 
+When comparing delegated and direct runs, keep the check scope comparable.
+Record the main thread and worker token snapshots separately when available,
+including cached input where reported. Include handoffs, repeated reads or
+checks, and elapsed overlap. A smaller main-thread snapshot alone does not
+establish lower total usage.
+
 The [validation policy](validation.md#work-cycle) owns the development sequence,
 parallel checks, and retry rules. Measure that workflow; do not add checks or
 per-task collectors solely for profiling. Keep run-specific results under

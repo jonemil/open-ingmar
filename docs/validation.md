@@ -84,6 +84,37 @@ script for each feature.
 Do not add a helper for a trivial one-off command or repeat it manually after its
 equivalent automated check passes.
 
+## Delegation
+
+Keep feature design, implementation, and interpretation together in the main
+thread. Delegate when a check can run while the main agent has independent work,
+or when the worker can reduce substantial evidence to a short result. Run quick
+commands directly.
+
+- [`rust_validation`](../.codex/agents/rust-validation.toml) runs the selected
+  Rust checks and triages failures in the assigned broker session. Use it for a
+  validation batch after the build inputs stabilize.
+- [`sdk_probe`](../.codex/agents/sdk-probe.toml) runs a bounded SDK or simulator
+  experiment. Give it the cases and the observation needed to make a decision.
+  Start it early when another part of the feature can proceed independently.
+
+Start workers without parent history when supported. Give each worker the
+question or commands, input paths, running broker session, fresh scratch path,
+and expected result. Assign one owner per run and keep build inputs stable.
+Reuse the worker while its context is short or useful. Start a fresh worker
+when accumulated context gets in the way.
+
+The worker owns log inspection. The main thread reviews its verdict and uses
+the evidence it reports. If a decision needs more evidence, ask the worker for
+a specific excerpt or verification first. Open the logs in the main thread
+only when the worker's follow-up leaves a material question unresolved or the
+worker is unavailable and the evidence is needed. Keep full logs and routine
+retry details in scratch. Before moving on,
+record confirmed behavior in the appropriate spec or investigation and carry
+remaining work in the plan. This gives a fresh main thread enough context to
+resume from the repository. Compact the main thread when continuing the same
+feature still depends on its recent decisions.
+
 ## Scratch retention
 
 After validation for a proposed commit, inspect failures and fallback diagnostics,

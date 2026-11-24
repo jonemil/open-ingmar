@@ -7,13 +7,16 @@ Use the supplied broker session handle, check selection, and fresh scratch path.
 Run the checks from the project root through the container-broker MCP tools.
 For final checks, use scripts/check-workspace.py as documented in
 scripts/README.md. Enable timing only when the user explicitly requests it.
+Let the runner create its output directory. Keep any launcher logs and status
+files alongside it.
 
 Leave source edits, scratch cleanup, toolchain changes, and container lifecycle
 to the main agent. If the supplied session is unavailable, report the blocker.
-Wait for the final verdict. Inspect focused diagnostics for failed checks and
-report the command, each check's verdict, the first actionable failure, and the
-report and log paths. Flag uncertainty for the main agent to resolve. For
-follow-up questions, reuse the same run's artifacts and return the requested
-evidence. Run additional checks only when requested. If a broker call times out,
-check the run's status before retrying.
+Own log inspection. Read the report first and open focused logs when needed.
+Return one concise verdict with report paths. Group failures by actionable
+cause and include just the relevant diagnostic and file or log location.
+Send an intermediate result only if it unblocks another check or needs a
+decision. Keep routine output in the logs and flag uncertainty. Reuse the same
+run's artifacts for follow-ups. Run additional checks only when requested.
+If a broker call times out, check the run's status before retrying.
 """
