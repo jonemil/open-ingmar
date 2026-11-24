@@ -105,6 +105,7 @@ fn barrier(op: &Operation) -> bool {
             | Operation::NativeModuleCallStatement { .. }
             | Operation::SourceNew { .. }
             | Operation::NativeNew { .. }
+            | Operation::LangObjectNew { .. }
             | Operation::WeakReferenceNew { .. }
             | Operation::Println { .. }
     )

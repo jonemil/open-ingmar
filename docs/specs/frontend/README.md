@@ -1867,7 +1867,11 @@ Construction checks its zero-argument signature. Field defaults still come
 from declaration metadata; fields requiring explicit initialization remain
 rejected unless a source initializer fills them under the ordinary field rules.
 Declarations inside the class cannot shadow its reserved Object base binding.
-Direct native `new Object()` remains outside this profile.
+
+`new Lang.Object()` constructs a non-null native Object from API 1.0.0. It
+takes zero arguments and uses ordinary native type name resolution, including
+the fully qualified name and Lang module aliases. Its result has the native
+Object contract without a source class identity.
 
 Number fields, supported constructor arguments, local aliases/reassignment, self
 calls, and calls on a proven source instance use the ordinary class rules.

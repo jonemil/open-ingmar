@@ -302,6 +302,7 @@ pub(crate) struct Expression {
 #[derive(Clone)]
 pub(crate) enum NativeConstructor {
     Object(crate::NativeClass),
+    LangObject,
     WeakReference,
 }
 
@@ -2753,17 +2754,18 @@ impl<'a> Parser<'a> {
         let method = path == "Toybox.Lang.Method";
         let weak = self.names.type_name(&path).ok().flatten().as_deref()
             == Some("Toybox.Lang.WeakReference");
-        let native = self
-            .names
-            .view(&path)
-            .then_some(crate::NativeClass::View)
-            .or_else(|| {
-                self.names
-                    .behavior_delegate(&path)
-                    .then_some(crate::NativeClass::BehaviorDelegate)
-            });
+        let native = match path.as_str() {
+            "Toybox.Lang.Object" => Some(NativeConstructor::LangObject),
+            _ if self.names.view(&path) => {
+                Some(NativeConstructor::Object(crate::NativeClass::View))
+            }
+            _ if self.names.behavior_delegate(&path) => Some(NativeConstructor::Object(
+                crate::NativeClass::BehaviorDelegate,
+            )),
+            _ if weak => Some(NativeConstructor::WeakReference),
+            _ => None,
+        };
         if native.is_none()
-            && !weak
             && !method
             && path.contains('.')
             && !self.declarations.classes.contains(&path)
@@ -2795,20 +2797,16 @@ impl<'a> Parser<'a> {
                 },
             );
         }
-        if (native.is_some() || weak) && !arguments.is_empty() {
+        if native.is_some() && !arguments.is_empty() {
             return Err(self.error(
                 open.span.start,
                 "supported native construction requires zero arguments",
             ));
         }
         self.node(
-            if weak || native.is_some() {
+            if let Some(class) = native {
                 ExpressionKind::NativeNew {
-                    class: if weak {
-                        NativeConstructor::WeakReference
-                    } else {
-                        NativeConstructor::Object(native.unwrap())
-                    },
+                    class,
                     qualifier: raw_path
                         .trim_start_matches("$.")
                         .split('.')

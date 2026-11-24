@@ -321,6 +321,7 @@ Unsigned sections, in order:
    reference selects that pair's index (2 without a delegate, 3 with one);
    it is not the SDK reference's fixed index. Lang's native import module is
    `0x00800007`, distinct from the short `Lang` symbol `0x00800020`.
+   Direct native Object construction resolves its class entirely through CODE.
 6. RESOURCES: u16 count zero and deterministic trailing zero padding.
 7. PERMISSIONS (`0x6000db01`): u16 count zero.
 8. EXCEPTIONS: u16 count zero.

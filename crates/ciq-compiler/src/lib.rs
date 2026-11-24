@@ -1709,6 +1709,10 @@ pub enum Operation {
         result: ValueId,
         class: NativeClass,
     },
+    /// Construct a non-null native Lang.Object with no arguments.
+    LangObjectNew {
+        result: ValueId,
+    },
     /// Allocate an unpublished Method before evaluating receiver/selector arguments.
     MethodBegin {
         builder: BuilderId,
@@ -2162,6 +2166,7 @@ impl Operation {
             | Self::TupleWrite { result, .. }
             | Self::TupleAppend { result, .. }
             | Self::NativeNew { result, .. }
+            | Self::LangObjectNew { result }
             | Self::MethodFinish { result, .. }
             | Self::WeakReferenceNew { result, .. }
             | Self::ArrayNew { result, .. }
@@ -3958,6 +3963,15 @@ impl Function {
                     types.insert(result, ValueType::Object(class));
                     (Some(result), vec![])
                 }
+                Operation::LangObjectNew { result } => {
+                    if let Some(context) = context {
+                        context
+                            .check_class(api::core(), "Toybox.Lang.Object")
+                            .map_err(|message| fail(&message))?;
+                    }
+                    types.insert(result, ValueType::LangObject);
+                    (Some(result), vec![])
+                }
                 Operation::ArrayConstant {
                     result,
                     ref element_type,
@@ -4988,6 +5002,7 @@ impl Function {
                     | Operation::ArrayFill { .. }
                     | Operation::ArrayFillMany { .. }
                     | Operation::NativeNew { .. }
+                    | Operation::LangObjectNew { .. }
                     | Operation::WeakReferenceNew { .. }
                     | Operation::TupleNew { .. }
                     | Operation::TupleWrite { .. }
@@ -5683,6 +5698,9 @@ impl Function {
                 ),
                 Operation::NativeNew { result, class } => {
                     format!(".new-native %{} {}", result.0, class.name())
+                }
+                Operation::LangObjectNew { result } => {
+                    format!(".new-native %{} Toybox.Lang.Object", result.0)
                 }
                 Operation::MethodBegin { builder } => format!(".method-begin &{}", builder.0),
                 Operation::MethodFinish {

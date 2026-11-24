@@ -71,6 +71,25 @@ The initial accepted probe and structured SDK export are in
 directory. This does not establish default initialization for other native bases
 or source superclass chains.
 
+## Direct native Object construction
+
+**Observed, 2026-11-24:** SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
+`new Lang.Object()`, `new Toybox.Lang.Object()`, and `new L.Object()` after
+`using Toybox.Lang as L` each compiled and returned a usable Object. The SDK
+rejected `new Lang.Object(1)` with an arity diagnostic for `Object.initialize`.
+The [native constructor specimen](../../examples/compiler-native-constructors/README.md)
+uses self-equality and equality with an independent allocation to check the
+constructed instances.
+
+The SDK emits `getmv` for `Toybox_Lang` (`0x00800007`) and `Object`
+(`0x0080004c`), followed by `newc` and a zero-argument call to `initialize`
+(`0x0080005e`). The receiver remains on the stack after discarding the call's
+result. The SDK specimen's import table contains the same `Toybox_Lang` and
+`Object` pair used by Object-rooted source classes.
+The generated PRG resolves Object entirely through CODE. It matches the SDK
+console, including `true` for self-equality and `false` for the two independent
+allocations.
+
 ## Static storage and receivers
 
 **Observed, 2026-11-03:** SDK/compiler/simulator 9.2.0, `fr265`, `-O 0`,

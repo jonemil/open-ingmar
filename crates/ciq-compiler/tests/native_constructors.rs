@@ -4,6 +4,40 @@ mod checking;
 mod common;
 
 #[test]
+fn direct_object_construction_preserves_the_native_contract_at_api_1() {
+    use ciq_compiler::{
+        ReturnType,
+        api::{ApiContext, ApiLevel},
+        compile_sources_with_api, parse_unit_ir_with_api,
+    };
+
+    let initial = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
+    for (imports, target) in [
+        ("using Toybox.Lang;", "Lang.Object"),
+        ("", "Toybox.Lang.Object"),
+        ("using Toybox.Lang as L;", "L.Object"),
+        ("import Toybox.Lang;", "Object"),
+    ] {
+        let source =
+            format!("{imports} function make() as Toybox.Lang.Object {{ return new {target}(); }}");
+        let unit = compile_sources_with_api(&[&source], initial).unwrap();
+        assert_eq!(
+            unit.declarations()[0].function.return_type(),
+            ReturnType::LangObject
+        );
+        let text = unit.to_ir_text();
+        assert!(text.contains(".new-native %0 Toybox.Lang.Object"), "{text}");
+        assert_eq!(parse_unit_ir_with_api(&text, initial).unwrap(), unit);
+    }
+    for source in [
+        "function make() { return new Toybox.Lang.Object(1); }",
+        "using Toybox.Lang as L; function make(L) { return new L.Object(); }",
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn source_allocation_checks_the_class_and_explicit_native_calls_check_the_method_api() {
     use ciq_compiler::{
         api::{ApiContext, ApiLevel},

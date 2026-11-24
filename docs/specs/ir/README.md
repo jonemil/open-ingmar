@@ -1771,8 +1771,8 @@ IR uses `NativeNew { result, class: NativeClass::View }`.
 
 `Toybox.WatchUi.BehaviorDelegate` is also accepted, using the corresponding
 NativeClass, `behavior-delegate` parameter/result tag, and initializer API
-1.0.0. WeakReference construction follows its separate contract below; other
-native class paths and extra arguments are rejected. View parameter text is
+1.0.0. Object and WeakReference construction follow their separate contracts
+below. View parameter text is
 `view`; user value calls use `result=view`. Function results are inferred from
 returns; `.function result=view` is unsupported.
 
@@ -1782,6 +1782,11 @@ same-block, and effect-order checking as an allocation/call. Discarding its
 result still executes allocation and initialization.
 
 [VM lowering](../lowering/README.md#native-object-construction).
+
+`.new-native %0 Toybox.Lang.Object` uses `LangObjectNew { result }` and
+produces a non-null native Object. It takes no operands, checks class
+availability from API 1.0.0, and retains allocation effect order even when
+the result is discarded.
 
 `.new-native` uses `WeakReferenceNew { result }` and produces a non-null
 WeakReference. It takes no operands, retains allocation effect order, and checks

@@ -35,8 +35,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Implement SDK-valid direct `new Lang.Object()` construction; determine its
-  initialization/metadata contract with an authored specimen.
 - [ ] Permit receiver exposure, branches, and early exits in initializers when
   required-field initialization is proven on every relevant path, replacing the
   current mandatory straight-line initialization prefix. Extend that proof to

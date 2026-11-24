@@ -244,6 +244,7 @@ fn emit_native_constructor(
     }
     Ok(match class {
         parser::NativeConstructor::Object(class) => Operation::NativeNew { result, class },
+        parser::NativeConstructor::LangObject => Operation::LangObjectNew { result },
         parser::NativeConstructor::WeakReference => Operation::WeakReferenceNew { result },
     })
 }

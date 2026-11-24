@@ -62,6 +62,10 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(initializedDelegate.total());
         var optionalView = new OptionalView(true);
         var optionalDelegate = new OptionalDelegate(true);
+        var object = new Lang.Object();
+        var other = new Toybox.Lang.Object();
+        System.println(object.equals(object));
+        System.println(object.equals(other));
         System.exit();
     }
 }

@@ -857,20 +857,19 @@ pub(crate) fn parse_function_ir_context(
                             .collect::<Result<_, _>>()?,
                     }
                 }
-                Directive::NewNative => {
-                    if fields[2] == "Toybox.Lang.WeakReference" {
-                        Operation::WeakReferenceNew {
-                            result: parse_value(&fields[1])?,
-                        }
-                    } else {
-                        Operation::NativeNew {
-                            result: parse_value(&fields[1])?,
-                            class: crate::NativeClass::from_name(&fields[2]).ok_or_else(|| {
-                                fail(*at, "unsupported native construction class")
-                            })?,
-                        }
-                    }
-                }
+                Directive::NewNative => match fields[2].as_str() {
+                    "Toybox.Lang.Object" => Operation::LangObjectNew {
+                        result: parse_value(&fields[1])?,
+                    },
+                    "Toybox.Lang.WeakReference" => Operation::WeakReferenceNew {
+                        result: parse_value(&fields[1])?,
+                    },
+                    _ => Operation::NativeNew {
+                        result: parse_value(&fields[1])?,
+                        class: crate::NativeClass::from_name(&fields[2])
+                            .ok_or_else(|| fail(*at, "unsupported native construction class"))?,
+                    },
+                },
                 Directive::ArrayConstant => {
                     if width < 4 {
                         return Err(fail(*at, "constant array requires a type and elements"));

@@ -4,7 +4,8 @@
 allocation hooks, defaults before argument effects, explicit parent constructor
 assignments, and optional, late, conditional, and repeated native base calls.
 An omitted child initializer stays empty rather than invoking its parameterized
-source parent. See [expected.txt](expected.txt).
+source parent. The final two lines compare a directly constructed native
+Object with itself and with a separate allocation. See [expected.txt](expected.txt).
 
 ```sh
 mkdir -p scratch/compiler-native-constructors

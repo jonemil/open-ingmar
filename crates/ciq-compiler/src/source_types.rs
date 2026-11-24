@@ -246,6 +246,9 @@ impl Types {
                 )
             }
             Operation::NativeNew { result, class } => (*result, Some(Type::named(class.name()))),
+            Operation::LangObjectNew { result } => {
+                (*result, Some(Type::named("Toybox.Lang.Object")))
+            }
             Operation::WeakReferenceNew { result } => {
                 (*result, Some(Type::named("Toybox.Lang.WeakReference")))
             }

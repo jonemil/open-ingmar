@@ -213,6 +213,7 @@ pub(crate) fn lower_bound<'a>(
             | Operation::DictionaryFinish { result, .. }
             | Operation::ArrayFinish { result, .. }
             | Operation::NativeNew { result, .. }
+            | Operation::LangObjectNew { result }
             | Operation::MethodFinish { result, .. }
             | Operation::WeakReferenceNew { result }
             | Operation::SourceNew { result, .. }
@@ -1133,8 +1134,12 @@ fn expression(
                     class: crate::NativeClass::View | crate::NativeClass::BehaviorDelegate,
                     ..
                 }
+                | Operation::LangObjectNew { .. }
                 | Operation::WeakReferenceNew { .. }) => {
                     let (module, symbol) = match operation {
+                        Operation::LangObjectNew { .. } => {
+                            ("__ciq_sdk_Lang", "__ciq_type_Object".into())
+                        }
                         Operation::WeakReferenceNew { .. } => {
                             ("__ciq_sdk_Lang", "__ciq_type_WeakReference".into())
                         }

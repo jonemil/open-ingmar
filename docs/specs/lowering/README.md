@@ -461,6 +461,11 @@ respectively; the class alias is `__ciq_native_BehaviorDelegate` for delegate
 construction. See [constructor
 evidence](../../investigations/compiler-native-views.md).
 
+Direct Lang.Object construction uses the same zero-argument initializer
+sequence with `getmv @__ciq_sdk_Lang @__ciq_type_Object`. The bindings select
+`Toybox_Lang` and `Object`. The native initializer call is separate from the
+allocation hooks for [Object-rooted source classes](#source-allocation-and-initialization).
+
 Method construction begins with `getmv @__ciq_sdk_Lang @__ciq_type_Method;
 newc; lputv <builder-slot>`, before argument effects. Finish loads the private
 object, clears its slot with `npush; lputv`, and emits `dup 0; getsv
