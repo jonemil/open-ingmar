@@ -152,6 +152,28 @@ fn storage_field(
         Reference::Raw(value),
     )
 }
+/// Publish directly declared child classes in the containing class record.
+fn nested_classes<'a>(
+    owner: &'a str,
+    unit: &'a CompilationUnit,
+    ids: &'a BTreeMap<String, u32>,
+) -> impl Iterator<Item = FieldDeclaration> + 'a {
+    unit.classes().iter().filter_map(move |child| {
+        let (parent, member) = child.name.rsplit_once('.')?;
+        (parent == owner).then(|| {
+            field(
+                ids[member],
+                0x50,
+                7,
+                Reference::Class(format!(
+                    "__ciq_data_class_{}",
+                    crate::names::module_key(&child.name)
+                )),
+            )
+        })
+    })
+}
+
 fn field_string_alias(class: &str, field: &str) -> String {
     format!(
         "__ciq_field_string_{}_{}_{}",
@@ -816,6 +838,9 @@ pub fn build_console_application(
                     )
                 }),
         );
+        application
+            .fields
+            .extend(nested_classes(&source_class.name, unit, &ids));
         application.fields.sort_by_key(|f| match f.key {
             Key::Raw(key) => key,
             _ => unreachable!(),
@@ -872,6 +897,7 @@ pub fn build_console_application(
                 .filter(|f| !f.kind.class_shared())
                 .map(|declaration| storage_field(declaration, &ids, unit, &source_class.name)),
         );
+        fields.extend(nested_classes(&source_class.name, unit, &ids));
         fields.extend(
             source_class
                 .methods
@@ -911,7 +937,11 @@ pub fn build_console_application(
                     source_class
                         .name
                         .rsplit_once('.')
-                        .map_or(GLOBALS, |(owner, _)| module_ids[owner]),
+                        .and_then(|(owner, _)| {
+                            crate::names::scopes(owner).find_map(|scope| module_ids.get(scope))
+                        })
+                        .copied()
+                        .unwrap_or(GLOBALS),
                 )),
                 None,
             ],
@@ -935,7 +965,11 @@ pub fn build_console_application(
                     source_class
                         .name
                         .rsplit_once('.')
-                        .map_or(GLOBALS, |(owner, _)| module_ids[owner]),
+                        .and_then(|(owner, _)| {
+                            crate::names::scopes(owner).find_map(|scope| module_ids.get(scope))
+                        })
+                        .copied()
+                        .unwrap_or(GLOBALS),
                 )),
                 None,
             ],

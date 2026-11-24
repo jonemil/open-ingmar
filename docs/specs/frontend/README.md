@@ -1714,16 +1714,16 @@ evidence](../../investigations/compiler-class.md).
 
 [Accepted declaration syntax](grammar.md#declarations) is defined in the grammar.
 
-Classes may be global or module declarations. The base can be a supported native
-identity or a source class resolved through the declaration/type namespace.
+Classes may be global, module-owned, or class-owned declarations. The base can
+be a supported native identity or a source class resolved through the
+declaration/type namespace.
 Native bases accept canonical, qualified, aliased, and imported Object/AppBase/
 View/BehaviorDelegate spellings. An omitted base selects Lang.Object. The
 [source hierarchy profile](#source-superclasses) limits inherited construction
 and member behavior. Supported [field contracts](#instance-fields) and
-[static method dispatch](#static-methods) remain separate. Nested classes are
-unsupported.
+[static method dispatch](#static-methods) remain separate.
 Object-, View-, and BehaviorDelegate-rooted classes may be empty; AppBase classes
-require a supported member.
+require a supported member and global or module scope.
 Class identities must be unique within their containing namespace; classes
 cannot be reopened. Reject class/module/function/shared-binding collisions in
 the same owner. Different modules may declare classes with the same short name.
@@ -1736,12 +1736,13 @@ Constructors and runtime tests check the source qualifier against local/paramete
 shadowing. Instance members retain priority over enclosing module members during
 bare field/call lookup; inherited Object methods precede enclosing module calls.
 
-Class selection is statically bound to its declaring module. Access from another
+A module-owned class is selected from its declaring module. Access from another
 owner initializes that module directly, leaving intermediate parents cold, even
 for a bare class spelling. Same-module lookup uses the current receiver. Class
 enum access follows the same owner selection. Instance field/function lookup
 through parents retains the ordinary lexical activation rules. See the
-[module-class example](../../../examples/compiler-module-classes/README.md).
+[module-class example](../../../examples/compiler-module-classes/README.md) and
+[nested construction rules](#calls-on-constructed-source-objects).
 
 Reserved top-level class names include language keywords, `self`, `System`, `Application`,
 `AppBase`, `globals`, `statics`, `Toybox`, and the bootstrap's pinned native
@@ -1782,6 +1783,19 @@ possible exact classes and native alternatives under the shared
 [storage rules](#local-declarations-and-reads). An opaque native alternative does
 not establish a source class. Local aliases refer to the same runtime instance;
 reassignment changes only the local reference.
+
+Class declarations may contain named classes. A nested class has an
+owner-qualified identity such as `Scope.Outer.Inner`. Inside `Outer` instance
+methods, `new Inner(args)` and `new self.Inner(args)` select the child on the
+current receiver. `me` is also accepted in place of `self`.
+`new outer.Inner(args)` selects through an existing source
+instance, including a subclass instance that inherits the child. A qualified
+class target such as `new Scope.Outer.Inner(args)` follows the outer class
+record directly. The outer receiver is evaluated before initializer arguments.
+Inner methods have their own `self` and lexical module. They cannot capture
+the outer class's fields or constants by name. The current profile supports
+public nested declarations with unambiguous selectors across the outer class
+hierarchy. An instance target uses one named receiver and one child selector.
 
 `receiver.method(arguments)` resolves members across the receiver's retained
 source classes and native alternatives. The receiver may be a construction,
@@ -2880,7 +2894,7 @@ claims that proof. This is a caller assertion, not runtime validation or convers
 
 Class operands are named declarations, not dynamic class values. The bounded
 profile rejects local/parameter shadowing of a source target. Qualified source names and superclass identities use the unit declaration
-namespace; nested class declarations remain unsupported.
+namespace, including nested classes.
 Unit validation checks target identity and base;
 standalone function IR retains that declaration-resolution obligation.
 

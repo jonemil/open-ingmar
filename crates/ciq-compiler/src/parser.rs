@@ -350,7 +350,7 @@ pub(crate) enum ExpressionKind {
         field: String,
     },
     SourceNew {
-        qualifier: String,
+        spelling: String,
         class: String,
         arguments: Vec<Expression>,
     },
@@ -1476,12 +1476,12 @@ pub(crate) fn collect_declarations<'a>(
                             );
                         }
                     }
-                    Kind::Word("module" | "class")
-                        if parser.owner.is_none()
-                            || (!parser
+                    Kind::Word(kind @ ("module" | "class"))
+                        if kind == "class"
+                            || !parser
                                 .owner
                                 .as_ref()
-                                .is_some_and(|owner| aliases.classes.contains(owner))) =>
+                                .is_some_and(|owner| aliases.classes.contains(owner)) =>
                     {
                         let class = parser.token()?.kind == Kind::Word("class");
                         let name = parser.identifier()?;
@@ -2742,7 +2742,13 @@ impl<'a> Parser<'a> {
                 },
             );
         }
-        let raw_path = self.type_path()?;
+        let raw_path = if matches!(self.peek()?, Kind::Word("self" | "me")) {
+            self.token()?;
+            self.expect(Kind::Punctuation('.'), "'.' after self")?;
+            format!("self.{}", self.path()?)
+        } else {
+            self.type_path()?
+        };
         let path = self.type_name(&raw_path, open.span.start)?;
         let method = path == "Toybox.Lang.Method";
         let weak = self.names.type_name(&path).ok().flatten().as_deref()
@@ -2761,6 +2767,7 @@ impl<'a> Parser<'a> {
             && !method
             && path.contains('.')
             && !self.declarations.classes.contains(&path)
+            && (raw_path.starts_with('$') || raw_path.split('.').count() != 2)
         {
             return Err(self.error(open.span.start, "unsupported qualified construction class"));
         }
@@ -2811,12 +2818,7 @@ impl<'a> Parser<'a> {
                 }
             } else {
                 ExpressionKind::SourceNew {
-                    qualifier: raw_path
-                        .trim_start_matches("$.")
-                        .split('.')
-                        .next()
-                        .unwrap()
-                        .into(),
+                    spelling: raw_path.clone(),
                     class: path,
                     arguments,
                 }
@@ -4588,232 +4590,7 @@ pub(crate) fn declarations<'a>(
             continue;
         }
         if parser.peek()? == Kind::Word("class") {
-            parser.token()?;
-            let token = parser.identifier()?;
-            parser.reject_binding(&token)?;
-            let Kind::Word(name) = token.kind else {
-                unreachable!()
-            };
-            let outer_owner = parser.owner.clone();
-            let name = outer_owner
-                .as_ref()
-                .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
-            if parser.peek()? == Kind::Word("extends") {
-                parser.token()?;
-                parser.type_path()?;
-            }
-            let class_base = parser.declarations.class_types[&name].base;
-            let superclass = match &parser.declarations.class_parents[&name] {
-                crate::inheritance::Parent::Source(parent) => Some(parent.clone()),
-                _ => None,
-            };
-            parser.expect(Kind::Punctuation('{'), "'{'")?;
-            let outer_names = parser.names.clone();
-            parser.owner = Some(name.clone());
-            parser.native_base = Some(class_base);
-            parser.imports()?;
-            parser.validate_source_imports()?;
-            let mut methods = Vec::new();
-            let mut visibility = Vec::new();
-            let mut fields = Vec::new();
-            let mut bindings = Vec::new();
-            while parser.peek()? != Kind::Punctuation('}') {
-                let (access, is_static) = parser.modifiers()?;
-                if !matches!(
-                    parser.peek()?,
-                    Kind::Word("function" | "var" | "const" | "enum")
-                ) && access != crate::Visibility::Public
-                {
-                    return Err(parser.error(parser.offset, "visibility requires a class member"));
-                }
-                if is_static {
-                    if parser.peek()? == Kind::Word("function") {
-                        let mut method = parser.function()?;
-                        method.is_static = true;
-                        visibility.push((method.name.clone(), access));
-                        methods.push(method);
-                        count += 1;
-                        if count > crate::unit::MAX_FUNCTIONS {
-                            return Err(parser.error(
-                                token.span.start,
-                                "compilation unit exceeds 256-function limit",
-                            ));
-                        }
-                        continue;
-                    }
-                    if !matches!(parser.peek()?, Kind::Word("const" | "var")) {
-                        return Err(parser.error(
-                            parser.offset,
-                            "only class static const/var declarations are supported",
-                        ));
-                    }
-                    bindings.extend(parser.constant_declarations()?.into_iter().map(
-                        |mut binding| {
-                            visibility.push((binding.name.clone(), access));
-                            binding.static_binding = true;
-                            if binding.mutable && binding.annotation.is_none() {
-                                binding.annotation = Some(crate::ReturnType::Any);
-                            }
-                            binding
-                        },
-                    ));
-                    continue;
-                }
-                if matches!(parser.peek()?, Kind::Word("const" | "enum")) {
-                    let declarations = parser.constant_declarations()?;
-                    visibility.extend(declarations.iter().map(|b| (b.name.clone(), access)));
-                    bindings.extend(declarations);
-                    continue;
-                }
-                if parser.peek()? == Kind::Word("typedef") {
-                    parser.skip_typedef()?;
-                    continue;
-                }
-                if parser.peek()? == Kind::Word("var") {
-                    for mut binding in parser.constant_declarations()? {
-                        visibility.push((binding.name.clone(), access));
-                        let literal =
-                            crate::FieldDefault::literal(&binding.initializer).filter(|initial| {
-                                !initial.allocation_write()
-                                    && !matches!(
-                                        initial,
-                                        crate::FieldDefault::Number(_)
-                                            | crate::FieldDefault::Symbol(_)
-                                    )
-                            });
-                        let kind = if binding.has_initializer && !binding.literal_default {
-                            if binding.annotation.is_none() {
-                                binding.annotation = Some(crate::ReturnType::Any);
-                            }
-                            None
-                        } else if binding.has_initializer && literal.is_some() {
-                            let initial = literal.unwrap();
-                            Some(crate::FieldKind::Metadata {
-                                value_type: binding
-                                    .annotation
-                                    .clone()
-                                    .unwrap_or(crate::ReturnType::Any),
-                                initial,
-                                readonly: false,
-                            })
-                        } else if !binding.has_initializer {
-                            Some(
-                                crate::FieldKind::from_result(
-                                    binding.annotation.clone().unwrap_or(crate::ReturnType::Any),
-                                )
-                                .ok_or_else(|| {
-                                    parser.error(binding.span.start, "unsupported field type")
-                                })?,
-                            )
-                        } else if binding.annotation.is_none() {
-                            match &binding.initializer.kind {
-                                ExpressionKind::Integer(n) => {
-                                    Some(crate::FieldKind::DynamicNumber(*n))
-                                }
-                                ExpressionKind::Symbol(name) => {
-                                    Some(crate::FieldKind::DynamicSymbol(name.clone()))
-                                }
-                                ExpressionKind::Null => {
-                                    binding.annotation = Some(crate::ReturnType::Any);
-                                    Some(crate::FieldKind::Value {
-                                        value_type: crate::ReturnType::Any,
-                                    })
-                                }
-                                _ => {
-                                    binding.annotation = Some(crate::ReturnType::Any);
-                                    None
-                                }
-                            }
-                        } else {
-                            let mut kind =
-                                crate::FieldKind::from_result(binding.annotation.clone().unwrap())
-                                    .ok_or_else(|| {
-                                        parser.error(binding.span.start, "unsupported field type")
-                                    })?;
-                            match (&mut kind, &binding.initializer.kind) {
-                                (
-                                    crate::FieldKind::Scalar {
-                                        ty: crate::ScalarFieldType::Number,
-                                        nullable: false,
-                                    },
-                                    ExpressionKind::Integer(n),
-                                ) => Some(crate::FieldKind::Number(*n)),
-                                (
-                                    crate::FieldKind::Symbol { initial, .. },
-                                    ExpressionKind::Symbol(name),
-                                ) => {
-                                    *initial = Some(name.clone());
-                                    Some(kind)
-                                }
-                                (_, ExpressionKind::Null)
-                                    if crate::native::accepts(
-                                        &binding.annotation.as_ref().unwrap().api_type(),
-                                        &crate::api::Type::Null,
-                                    ) =>
-                                {
-                                    Some(kind)
-                                }
-                                _ => None,
-                            }
-                        };
-                        if let Some(kind) = kind {
-                            fields.push(crate::InstanceField {
-                                name: binding.name,
-                                kind,
-                            });
-                        } else {
-                            bindings.push(binding);
-                        }
-                        if fields.len() + bindings.len() > 256 {
-                            return Err(
-                                parser.error(token.span.start, "class exceeds 256 instance fields")
-                            );
-                        }
-                    }
-                    continue;
-                }
-                let method = parser.function()?;
-                visibility.push((method.name.clone(), access));
-                methods.push(method);
-                count += 1;
-                if count > crate::unit::MAX_FUNCTIONS {
-                    return Err(parser.error(
-                        token.span.start,
-                        "compilation unit exceeds 256-function limit",
-                    ));
-                }
-            }
-            parser.token()?;
-            parser.names = outer_names;
-            parser.owner = outer_owner;
-            parser.native_base = None;
-            let has_constants = parser
-                .declarations
-                .constants
-                .keys()
-                .any(|key| key.starts_with(&format!("{name}.")));
-            let has_aliases = parser
-                .declarations
-                .aliases
-                .keys()
-                .any(|key| key.starts_with(&format!("{name}.")));
-            if methods.is_empty()
-                && class_base.constructed_type().is_none()
-                && !has_aliases
-                && !has_constants
-            {
-                return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
-            }
-            unit.classes.push(ParsedClass {
-                superclass,
-                visibility,
-                bindings,
-                name,
-                name_span: token.span,
-                base: class_base,
-                fields,
-                methods,
-            });
+            parse_class(&mut parser, &mut unit, &mut count)?;
         } else {
             unit.functions
                 .push((parser.owner.clone(), parser.function()?));
@@ -4827,6 +4604,249 @@ pub(crate) fn declarations<'a>(
         return Err(parser.error(parser.offset, "unterminated module body"));
     }
     Ok(unit)
+}
+
+/// Parse class members and class-owned declarations, preserving the outer parser scope.
+fn parse_class(
+    parser: &mut Parser<'_>,
+    unit: &mut ParsedUnit,
+    count: &mut usize,
+) -> Result<(), Diagnostic> {
+    parser.token()?;
+    let token = parser.identifier()?;
+    parser.reject_binding(&token)?;
+    let Kind::Word(name) = token.kind else {
+        unreachable!()
+    };
+    let outer_owner = parser.owner.clone();
+    let name = outer_owner
+        .as_ref()
+        .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
+    if parser.peek()? == Kind::Word("extends") {
+        parser.token()?;
+        parser.type_path()?;
+    }
+    let class_base = parser.declarations.class_types[&name].base;
+    let superclass = match &parser.declarations.class_parents[&name] {
+        crate::inheritance::Parent::Source(parent) => Some(parent.clone()),
+        _ => None,
+    };
+    parser.expect(Kind::Punctuation('{'), "'{'")?;
+    let outer_names = parser.names.clone();
+    let outer_base = parser.native_base;
+    parser.owner = Some(name.clone());
+    parser.native_base = Some(class_base);
+    parser.imports()?;
+    parser.validate_source_imports()?;
+    let mut methods = Vec::new();
+    let mut visibility = Vec::new();
+    let mut fields = Vec::new();
+    let mut bindings = Vec::new();
+    let first_child = unit.classes.len();
+    while parser.peek()? != Kind::Punctuation('}') {
+        let (access, is_static) = parser.modifiers()?;
+        if parser.peek()? == Kind::Word("class") {
+            if access != crate::Visibility::Public || is_static {
+                return Err(parser.error(parser.offset, "nested classes require public visibility"));
+            }
+            parse_class(parser, unit, count)?;
+            continue;
+        }
+        if !matches!(
+            parser.peek()?,
+            Kind::Word("function" | "var" | "const" | "enum")
+        ) && access != crate::Visibility::Public
+        {
+            return Err(parser.error(parser.offset, "visibility requires a class member"));
+        }
+        if is_static {
+            if parser.peek()? == Kind::Word("function") {
+                let mut method = parser.function()?;
+                method.is_static = true;
+                visibility.push((method.name.clone(), access));
+                methods.push(method);
+                *count += 1;
+                if *count > crate::unit::MAX_FUNCTIONS {
+                    return Err(parser.error(
+                        token.span.start,
+                        "compilation unit exceeds 256-function limit",
+                    ));
+                }
+                continue;
+            }
+            if !matches!(parser.peek()?, Kind::Word("const" | "var")) {
+                return Err(parser.error(
+                    parser.offset,
+                    "only class static const/var declarations are supported",
+                ));
+            }
+            bindings.extend(
+                parser
+                    .constant_declarations()?
+                    .into_iter()
+                    .map(|mut binding| {
+                        visibility.push((binding.name.clone(), access));
+                        binding.static_binding = true;
+                        if binding.mutable && binding.annotation.is_none() {
+                            binding.annotation = Some(crate::ReturnType::Any);
+                        }
+                        binding
+                    }),
+            );
+            continue;
+        }
+        if matches!(parser.peek()?, Kind::Word("const" | "enum")) {
+            let declarations = parser.constant_declarations()?;
+            visibility.extend(declarations.iter().map(|b| (b.name.clone(), access)));
+            bindings.extend(declarations);
+            continue;
+        }
+        if parser.peek()? == Kind::Word("typedef") {
+            parser.skip_typedef()?;
+            continue;
+        }
+        if parser.peek()? == Kind::Word("var") {
+            for mut binding in parser.constant_declarations()? {
+                visibility.push((binding.name.clone(), access));
+                let literal =
+                    crate::FieldDefault::literal(&binding.initializer).filter(|initial| {
+                        !initial.allocation_write()
+                            && !matches!(
+                                initial,
+                                crate::FieldDefault::Number(_) | crate::FieldDefault::Symbol(_)
+                            )
+                    });
+                let kind = if binding.has_initializer && !binding.literal_default {
+                    if binding.annotation.is_none() {
+                        binding.annotation = Some(crate::ReturnType::Any);
+                    }
+                    None
+                } else if binding.has_initializer && literal.is_some() {
+                    let initial = literal.unwrap();
+                    Some(crate::FieldKind::Metadata {
+                        value_type: binding.annotation.clone().unwrap_or(crate::ReturnType::Any),
+                        initial,
+                        readonly: false,
+                    })
+                } else if !binding.has_initializer {
+                    Some(
+                        crate::FieldKind::from_result(
+                            binding.annotation.clone().unwrap_or(crate::ReturnType::Any),
+                        )
+                        .ok_or_else(|| {
+                            parser.error(binding.span.start, "unsupported field type")
+                        })?,
+                    )
+                } else if binding.annotation.is_none() {
+                    match &binding.initializer.kind {
+                        ExpressionKind::Integer(n) => Some(crate::FieldKind::DynamicNumber(*n)),
+                        ExpressionKind::Symbol(name) => {
+                            Some(crate::FieldKind::DynamicSymbol(name.clone()))
+                        }
+                        ExpressionKind::Null => {
+                            binding.annotation = Some(crate::ReturnType::Any);
+                            Some(crate::FieldKind::Value {
+                                value_type: crate::ReturnType::Any,
+                            })
+                        }
+                        _ => {
+                            binding.annotation = Some(crate::ReturnType::Any);
+                            None
+                        }
+                    }
+                } else {
+                    let mut kind =
+                        crate::FieldKind::from_result(binding.annotation.clone().unwrap())
+                            .ok_or_else(|| {
+                                parser.error(binding.span.start, "unsupported field type")
+                            })?;
+                    match (&mut kind, &binding.initializer.kind) {
+                        (
+                            crate::FieldKind::Scalar {
+                                ty: crate::ScalarFieldType::Number,
+                                nullable: false,
+                            },
+                            ExpressionKind::Integer(n),
+                        ) => Some(crate::FieldKind::Number(*n)),
+                        (
+                            crate::FieldKind::Symbol { initial, .. },
+                            ExpressionKind::Symbol(name),
+                        ) => {
+                            *initial = Some(name.clone());
+                            Some(kind)
+                        }
+                        (_, ExpressionKind::Null)
+                            if crate::native::accepts(
+                                &binding.annotation.as_ref().unwrap().api_type(),
+                                &crate::api::Type::Null,
+                            ) =>
+                        {
+                            Some(kind)
+                        }
+                        _ => None,
+                    }
+                };
+                if let Some(kind) = kind {
+                    fields.push(crate::InstanceField {
+                        name: binding.name,
+                        kind,
+                    });
+                } else {
+                    bindings.push(binding);
+                }
+                if fields.len() + bindings.len() > 256 {
+                    return Err(parser.error(token.span.start, "class exceeds 256 instance fields"));
+                }
+            }
+            continue;
+        }
+        let method = parser.function()?;
+        visibility.push((method.name.clone(), access));
+        methods.push(method);
+        *count += 1;
+        if *count > crate::unit::MAX_FUNCTIONS {
+            return Err(parser.error(
+                token.span.start,
+                "compilation unit exceeds 256-function limit",
+            ));
+        }
+    }
+    parser.token()?;
+    parser.names = outer_names;
+    parser.owner = outer_owner;
+    parser.native_base = outer_base;
+    let has_constants = parser
+        .declarations
+        .constants
+        .keys()
+        .any(|key| key.starts_with(&format!("{name}.")));
+    let has_aliases = parser
+        .declarations
+        .aliases
+        .keys()
+        .any(|key| key.starts_with(&format!("{name}.")));
+    if methods.is_empty()
+        && unit.classes.len() == first_child
+        && class_base.constructed_type().is_none()
+        && !has_aliases
+        && !has_constants
+    {
+        return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
+    }
+    unit.classes.insert(
+        first_child,
+        ParsedClass {
+            superclass,
+            visibility,
+            bindings,
+            name,
+            name_span: token.span,
+            base: class_base,
+            fields,
+            methods,
+        },
+    );
+    Ok(())
 }
 
 /// Decode one source literal character or escape to its scalar/code-unit value.

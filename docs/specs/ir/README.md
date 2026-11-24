@@ -2285,7 +2285,8 @@ checks nominal upcasts without treating a common native base as a source proof.
 
 Source tags use `Class>Parent>Root@Native.Base`, with no `>` when there are no
 source ancestors. `.new-source` carries that same source chain before its
-separate native-base operand; `.begin-source` selects only the named class.
+separate native-base operand; `.begin-source` selects the named class, with an
+optional outer instance value for nested-class member lookup.
 Allocation, self, casts/tests, signatures, fields, joins, and nested container
 contracts are checked against the same graph. Native/text paths preserve the
 same ancestry. Object-, View-, and BehaviorDelegate-rooted allocation proves
@@ -2652,7 +2653,10 @@ retaining literal default names and explicit Symbol/nullability read contracts.
 Standalone method parsing leaves that unit obligation unresolved.
 
 `.begin-source &0 HelloView WatchUi.View` allocates a private source instance
-before user argument evaluation. `.new-source %0 HelloView WatchUi.View &0 %1`
+before user argument evaluation. A final value operand on `.begin-source`
+selects a nested class through a non-null source receiver. Unit validation checks
+that receiver lookup through the source superclass chain selects the declared
+class. `.new-source %0 HelloView WatchUi.View &0 %1`
 consumes that builder, invokes user `initialize()` with one argument, and
 publishes the completed instance. Builder declarations are unique within the
 function, and each completion must match its class/native base and an active

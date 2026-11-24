@@ -484,7 +484,7 @@ pub(crate) fn parse_function_ir_context(
             Some(".tuple-add-all") => (Directive::TupleAddAll, 4),
             Some(".array-add") => (Directive::ArrayAdd, 4),
             Some(".array-add-all") => (Directive::ArrayAddAll, 4),
-            Some(".begin-source") => (Directive::BeginSource, 4),
+            Some(".begin-source") => (Directive::BeginSource, call_width()),
             Some(".new-source") => (Directive::NewSource, call_width()),
             Some(".enum-value") => (Directive::EnumValue, 4),
             Some(".constant") => (Directive::Constant, 4),
@@ -766,17 +766,26 @@ pub(crate) fn parse_function_ir_context(
                     field: fields[1].clone(),
                     value: parse_value(&fields[2])?,
                 },
-                Directive::BeginSource => Operation::SourceBegin {
-                    builder: parse_builder(&fields[1])?,
-                    class: fields[2].clone(),
-                    base: match fields[3].as_str() {
-                        "Lang.Object" => crate::ClassBase::LangObject,
-                        "WatchUi.View" => crate::ClassBase::WatchUiView,
-                        "WatchUi.BehaviorDelegate" => crate::ClassBase::WatchUiBehaviorDelegate,
-                        "Application.AppBase" => crate::ClassBase::ApplicationAppBase,
-                        _ => return Err(fail(*at, "unsupported source construction base")),
-                    },
-                },
+                Directive::BeginSource => {
+                    if !matches!(width, 4 | 5) {
+                        return Err(fail(
+                            *at,
+                            "expected .begin-source builder class base [outer]",
+                        ));
+                    }
+                    Operation::SourceBegin {
+                        builder: parse_builder(&fields[1])?,
+                        class: fields[2].clone(),
+                        outer: (width == 5).then(|| parse_value(&fields[4])).transpose()?,
+                        base: match fields[3].as_str() {
+                            "Lang.Object" => crate::ClassBase::LangObject,
+                            "WatchUi.View" => crate::ClassBase::WatchUiView,
+                            "WatchUi.BehaviorDelegate" => crate::ClassBase::WatchUiBehaviorDelegate,
+                            "Application.AppBase" => crate::ClassBase::ApplicationAppBase,
+                            _ => return Err(fail(*at, "unsupported source construction base")),
+                        },
+                    }
+                }
                 Directive::NewSource => {
                     if width < 5 {
                         return Err(fail(

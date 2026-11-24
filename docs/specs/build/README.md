@@ -113,7 +113,8 @@ rules](../frontend/README.md#void-functions-and-statement-calls).
 
 ### Application and VM binding
 
-Complete PRG generation permits exactly one declared AppBase class plus optional
+Complete PRG generation permits exactly one declared AppBase class at global or
+module scope, plus optional
 Object-rooted classes or WatchUi.View/BehaviorDelegate subclasses and requires
 `--entry Class.method`. The selected method must have zero parameters, except
 source onStart follows the [callback

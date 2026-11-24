@@ -35,8 +35,9 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Source inheritance and construction
 
-- [ ] Support nested classes and outer-instance construction/member lookup;
-  distinguish an explicit outer receiver from captured lexical names.
+- [ ] Extend nested-class construction to inherited bare targets, multi-step
+  instance paths, subclass child-class overrides, and private child declarations.
+  Verify runtime member selection and visibility for each SDK-accepted form.
 - [ ] Implement SDK-valid direct `new Lang.Object()` construction; determine its
   initialization/metadata contract with an authored specimen.
 - [ ] Permit receiver exposure, branches, and early exits in initializers when

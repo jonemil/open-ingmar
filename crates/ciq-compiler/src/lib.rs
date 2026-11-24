@@ -1651,12 +1651,13 @@ pub enum Operation {
         member: String,
     },
     /// Allocate a source instance into private storage before evaluating user
-    /// initializer arguments, selecting its declaring module directly.
+    /// initializer arguments, optionally selecting it through an outer instance.
     /// The instance cannot escape until SourceNew.
     SourceBegin {
         builder: BuilderId,
         class: String,
         base: ClassBase,
+        outer: Option<ValueId>,
     },
     /// Invoke a private source allocation's user initializer and expose the
     /// completed instance. Unit validation resolves the initializer contract.
@@ -3768,9 +3769,22 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::SourceBegin {
-                    ref class, base, ..
+                    ref class,
+                    base,
+                    outer,
+                    ..
                 } => {
                     validate_call_names(Some(class), "class").map_err(fail)?;
+                    if let Some(receiver) = outer {
+                        if origins
+                            .contract(receiver)
+                            .is_none_or(|contract| contract.nullable || !contract.native.is_empty())
+                        {
+                            return Err(fail(
+                                "nested construction requires a non-null source instance receiver",
+                            ));
+                        }
+                    }
                     let ty = base
                         .constructed_type()
                         .ok_or_else(|| fail("unsupported source allocation base"))?;
@@ -3779,7 +3793,7 @@ impl Function {
                             .check_type(api::core(), &ty)
                             .map_err(|message| fail(&message))?;
                     }
-                    (None, vec![])
+                    (None, outer.into_iter().collect())
                 }
                 Operation::SourceNew {
                     result,
@@ -5049,7 +5063,6 @@ impl Function {
                     Operation::LocalVariable { value: None, .. }
                     | Operation::LocalDeclare { .. }
                     | Operation::MethodBegin { .. }
-                    | Operation::SourceBegin { .. }
                     | Operation::CallBegin { .. }
                     | Operation::SharedBegin { .. }
                     | Operation::ClassFieldBegin { .. }
@@ -5057,6 +5070,7 @@ impl Function {
                     | Operation::RecordBegin { .. }
                     | Operation::ArrayBegin { .. }
                     | Operation::ByteArrayBegin { .. } => vec![],
+                    Operation::SourceBegin { outer, .. } => outer.iter().copied().collect(),
                     Operation::DictionaryFill { entries, .. } => entries
                         .iter()
                         .flat_map(|(key, value)| [*key, *value])
@@ -5566,8 +5580,13 @@ impl Function {
                     builder,
                     ref class,
                     base,
-                    ..
-                } => format!(".begin-source &{} {class} {}", builder.0, base.text()),
+                    outer,
+                } => format!(
+                    ".begin-source &{} {class} {}{}",
+                    builder.0,
+                    base.text(),
+                    outer.map_or_else(String::new, |value| format!(" %{}", value.0))
+                ),
                 Operation::SourceNew {
                     result,
                     builder,

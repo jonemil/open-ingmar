@@ -21,6 +21,7 @@ struct Definitions<'a> {
     values: BTreeMap<ValueId, &'a Operation>,
     owner: Option<Option<&'a str>>,
     initializers: &'a BTreeMap<String, String>,
+    source_classes: &'a std::collections::BTreeSet<&'a str>,
 }
 impl<'a> std::ops::Deref for Definitions<'a> {
     type Target = BTreeMap<ValueId, &'a Operation>;
@@ -58,7 +59,13 @@ pub(crate) fn lower_owned<'a>(
     label: &str,
     owner: Option<Option<&'a str>>,
 ) -> Program {
-    lower_bound(function, label, owner, &BTreeMap::new())
+    lower_bound(
+        function,
+        label,
+        owner,
+        &BTreeMap::new(),
+        &Default::default(),
+    )
 }
 
 /// Apply a unit's class-private constructor selectors during VM lowering.
@@ -68,11 +75,13 @@ pub(crate) fn lower_bound<'a>(
     label: &str,
     owner: Option<Option<&'a str>>,
     initializers: &'a BTreeMap<String, String>,
+    source_classes: &'a std::collections::BTreeSet<&'a str>,
 ) -> Program {
     let mut definitions = Definitions {
         values: BTreeMap::new(),
         owner,
         initializers,
+        source_classes,
     };
     let mut literal_aliases = BTreeMap::new();
     let mut literals = Vec::new();
@@ -313,7 +322,7 @@ pub(crate) fn lower_bound<'a>(
                     .expect("validated capture")
                     .operation;
                 let owner = uncaptured_owner(call);
-                call_receiver(owner, definitions.owner, &mut items);
+                call_receiver(owner, &definitions, &mut items);
                 items.push(call_target(owner, call_member(call), definitions.owner));
                 items.push(instruction(Opcode::Frpush, vec![]));
                 items.push(instruction(
@@ -353,7 +362,7 @@ pub(crate) fn lower_bound<'a>(
             Operation::ClassFieldBegin {
                 builder, ref class, ..
             } => {
-                items.push(class_lookup(class, owner));
+                class_lookup(class, &definitions, &mut items);
                 items.push(instruction(
                     Opcode::Lputv,
                     vec![Operand::Bits(builders[&builder])],
@@ -388,9 +397,46 @@ pub(crate) fn lower_bound<'a>(
                 continue;
             }
             Operation::SourceBegin {
-                builder, ref class, ..
+                builder,
+                ref class,
+                outer,
+                ..
             } => {
-                items.push(class_lookup(class, owner));
+                if let Some(receiver) = outer {
+                    let member = class_selector(class);
+                    match definitions[&receiver] {
+                        Operation::SelfValue { .. } => {
+                            items.push(instruction(Opcode::Getselfv, vec![member]));
+                        }
+                        Operation::LocalRead { local, .. }
+                        | Operation::VariableRead { local, .. } => {
+                            items.push(instruction(
+                                Opcode::Getlocalv,
+                                vec![Operand::Bits(slots[local]), member],
+                            ));
+                        }
+                        Operation::ParameterRead { index, .. } => {
+                            items.push(instruction(
+                                Opcode::Getlocalv,
+                                vec![Operand::Bits(*index as u64 + 1), member],
+                            ));
+                        }
+                        _ => {
+                            expression(
+                                receiver,
+                                &definitions,
+                                &slots,
+                                &builders,
+                                &function.value_types,
+                                &literal_aliases,
+                                &mut items,
+                            );
+                            items.push(instruction(Opcode::Getsv, vec![member]));
+                        }
+                    }
+                } else {
+                    class_lookup(class, &definitions, &mut items);
+                }
                 items.extend([
                     instruction(Opcode::Newc, vec![]),
                     instruction(Opcode::Lputv, vec![Operand::Bits(builders[&builder])]),
@@ -1180,20 +1226,15 @@ fn expression(
                     (Opcode::Getm, vec![])
                 }
                 Operation::ClassValue { class, .. } => {
-                    let item = if let Some((module, symbol)) =
-                        crate::native_bindings::class_alias(class)
-                    {
-                        instruction(
+                    if let Some((module, symbol)) = crate::native_bindings::class_alias(class) {
+                        (
                             Opcode::Getmv,
                             vec![Operand::Symbol(module), Operand::Symbol(symbol)],
                         )
                     } else {
-                        class_lookup(class, definitions.owner)
-                    };
-                    let Item::Instruction { opcode, operands } = item else {
-                        unreachable!()
-                    };
-                    (opcode, operands)
+                        class_lookup(class, definitions, items);
+                        continue;
+                    }
                 }
                 Operation::SelfValue { .. } | Operation::StaticSelf { .. } => {
                     (Opcode::Getself, vec![])
@@ -1233,7 +1274,7 @@ fn expression(
                     }
                 }
                 Operation::ClassFieldRead { class, field, .. } => {
-                    items.push(class_lookup(class, definitions.owner));
+                    class_lookup(class, definitions, items);
                     (
                         Opcode::Getsv,
                         vec![Operand::Symbol(format!("__ciq_field_{field}"))],
@@ -1353,13 +1394,7 @@ fn expression(
                             _ => CallOwner::Instance,
                         }
                     };
-                    call_setup(
-                        owner,
-                        member,
-                        definitions.owner,
-                        !arguments.is_empty(),
-                        items,
-                    );
+                    call_setup(owner, member, definitions, !arguments.is_empty(), items);
                     continue;
                 }
                 Operation::ParameterRead { index, .. } => {
@@ -1533,7 +1568,7 @@ fn expression(
             }
             Task::TupleStore => (Opcode::Aputv, vec![]),
             Task::SourceInstanceOf(class) => {
-                items.push(class_lookup(&class, definitions.owner));
+                class_lookup(&class, definitions, items);
                 (Opcode::Isa, vec![])
             }
             Task::InstanceOf(class) => {
@@ -1605,9 +1640,9 @@ fn call_target(owner: CallOwner<'_>, member: &str, current: Option<Option<&str>>
     }
 }
 /// Resolve owner-relative namespace selectors before the final callable and its arguments.
-fn call_receiver(owner: CallOwner<'_>, current: Option<Option<&str>>, items: &mut Vec<Item>) {
+fn call_receiver(owner: CallOwner<'_>, definitions: &Definitions<'_>, items: &mut Vec<Item>) {
     if let CallOwner::Class(class) = owner {
-        items.push(class_lookup(class, current));
+        class_lookup(class, definitions, items);
     }
     if let CallOwner::Path(path) = owner {
         for (index, part) in path.iter().enumerate() {
@@ -1658,7 +1693,7 @@ fn call_member(call: &Operation) -> &str {
 fn call_setup(
     owner: CallOwner<'_>,
     member: &str,
-    current: Option<Option<&str>>,
+    definitions: &Definitions<'_>,
     context: bool,
     items: &mut Vec<Item>,
 ) {
@@ -1670,8 +1705,8 @@ fn call_setup(
             items.push(instruction(Opcode::Lputv, vec![Operand::Bits(slot)]));
         }
     } else {
-        call_receiver(owner, current, items);
-        items.push(call_target(owner, member, current));
+        call_receiver(owner, definitions, items);
+        items.push(call_target(owner, member, definitions.owner));
         if context {
             items.push(instruction(Opcode::Frpush, vec![]));
         }
@@ -1692,13 +1727,7 @@ fn statement_call(
     literal_aliases: &BTreeMap<LiteralKey, String>,
     items: &mut Vec<Item>,
 ) {
-    call_setup(
-        owner,
-        member,
-        definitions.owner,
-        !arguments.is_empty(),
-        items,
-    );
+    call_setup(owner, member, definitions, !arguments.is_empty(), items);
     if !arguments.is_empty() {
         for value in arguments {
             expression(
@@ -1741,20 +1770,31 @@ fn integer(value: i32) -> (Opcode, Vec<Operand>) {
     (opcode, vec![Operand::Bits(u64::from(value as u32) & mask)])
 }
 
-/// Select a statically resolved class from its declaring module or current owner.
-fn class_lookup(class: &str, owner: Option<Option<&str>>) -> ciq_assembly::Item {
-    let member =
-        ciq_assembly::Operand::Symbol(format!("__ciq_class_{}", crate::names::module_key(class)));
-    if owner == Some(class.rsplit_once('.').map(|(module, _)| module)) {
-        instruction(ciq_mc::Opcode::Getselfv, vec![member])
+fn class_selector(class: &str) -> Operand {
+    Operand::Symbol(format!("__ciq_class_{}", crate::names::module_key(class)))
+}
+
+/// Select the outermost class from its module, then traverse class-owned members.
+fn class_lookup(class: &str, definitions: &Definitions<'_>, items: &mut Vec<Item>) {
+    let mut selectors = crate::names::scopes(class)
+        .take_while(|name| *name == class || definitions.source_classes.contains(name))
+        .collect::<Vec<_>>();
+    let root = selectors.pop().expect("a class lookup includes its target");
+    let owner = root.rsplit_once('.').map(|(owner, _)| owner);
+    let member = class_selector(root);
+    items.push(if definitions.owner == Some(owner) {
+        instruction(Opcode::Getselfv, vec![member])
     } else {
-        let module = class.rsplit_once('.').map_or_else(
+        let module = owner.map_or_else(
             || "__ciq_source_globals".into(),
-            |(module, _)| format!("__ciq_module_{}", crate::names::module_key(module)),
+            |module| format!("__ciq_module_{}", crate::names::module_key(module)),
         );
-        instruction(
-            ciq_mc::Opcode::Getmv,
-            vec![ciq_assembly::Operand::Symbol(module), member],
-        )
-    }
+        instruction(Opcode::Getmv, vec![Operand::Symbol(module), member])
+    });
+    items.extend(
+        selectors
+            .into_iter()
+            .rev()
+            .map(|class| instruction(Opcode::Getsv, vec![class_selector(class)])),
+    );
 }

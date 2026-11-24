@@ -592,8 +592,14 @@ or rescheduling constant dependencies.
 
 ### Source allocation and initialization
 
-`SourceBegin` selects the source class with `getmv`, allocates with `newc`, and
-stores the private instance in a builder frame slot. Its allocation hook runs
+`SourceBegin` resolves the class, allocates with `newc`, and stores the private
+instance in a builder frame slot. Namespace-based selection loads the outermost
+class from its module, then follows class members with `getsv`. Instance-based
+selection uses `getselfv` for the current receiver, `getlocalv` for frame
+slots, or `getsv` on an evaluated receiver. Class DATA carries each directly
+declared nested class in a type
+`0x07` field with key flags `0x50`. The nested class's own DATA parent remains
+its lexical module or the global scope. Its allocation hook runs
 before user argument effects. `SourceNew` loads and clears that slot, retains
 the instance on the stack, selects `initialize` with `getsv`, then invokes it
 with the ordered argument values. Popping the initializer result leaves the

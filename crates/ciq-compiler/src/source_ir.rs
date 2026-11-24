@@ -2320,12 +2320,89 @@ impl Builder<'_> {
     /// recursive expression dispatch so the source nesting budget stays usable.
     fn source_construction(
         &mut self,
-        class: String,
-        qualifier: String,
+        mut class: String,
+        spelling: String,
         arguments: Vec<parser::Expression>,
         span: Span,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<parser::Expression, Diagnostic> {
+        use parser::ExpressionKind as E;
+        let rooted = spelling.starts_with("$.");
+        let qualifier = spelling.trim_start_matches("$.").split('.').next().unwrap();
+        let shadowed = locals.contains_key(qualifier) || self.parameters.contains_key(qualifier);
+        let explicit = spelling.split_once('.').filter(|(root, _)| {
+            !rooted
+                && (shadowed
+                    || *root == "self"
+                    || self.calls.field_names.contains(*root)
+                    || self.calls.shared_name(root))
+        });
+        let mut outer = None;
+        if let Some((root, member)) = explicit {
+            let receiver = self.value_for_setup(
+                parser::Expression {
+                    kind: if root == "self" {
+                        E::SelfValue
+                    } else {
+                        E::Local(root.into())
+                    },
+                    span,
+                },
+                locals,
+            )?;
+            let receiver_class = crate::source_objects::class(
+                &self.operations,
+                receiver,
+                self.calls.parameter_types.clone(),
+            )
+            .ok_or_else(|| {
+                Diagnostic::at(
+                    self.source,
+                    span.start,
+                    "nested construction requires a source instance receiver",
+                )
+            })?;
+            class = std::iter::once(&receiver_class)
+                .chain(
+                    self.calls
+                        .class_ancestors
+                        .get(&receiver_class)
+                        .into_iter()
+                        .flatten(),
+                )
+                .map(|owner| format!("{owner}.{member}"))
+                .find(|candidate| self.calls.class_bases.contains_key(candidate))
+                .ok_or_else(|| {
+                    Diagnostic::at(
+                        self.source,
+                        span.start,
+                        "receiver has no nested construction class",
+                    )
+                })?;
+            outer = Some(receiver);
+        } else if shadowed {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "source construction class is shadowed",
+            ));
+        } else if !rooted
+            && !spelling.contains('.')
+            && !self.calls.static_context
+            && self.calls.current_class.as_ref().is_some_and(|owner| {
+                class
+                    .rsplit_once('.')
+                    .is_some_and(|(parent, _)| parent == owner.name)
+            })
+        {
+            outer = Some(self.value(
+                parser::Expression {
+                    kind: E::SelfValue,
+                    span,
+                },
+                locals,
+            )?);
+        }
         let base = self.calls.class_bases.get(&class).copied().ok_or_else(|| {
             Diagnostic::at(
                 self.source,
@@ -2333,19 +2410,13 @@ impl Builder<'_> {
                 "source constructor requires a declared class",
             )
         })?;
-        if locals.contains_key(&qualifier) || self.parameters.contains_key(&qualifier) {
-            return Err(Diagnostic::at(
-                self.source,
-                span.start,
-                "source construction class is shadowed",
-            ));
-        }
         let builder = crate::BuilderId(self.local_id(span)?.0);
         self.push(
             Operation::SourceBegin {
                 builder,
                 class: class.clone(),
                 base,
+                outer,
             },
             Some(span),
         );
@@ -2512,10 +2583,11 @@ impl Builder<'_> {
             },
             E::SourceNew {
                 class,
-                qualifier,
+                spelling,
                 arguments,
+                ..
             } => {
-                return self.source_construction(class, qualifier, arguments, span, locals);
+                return self.source_construction(class, spelling, arguments, span, locals);
             }
             E::ValueCall {
                 receiver,
@@ -4607,6 +4679,18 @@ pub(crate) struct CallContext {
     initializing_fields: bool,
 }
 impl CallContext {
+    /// Find the lexical module outside any enclosing class declarations.
+    pub(crate) fn containing_module<'a>(&self, class: &'a str) -> Option<&'a str> {
+        crate::names::scopes(class)
+            .skip(1)
+            .find(|owner| !self.class_bases.contains_key(*owner))
+    }
+
+    fn lexical_value_scopes<'a>(&'a self, owner: &'a str) -> impl Iterator<Item = &'a str> {
+        crate::names::scopes(owner)
+            .filter(move |scope| *scope == owner || !self.class_bases.contains_key(*scope))
+    }
+
     /// Resolve literal namespace references after lexical values/constants have had priority.
     fn namespace_value(
         &self,
@@ -5137,11 +5221,14 @@ impl CallContext {
             }
             return owner
                 .into_iter()
-                .flat_map(crate::names::scopes)
+                .flat_map(|owner| self.lexical_value_scopes(owner))
                 .find_map(|owner| self.constants.get(&format!("{owner}.{member}")))
                 .or_else(|| self.constants.get(member));
         }
-        for scope in owner.into_iter().flat_map(crate::names::scopes) {
+        for scope in owner
+            .into_iter()
+            .flat_map(|owner| self.lexical_value_scopes(owner))
+        {
             if let Some(value) = self.constants.get(&format!("{scope}.{path}")) {
                 return Some(value);
             }

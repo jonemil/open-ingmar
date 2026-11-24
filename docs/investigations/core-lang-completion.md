@@ -675,6 +675,31 @@ which retain lexical search. Entry lookup also leaves the app module's marker
 90 absent. These distinctions are checked by the specimen rather than inferred
 from declaration nesting alone.
 
+## Nested classes
+
+Experimentally observed, 2026-11-24, with SDK 9.2.0, `fr265`, `-O 0`, and
+minimum API 3.0.0. The [nested-class specimen](../../examples/compiler-nested-classes/README.md)
+prints 41 through 45. The inner method reads the module's `number`, even with
+an outer instance field of the same name. In an isolated variant, a bare read
+of an outer-only field or constant fails with an unresolved symbol on `self`.
+
+In the SDK PRG (SHA-256
+`89a816ad320fb140e6f8c03f04f3732a3b78a84a82ef1d62d0f6cd694cd8f19f`),
+the outer DATA class has a type `0x07`, flags `0x50` `Inner` field at
+DATA+`0x5a3`, pointing to DATA+`0xa7a`. The target's parent is `globals/Scope`,
+the enclosing module, and the subclass inherits the member. CODE uses
+`getselfv` for bare/current-receiver selection, `getlocalv` on outer/subclass
+locals, and module/class lookup followed by `getsv` for the qualified target.
+Each selects `Inner` before `newc`.
+
+Separate SDK compilation probes also accepted `new outer.Middle.Inner()`,
+unqualified `new Inner()` from a subclass of the outer class, a subclass
+declaring its own `class Inner`, and a declaration with `private class Inner`.
+These probes establish compilation only. A call in receiver position spelled
+`new outer().Inner()` was parsed as a construction of `outer` and rejected.
+Using a class-owned AppBase subclass as the manifest entry failed with
+`Entry point cannot have a class as its parent.`
+
 ## Source namespace imports
 
 Experimentally observed, 2026-11-01: SDK 9.2.0, `fr265`, `-O 0`, minimum API

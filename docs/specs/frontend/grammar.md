@@ -48,6 +48,7 @@ superclass = type-path
 class-member = visibility? (field | function | constant | enumeration)
              | static-modifiers (function | constant | shared-variable)
              | "public"? typedef
+             | "public"? class
 static-modifiers = "static" visibility? | visibility "static"
 visibility = "public" | "private" | "protected" | "hidden"
 namespace-declaration = "using" namespace-path ("as" identifier)? ";"
@@ -125,9 +126,8 @@ Null defaults. Non-null fields have no initializer here except Symbol. Inferred 
 shown above.
 Imports, owner collisions, module reopening, and file-local bindings follow
 [declaration resolution](README.md#declarations-and-name-resolution). There are no optional/default
-parameters, function-local function/module/class declarations, source superclass
-chains, nested classes,
-or annotations. Module paths have at most 64 components; a unit has at most 256
+parameters, function-local function/module/class declarations, or annotations.
+Owner paths have at most 64 components; a unit has at most 256
 module scopes, including empty scopes and implied parents.
 
 ## Statements
@@ -236,7 +236,8 @@ native-constant = path
 array-literal = "[" (argument-list ","?)? "]" "b"?
 dictionary-literal = "{" (expression "=>" expression
                            ("," expression "=>" expression)* ","?)? "}"
-construction = "new" type-path "(" argument-list? ")"
+construction = "new" (type-path | ("self" | "me") "." identifier)
+               "(" argument-list? ")"
              | "new" "[" expression "]" "b"?
 argument-list = expression ("," expression)*
 literal = number-literal | long-literal | float-literal | double-literal

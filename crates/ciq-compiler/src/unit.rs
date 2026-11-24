@@ -339,16 +339,18 @@ fn activation_callees<'a>(
         | Operation::ModuleCall { module, .. }
         | Operation::ModuleCallStatement { module, .. } => Some(module.as_str()),
         Operation::ClassValue { class, .. }
-        | Operation::SourceBegin { class, .. }
+        | Operation::SourceBegin {
+            class, outer: None, ..
+        }
         | Operation::ClassCall { class, .. }
         | Operation::ClassCallStatement { class, .. }
         | Operation::ClassFieldRead { class, .. }
-        | Operation::ClassFieldBegin { class, .. } => {
-            class.rsplit_once('.').map(|(owner, _)| owner)
-        }
-        Operation::SourceInstanceOf { class, .. } => {
-            class.name.rsplit_once('.').map(|(owner, _)| owner)
-        }
+        | Operation::ClassFieldBegin { class, .. } => crate::names::scopes(class)
+            .skip(1)
+            .find(|scope| unit.modules.contains(*scope)),
+        Operation::SourceInstanceOf { class, .. } => crate::names::scopes(&class.name)
+            .skip(1)
+            .find(|scope| unit.modules.contains(*scope)),
         _ => None,
     };
     if let Some(module) = module.filter(|module| owner != Owner::Module(module)) {
@@ -2046,11 +2048,16 @@ impl CompilationUnit {
                 });
             }
         }
-        modules.extend(
-            classes
-                .iter()
-                .filter_map(|c| c.name.rsplit_once('.').map(|(owner, _)| owner.to_owned())),
-        );
+        let class_names = classes
+            .iter()
+            .map(|class| class.name.as_str())
+            .collect::<BTreeSet<_>>();
+        modules.extend(classes.iter().filter_map(|c| {
+            crate::names::scopes(&c.name)
+                .skip(1)
+                .find(|owner| !class_names.contains(owner))
+                .map(str::to_owned)
+        }));
         let modules = module_names(modules, &declarations, &shared);
         if modules.len() > 256 {
             return Err(UnitError {
@@ -2320,6 +2327,33 @@ impl CompilationUnit {
                 .map_or((None, class.name.as_str()), |(parent, member)| {
                     (Some(parent), member)
                 });
+            if let Some(owner) = parent.and_then(|parent| hierarchy.get(parent)) {
+                if class.base == crate::ClassBase::ApplicationAppBase {
+                    return Err(fail(
+                        Some(at),
+                        None,
+                        "AppBase classes cannot be nested inside a class".into(),
+                    ));
+                }
+                let conflicts = self.classes.iter().any(|candidate| {
+                    let related = candidate.name == owner.name
+                        || candidate.superclass.is_some()
+                            && hierarchy[&candidate.name].ancestors.contains(&owner.name)
+                        || owner.ancestors.contains(&candidate.name);
+                    related
+                        && (candidate.fields.iter().any(|f| f.name == member)
+                            || candidate.methods.iter().any(|f| f.name() == member)
+                            || candidate.name != owner.name
+                                && hierarchy.contains_key(&format!("{}.{member}", candidate.name)))
+                });
+                if conflicts {
+                    return Err(fail(
+                        Some(at),
+                        None,
+                        "nested class conflicts with a member in its outer class hierarchy".into(),
+                    ));
+                }
+            }
             if self
                 .declarations
                 .iter()
@@ -2842,6 +2876,7 @@ impl CompilationUnit {
                     {
                         if self.classes.iter().any(|class| {
                             class.name == scope
+                                && scope == current
                                 && (self.field(&class.name, member).is_some()
                                     || self.method(&class.name, member).is_some()
                                     || (!function.is_static_method()
@@ -4029,6 +4064,35 @@ impl CompilationUnit {
                     }
                     .check(class, true)
                     .map_err(|(_, message)| fail(Some(index), Some(operation), message))?;
+                }
+                if let Operation::SourceBegin {
+                    class,
+                    outer: Some(receiver),
+                    ..
+                } = &located.operation
+                {
+                    let (parent, member) = class.rsplit_once('.').ok_or_else(|| {
+                        fail(
+                            Some(index),
+                            Some(operation),
+                            "outer receiver requires a nested class".into(),
+                        )
+                    })?;
+                    let valid = origins.contract(*receiver).is_some_and(|contract| {
+                        contract.classes().iter().all(|receiver| {
+                            std::iter::once(&receiver.name)
+                                .chain(&receiver.ancestors)
+                                .find(|scope| hierarchy.contains_key(&format!("{scope}.{member}")))
+                                .is_some_and(|scope| scope == parent)
+                        })
+                    });
+                    if !valid {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "outer receiver does not select the declared nested class".into(),
+                        ));
+                    }
                 }
                 if let Operation::SourceNew { class, base, .. }
                 | Operation::SourceBegin { class, base, .. } = &located.operation
@@ -5228,6 +5292,7 @@ impl CompilationUnit {
             .filter(|c| self.member_visibility(&c.name, "initialize") == crate::Visibility::Private)
             .map(|c| (c.name.clone(), self.member_symbol(&c.name, "initialize")))
             .collect();
+        let source_classes = self.classes.iter().map(|c| c.name.as_str()).collect();
         let items = self
             .declarations
             .iter()
@@ -5237,6 +5302,7 @@ impl CompilationUnit {
                     &d.code_label(),
                     Some(d.module.as_deref()),
                     &initializers,
+                    &source_classes,
                 )
                 .items()
                 .to_vec()
@@ -5248,6 +5314,7 @@ impl CompilationUnit {
                         &c.code_label(f.name()),
                         None,
                         &initializers,
+                        &source_classes,
                     )
                     .items()
                     .to_vec()
@@ -5797,10 +5864,7 @@ pub(crate) fn compile_sources_mapped(
                 .filter(|binding| !binding.mutable)
                 .map(|value| value.name.clone())
                 .collect();
-            method_calls.current_module = class
-                .name
-                .rsplit_once('.')
-                .map(|(owner, _)| owner.to_owned());
+            method_calls.current_module = calls.containing_module(&class.name).map(str::to_owned);
             method_calls.current_class = Some(crate::SourceClass {
                 name: class.name.clone(),
                 ancestors: calls
@@ -6289,8 +6353,7 @@ fn infer_stored_constants(
                 }
                 Owner::Class(class) => {
                     let base = calls.class_bases[class];
-                    owner_calls.current_module =
-                        class.rsplit_once('.').map(|(owner, _)| owner.to_owned());
+                    owner_calls.current_module = calls.containing_module(class).map(str::to_owned);
                     owner_calls.current_class = Some(crate::SourceClass {
                         name: class.into(),
                         ancestors: calls
