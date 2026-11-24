@@ -1787,15 +1787,18 @@ reassignment changes only the local reference.
 Class declarations may contain named classes. A nested class has an
 owner-qualified identity such as `Scope.Outer.Inner`. Inside `Outer` instance
 methods, `new Inner(args)` and `new self.Inner(args)` select the child on the
-current receiver. `me` is also accepted in place of `self`.
-`new outer.Inner(args)` selects through an existing source
-instance, including a subclass instance that inherits the child. A qualified
-class target such as `new Scope.Outer.Inner(args)` follows the outer class
-record directly. The outer receiver is evaluated before initializer arguments.
+current receiver. Bare lookup includes inherited children. `me` is also
+accepted in place of `self`. `new outer.Middle.Inner(args)` starts from an
+existing source instance, then follows each class member in order. A qualified
+class target such as `new Scope.Outer.Inner(args)` starts from the declared
+outer class record. Selection and allocation precede initializer arguments.
+
 Inner methods have their own `self` and lexical module. They cannot capture
-the outer class's fields or constants by name. The current profile supports
-public nested declarations with unambiguous selectors across the outer class
-hierarchy. An instance target uses one named receiver and one child selector.
+the outer class's fields or constants by name. Public and private nested
+declarations use the same selector and may be constructed from outside the
+enclosing class. A subclass of the enclosing class may declare its own child
+with the same name. Instance construction requires the path to identify the
+same nested class for all possible source subclasses of the receiver type.
 
 `receiver.method(arguments)` resolves members across the receiver's retained
 source classes and native alternatives. The receiver may be a construction,

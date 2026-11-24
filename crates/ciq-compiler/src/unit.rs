@@ -2342,9 +2342,7 @@ impl CompilationUnit {
                         || owner.ancestors.contains(&candidate.name);
                     related
                         && (candidate.fields.iter().any(|f| f.name == member)
-                            || candidate.methods.iter().any(|f| f.name() == member)
-                            || candidate.name != owner.name
-                                && hierarchy.contains_key(&format!("{}.{member}", candidate.name)))
+                            || candidate.methods.iter().any(|f| f.name() == member))
                 });
                 if conflicts {
                     return Err(fail(
@@ -4067,30 +4065,38 @@ impl CompilationUnit {
                 }
                 if let Operation::SourceBegin {
                     class,
-                    outer: Some(receiver),
+                    outer: Some((receiver, path)),
                     ..
                 } = &located.operation
                 {
-                    let (parent, member) = class.rsplit_once('.').ok_or_else(|| {
-                        fail(
-                            Some(index),
-                            Some(operation),
-                            "outer receiver requires a nested class".into(),
-                        )
-                    })?;
                     let valid = origins.contract(*receiver).is_some_and(|contract| {
                         contract.classes().iter().all(|receiver| {
-                            std::iter::once(&receiver.name)
-                                .chain(&receiver.ancestors)
-                                .find(|scope| hierarchy.contains_key(&format!("{scope}.{member}")))
-                                .is_some_and(|scope| scope == parent)
+                            hierarchy
+                                .values()
+                                .filter(|candidate| {
+                                    candidate.name == receiver.name
+                                        || candidate.ancestors.contains(&receiver.name)
+                                })
+                                .all(|candidate| {
+                                    crate::inheritance::nested_class(
+                                        &candidate.name,
+                                        path,
+                                        |owner| {
+                                            hierarchy
+                                                .get(owner)
+                                                .map(|declared| declared.ancestors.as_slice())
+                                        },
+                                    )
+                                    .as_ref()
+                                        == Some(class)
+                                })
                         })
                     });
                     if !valid {
                         return Err(fail(
                             Some(index),
                             Some(operation),
-                            "outer receiver does not select the declared nested class".into(),
+                            "outer receiver path must select one declared nested class across its source hierarchy".into(),
                         ));
                     }
                 }

@@ -38,7 +38,7 @@ fn module_class_contracts_and_names_reject_invalid_claims() {
         "module A{class Token{}function f(){var Token=1;return new Token();}}",
         "module A{class Token{}function f(value){var Token=1;return value instanceof Token;}}",
         "module Outer{class Token{}}module A{module Outer{}function f(){return new Outer.Token();}}",
-        "module A{class Token{private class Inner{}}}function f(){}",
+        "module A{class Token{static class Inner{}}}function f(){}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }

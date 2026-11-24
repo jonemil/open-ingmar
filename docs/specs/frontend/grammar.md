@@ -48,7 +48,7 @@ superclass = type-path
 class-member = visibility? (field | function | constant | enumeration)
              | static-modifiers (function | constant | shared-variable)
              | "public"? typedef
-             | "public"? class
+             | ("public" | "private")? class
 static-modifiers = "static" visibility? | visibility "static"
 visibility = "public" | "private" | "protected" | "hidden"
 namespace-declaration = "using" namespace-path ("as" identifier)? ";"
@@ -236,7 +236,7 @@ native-constant = path
 array-literal = "[" (argument-list ","?)? "]" "b"?
 dictionary-literal = "{" (expression "=>" expression
                            ("," expression "=>" expression)* ","?)? "}"
-construction = "new" (type-path | ("self" | "me") "." identifier)
+construction = "new" (type-path | ("self" | "me") "." path)
                "(" argument-list? ")"
              | "new" "[" expression "]" "b"?
 argument-list = expression ("," expression)*

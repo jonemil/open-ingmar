@@ -596,9 +596,10 @@ or rescheduling constant dependencies.
 instance in a builder frame slot. Namespace-based selection loads the outermost
 class from its module, then follows class members with `getsv`. Instance-based
 selection uses `getselfv` for the current receiver, `getlocalv` for frame
-slots, or `getsv` on an evaluated receiver. Class DATA carries each directly
-declared nested class in a type
-`0x07` field with key flags `0x50`. The nested class's own DATA parent remains
+slots, or `getsv` on an evaluated receiver. Further selectors use `getsv` on
+the preceding class value. Class DATA carries each directly declared nested
+class in a type `0x07` field with key flags `0x50`, including private and
+overriding child declarations. The nested class's own DATA parent remains
 its lexical module or the global scope. Its allocation hook runs
 before user argument effects. `SourceNew` loads and clears that slot, retains
 the instance on the stack, selects `initialize` with `getsv`, then invokes it

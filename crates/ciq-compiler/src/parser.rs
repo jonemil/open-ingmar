@@ -1206,7 +1206,7 @@ pub(crate) fn collect_declarations<'a>(
                     && (!in_class
                         || !matches!(
                             parser.peek()?,
-                            Kind::Word("function" | "var" | "const" | "enum")
+                            Kind::Word("function" | "var" | "const" | "enum" | "class")
                         ))
                 {
                     return Err(parser.error(
@@ -2767,7 +2767,7 @@ impl<'a> Parser<'a> {
             && !method
             && path.contains('.')
             && !self.declarations.classes.contains(&path)
-            && (raw_path.starts_with('$') || raw_path.split('.').count() != 2)
+            && raw_path.starts_with('$')
         {
             return Err(self.error(open.span.start, "unsupported qualified construction class"));
         }
@@ -4646,8 +4646,8 @@ fn parse_class(
     while parser.peek()? != Kind::Punctuation('}') {
         let (access, is_static) = parser.modifiers()?;
         if parser.peek()? == Kind::Word("class") {
-            if access != crate::Visibility::Public || is_static {
-                return Err(parser.error(parser.offset, "nested classes require public visibility"));
+            if is_static || access == crate::Visibility::Protected {
+                return Err(parser.error(parser.offset, "unsupported nested class modifier"));
             }
             parse_class(parser, unit, count)?;
             continue;

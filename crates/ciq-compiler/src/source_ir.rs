@@ -2362,16 +2362,9 @@ impl Builder<'_> {
                     "nested construction requires a source instance receiver",
                 )
             })?;
-            class = std::iter::once(&receiver_class)
-                .chain(
-                    self.calls
-                        .class_ancestors
-                        .get(&receiver_class)
-                        .into_iter()
-                        .flatten(),
-                )
-                .map(|owner| format!("{owner}.{member}"))
-                .find(|candidate| self.calls.class_bases.contains_key(candidate))
+            class = self
+                .calls
+                .nested_class(&receiver_class, member)
                 .ok_or_else(|| {
                     Diagnostic::at(
                         self.source,
@@ -2379,29 +2372,30 @@ impl Builder<'_> {
                         "receiver has no nested construction class",
                     )
                 })?;
-            outer = Some(receiver);
+            outer = Some((receiver, member.to_owned()));
         } else if shadowed {
             return Err(Diagnostic::at(
                 self.source,
                 span.start,
                 "source construction class is shadowed",
             ));
-        } else if !rooted
-            && !spelling.contains('.')
-            && !self.calls.static_context
-            && self.calls.current_class.as_ref().is_some_and(|owner| {
-                class
-                    .rsplit_once('.')
-                    .is_some_and(|(parent, _)| parent == owner.name)
-            })
-        {
-            outer = Some(self.value(
-                parser::Expression {
-                    kind: E::SelfValue,
-                    span,
-                },
-                locals,
-            )?);
+        } else if !rooted && !spelling.contains('.') && !self.calls.static_context {
+            if let Some(target) = self
+                .calls
+                .current_class
+                .as_ref()
+                .and_then(|owner| self.calls.nested_class(&owner.name, &spelling))
+            {
+                class = target;
+                let receiver = self.value(
+                    parser::Expression {
+                        kind: E::SelfValue,
+                        span,
+                    },
+                    locals,
+                )?;
+                outer = Some((receiver, spelling));
+            }
         }
         let base = self.calls.class_bases.get(&class).copied().ok_or_else(|| {
             Diagnostic::at(
@@ -4679,6 +4673,12 @@ pub(crate) struct CallContext {
     initializing_fields: bool,
 }
 impl CallContext {
+    fn nested_class(&self, receiver: &str, path: &str) -> Option<String> {
+        crate::inheritance::nested_class(receiver, path, |owner| {
+            self.class_ancestors.get(owner).map(Vec::as_slice)
+        })
+    }
+
     /// Find the lexical module outside any enclosing class declarations.
     pub(crate) fn containing_module<'a>(&self, class: &'a str) -> Option<&'a str> {
         crate::names::scopes(class)

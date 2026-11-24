@@ -3,7 +3,9 @@
 [app.mc](app.mc) constructs a nested class through a named outer instance,
 a subclass instance, the current receiver, and the qualified class. The inner
 method reads its module variable even though the outer class has a field of the
-same name. See [expected.txt](expected.txt).
+same name. The specimen also covers inherited bare lookup, a multi-step path
+to a private child, and a child declaration that overrides an inherited
+selector. See [expected.txt](expected.txt).
 
 ```sh
 mkdir -p scratch/compiler-nested-classes

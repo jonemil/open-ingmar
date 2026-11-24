@@ -20,6 +20,12 @@ module Scope {
             }
         }
 
+        class Middle {
+            private class Leaf {
+                function get() as Lang.Number { return 51; }
+            }
+        }
+
         function bare() as Inner {
             return new Inner(1);
         }
@@ -29,7 +35,31 @@ module Scope {
         }
     }
 
-    class Sub extends Outer {}
+    class Sub extends Outer {
+        function inherited() as Outer.Inner {
+            return new Inner(6);
+        }
+    }
+}
+
+class Marker {
+    function get() as Lang.Number { return 99; }
+}
+
+class RootOuter {
+    class Marker {
+        function get() as Lang.Number { return 61; }
+    }
+}
+
+class ChildOuter extends RootOuter {
+    class Marker {
+        function get() as Lang.Number { return 62; }
+    }
+
+    function make() as Marker {
+        return new Marker();
+    }
 }
 
 class MinimalConsoleApp extends Application.AppBase {
@@ -45,6 +75,13 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println((new outer.Inner(3)).get());
         System.println((new sub.Inner(4)).get());
         System.println((new Scope.Outer.Inner(5)).get());
+        System.println(sub.inherited().get());
+        System.println((new outer.Middle.Leaf()).get());
+        System.println((new Scope.Outer.Middle.Leaf()).get());
+        System.println((new RootOuter.Marker()).get());
+        var child = new ChildOuter();
+        System.println((new child.Marker()).get());
+        System.println(child.make().get());
         System.exit();
     }
 }

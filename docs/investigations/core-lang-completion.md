@@ -679,11 +679,12 @@ from declaration nesting alone.
 
 Experimentally observed, 2026-11-24, with SDK 9.2.0, `fr265`, `-O 0`, and
 minimum API 3.0.0. The [nested-class specimen](../../examples/compiler-nested-classes/README.md)
-prints 41 through 45. The inner method reads the module's `number`, even with
-an outer instance field of the same name. In an isolated variant, a bare read
-of an outer-only field or constant fails with an unresolved symbol on `self`.
+checks construction and selector behavior. The inner method reads the module's
+`number`, even with an outer instance field of the same name. In an isolated
+variant, a bare read of an outer-only field or constant fails with an unresolved
+symbol on `self`.
 
-In the SDK PRG (SHA-256
+In the original SDK PRG (SHA-256
 `89a816ad320fb140e6f8c03f04f3732a3b78a84a82ef1d62d0f6cd694cd8f19f`),
 the outer DATA class has a type `0x07`, flags `0x50` `Inner` field at
 DATA+`0x5a3`, pointing to DATA+`0xa7a`. The target's parent is `globals/Scope`,
@@ -692,10 +693,16 @@ the enclosing module, and the subclass inherits the member. CODE uses
 locals, and module/class lookup followed by `getsv` for the qualified target.
 Each selects `Inner` before `newc`.
 
-Separate SDK compilation probes also accepted `new outer.Middle.Inner()`,
-unqualified `new Inner()` from a subclass of the outer class, a subclass
-declaring its own `class Inner`, and a declaration with `private class Inner`.
-These probes establish compilation only. A call in receiver position spelled
+Separate SDK PRGs compiled and ran deep paths, inherited bare targets, and
+outside construction of private children through both a receiver and a
+qualified class name. The deep path emitted `getlocalv @Middle`, then
+`getsv @Inner`, then `newc`. Inherited bare targets used `getselfv`. Private
+and overriding child fields both used type `0x07` with key flags `0x50`.
+
+With `Outer.Inner.get()` returning 42 and `Sub.Inner.get()` returning 43,
+`throughBase(x as Outer)` returned 43 for `new Sub()` and 42 for `new Outer()`
+when it called `(new x.Inner()).get()`. A bare `new Inner()` inside `Sub`
+selected its child even with a global `Inner` returning 99.
 `new outer().Inner()` was parsed as a construction of `outer` and rejected.
 Using a class-owned AppBase subclass as the manifest entry failed with
 `Entry point cannot have a class as its parent.`

@@ -45,10 +45,20 @@ fn saved_construction_rejects_an_unrelated_outer_receiver() {
 }
 
 #[test]
-fn outer_subclasses_cannot_replace_the_proven_nested_selector() {
-    for member in ["class Inner {}", "var Inner = 1;"] {
-        let source =
-            format!("class Outer {{ class Inner {{}} }} class Sub extends Outer {{ {member} }}");
-        assert!(compile_sources(&[&source]).is_err(), "{source}");
-    }
+fn ambiguous_outer_dispatch_and_value_collisions_are_rejected() {
+    let source = "class Outer { class Inner {} } class Sub extends Outer { class Inner {} }";
+    assert!(compile_sources(&[source]).is_ok());
+    assert!(
+        compile_sources(&[
+            source,
+            "function make(x as Outer) { return new x.Inner(); }"
+        ])
+        .is_err()
+    );
+    assert!(
+        compile_sources(&[
+            "class Outer { class Inner {} } class Sub extends Outer { var Inner = 1; }"
+        ])
+        .is_err()
+    );
 }

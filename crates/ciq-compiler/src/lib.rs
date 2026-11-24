@@ -1652,12 +1652,13 @@ pub enum Operation {
     },
     /// Allocate a source instance into private storage before evaluating user
     /// initializer arguments, optionally selecting it through an outer instance.
+    /// The outer operand carries the receiver and its dotted selector path.
     /// The instance cannot escape until SourceNew.
     SourceBegin {
         builder: BuilderId,
         class: String,
         base: ClassBase,
-        outer: Option<ValueId>,
+        outer: Option<(ValueId, String)>,
     },
     /// Invoke a private source allocation's user initializer and expose the
     /// completed instance. Unit validation resolves the initializer contract.
@@ -3771,13 +3772,16 @@ impl Function {
                 Operation::SourceBegin {
                     ref class,
                     base,
-                    outer,
+                    ref outer,
                     ..
                 } => {
                     validate_call_names(Some(class), "class").map_err(fail)?;
-                    if let Some(receiver) = outer {
+                    if let Some((receiver, path)) = outer {
+                        if !crate::names::module_path(path) {
+                            return Err(fail("invalid nested class selector path"));
+                        }
                         if origins
-                            .contract(receiver)
+                            .contract(*receiver)
                             .is_none_or(|contract| contract.nullable || !contract.native.is_empty())
                         {
                             return Err(fail(
@@ -3793,7 +3797,7 @@ impl Function {
                             .check_type(api::core(), &ty)
                             .map_err(|message| fail(&message))?;
                     }
-                    (None, outer.into_iter().collect())
+                    (None, outer.iter().map(|(receiver, _)| *receiver).collect())
                 }
                 Operation::SourceNew {
                     result,
@@ -5070,7 +5074,9 @@ impl Function {
                     | Operation::RecordBegin { .. }
                     | Operation::ArrayBegin { .. }
                     | Operation::ByteArrayBegin { .. } => vec![],
-                    Operation::SourceBegin { outer, .. } => outer.iter().copied().collect(),
+                    Operation::SourceBegin { outer, .. } => {
+                        outer.iter().map(|(receiver, _)| *receiver).collect()
+                    }
                     Operation::DictionaryFill { entries, .. } => entries
                         .iter()
                         .flat_map(|(key, value)| [*key, *value])
@@ -5580,12 +5586,14 @@ impl Function {
                     builder,
                     ref class,
                     base,
-                    outer,
+                    ref outer,
                 } => format!(
                     ".begin-source &{} {class} {}{}",
                     builder.0,
                     base.text(),
-                    outer.map_or_else(String::new, |value| format!(" %{}", value.0))
+                    outer
+                        .as_ref()
+                        .map_or_else(String::new, |(value, path)| format!(" %{} {path}", value.0))
                 ),
                 Operation::SourceNew {
                     result,

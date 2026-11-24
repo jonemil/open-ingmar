@@ -316,7 +316,7 @@ field-entry-metadata = "declared=" call-result-tag
 source-field-metadata = "field=" call-result-tag
 member-read-metadata = source-field-metadata | "view=" call-result-tag
 object-operation = ".new-native" value-id class-path
-                 | ".begin-source" builder-id class-path native-base [value-id]
+                 | ".begin-source" builder-id class-path native-base [value-id class-path]
                  | ".new-source" value-id source-chain native-base builder-id value-id*
                  | ".base-initialize" native-base
                  | ".tuple-new" value-id value-id*

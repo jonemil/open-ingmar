@@ -50,6 +50,22 @@ pub(crate) fn resolve(
     Ok(result)
 }
 
+/// Resolve each nested selector on its current class and then its source ancestors.
+pub(crate) fn nested_class<'a>(
+    receiver: &str,
+    path: &str,
+    ancestors: impl Fn(&str) -> Option<&'a [String]>,
+) -> Option<String> {
+    let mut owner = receiver.to_owned();
+    for member in path.split('.') {
+        owner = std::iter::once(owner.as_str())
+            .chain(ancestors(&owner)?.iter().map(String::as_str))
+            .map(|scope| format!("{scope}.{member}"))
+            .find(|class| ancestors(class).is_some())?;
+    }
+    Some(owner)
+}
+
 /// Rebuild ancestry from unit declarations and check their native projections.
 /// Saved type contracts must agree with this graph rather than supplying parents.
 pub(crate) fn for_classes(

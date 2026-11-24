@@ -767,16 +767,20 @@ pub(crate) fn parse_function_ir_context(
                     value: parse_value(&fields[2])?,
                 },
                 Directive::BeginSource => {
-                    if !matches!(width, 4 | 5) {
+                    if !matches!(width, 4 | 6) {
                         return Err(fail(
                             *at,
-                            "expected .begin-source builder class base [outer]",
+                            "expected .begin-source builder class base [outer selector-path]",
                         ));
                     }
                     Operation::SourceBegin {
                         builder: parse_builder(&fields[1])?,
                         class: fields[2].clone(),
-                        outer: (width == 5).then(|| parse_value(&fields[4])).transpose()?,
+                        outer: if width == 6 {
+                            Some((parse_value(&fields[4])?, fields[5].clone()))
+                        } else {
+                            None
+                        },
                         base: match fields[3].as_str() {
                             "Lang.Object" => crate::ClassBase::LangObject,
                             "WatchUi.View" => crate::ClassBase::WatchUiView,

@@ -399,12 +399,15 @@ pub(crate) fn lower_bound<'a>(
             Operation::SourceBegin {
                 builder,
                 ref class,
-                outer,
+                ref outer,
                 ..
             } => {
-                if let Some(receiver) = outer {
-                    let member = class_selector(class);
-                    match definitions[&receiver] {
+                if let Some((receiver, path)) = outer {
+                    let mut selectors = path
+                        .split('.')
+                        .map(|name| Operand::Symbol(format!("__ciq_member_{name}")));
+                    let member = selectors.next().expect("validated nested selector path");
+                    match definitions[receiver] {
                         Operation::SelfValue { .. } => {
                             items.push(instruction(Opcode::Getselfv, vec![member]));
                         }
@@ -423,7 +426,7 @@ pub(crate) fn lower_bound<'a>(
                         }
                         _ => {
                             expression(
-                                receiver,
+                                *receiver,
                                 &definitions,
                                 &slots,
                                 &builders,
@@ -434,6 +437,7 @@ pub(crate) fn lower_bound<'a>(
                             items.push(instruction(Opcode::Getsv, vec![member]));
                         }
                     }
+                    items.extend(selectors.map(|member| instruction(Opcode::Getsv, vec![member])));
                 } else {
                     class_lookup(class, &definitions, &mut items);
                 }
