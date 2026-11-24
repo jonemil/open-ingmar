@@ -426,8 +426,8 @@ pub(crate) fn reads(
                 }
             }
             let mut output = state.clone();
-            for at in 0..ops.len() {
-                if structure.blocks[at] == block {
+            for (at, &operation_block) in structure.blocks.iter().enumerate() {
+                if operation_block == block {
                     transfer(&mut output, at);
                 }
             }
