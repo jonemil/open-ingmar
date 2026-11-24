@@ -33,6 +33,12 @@
 - Follow [validation policy](docs/validation.md) for the work cycle, check
   selection, and retries. Inspect failures and unknown behavior; a successful
   process exit does not replace necessary visual or semantic review.
+- When the user asks to delegate Rust validation, give the
+  [`rust_validation` agent](.codex/agents/rust-validation.toml) the running
+  broker session handle, selected checks, and a fresh scratch path. Give it
+  sole ownership of the run and keep the inputs stable while it runs. Keep
+  technical analysis and decisions in the main thread. Ask the same agent for
+  targeted evidence if needed, then review its verdict before cleanup.
 - After validating a proposed commit, inspect the results, record needed
   findings, and remove its temporary builds, copied tools, exports, captures,
   and logs. Preserve `scratch/commit_msg`, unresolved evidence, and reusable
