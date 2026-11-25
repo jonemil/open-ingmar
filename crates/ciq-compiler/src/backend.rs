@@ -614,6 +614,12 @@ pub(crate) fn lower_bound<'a>(
                 condition,
                 on_true,
                 on_false,
+            }
+            | Operation::TruthBranch {
+                condition,
+                on_true,
+                on_false,
+                ..
             } => {
                 expression(
                     condition,
@@ -624,19 +630,34 @@ pub(crate) fn lower_bound<'a>(
                     &literal_aliases,
                     &mut items,
                 );
+                use crate::TruthBranchKind::{KeepOnFalse, KeepOnTrue, True};
+                if matches!(
+                    located.operation,
+                    Operation::TruthBranch {
+                        kind: KeepOnTrue | KeepOnFalse,
+                        ..
+                    }
+                ) {
+                    items.push(instruction(Opcode::Dup, vec![Operand::Bits(0)]));
+                }
+                let (opcode, target, next) = if matches!(
+                    located.operation,
+                    Operation::TruthBranch {
+                        kind: True | KeepOnTrue,
+                        ..
+                    }
+                ) {
+                    (Opcode::Bt, on_true, on_false)
+                } else {
+                    (Opcode::Bf, on_false, on_true)
+                };
                 items.push(instruction(
-                    Opcode::Bf,
-                    vec![Operand::Code(format!(
-                        "__ciq_block_{}_{}",
-                        label, on_false.0
-                    ))],
+                    opcode,
+                    vec![Operand::Code(format!("__ciq_block_{}_{}", label, target.0))],
                 ));
                 items.push(instruction(
                     Opcode::Goto,
-                    vec![Operand::Code(format!(
-                        "__ciq_block_{}_{}",
-                        label, on_true.0
-                    ))],
+                    vec![Operand::Code(format!("__ciq_block_{}_{}", label, next.0))],
                 ));
                 continue;
             }
@@ -1602,8 +1623,8 @@ fn expression(
                     BinaryOp::Multiply => Opcode::Mulv,
                     BinaryOp::Divide => Opcode::Divv,
                     BinaryOp::Remainder => Opcode::Modv,
-                    BinaryOp::BitAnd => Opcode::Andv,
-                    BinaryOp::BitOr => Opcode::Orv,
+                    BinaryOp::BitAnd | BinaryOp::LogicalAnd => Opcode::Andv,
+                    BinaryOp::BitOr | BinaryOp::LogicalOr => Opcode::Orv,
                     BinaryOp::BitXor => Opcode::Xorv,
                     BinaryOp::ShiftLeft => Opcode::Shlv,
                     BinaryOp::ShiftRight => Opcode::Shrv,

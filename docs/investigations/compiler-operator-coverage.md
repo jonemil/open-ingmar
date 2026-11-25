@@ -15,7 +15,8 @@ missing keyword spellings and Number `!`. Existing type restrictions remain
 intentional; this review is not an exhaustive operand-pair compatibility claim.
 Wider numeric combinations have [separate evidence](compiler-wide-operators.md).
 Runtime `has`/`instanceof` have [separate predicate evidence](compiler-object-tests.md).
-General truthiness and unions remain deferred in the [plan](../plan.md#next-work).
+Runtime truth and the distinction between value and condition forms have
+[separate evidence](compiler-logical-values.md#runtime-truth-values-and-operand-combination).
 
 ## SDK probes and outcome
 
@@ -44,8 +45,7 @@ Artifacts and console-checker reports are in `scratch/check-operator-aliases/`.
 
 **Interpretation:** keyword aliases share the symbolic logical AST/IR. Keep `or`
 as a word token so type-union syntax remains independent of expression parsing.
-Number `!` preserves Number; it does not establish Boolean coercion for branches
-or logical operands. Native and text IR recompute this type contract.
+Number `!` preserves Number. Native and text IR recompute this type contract.
 
 ## Reproduction
 

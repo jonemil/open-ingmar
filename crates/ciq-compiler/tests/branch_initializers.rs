@@ -88,6 +88,7 @@ fn bypassed_repeated_and_unreachable_assignments_cannot_prove_initialization() {
 fn branches_keep_owner_reentry_shutdown_and_type_checks() {
     for source in [
         "const X=!(false && true);function f(){return X;}",
+        "const X=1 ? 2:3;function f(){return X;}",
         "const X=(true ? 1:2)+3;function f(){return X;}",
         "const X=(true ? 1:2) as Toybox.Lang.Number;function f(){return X;}",
         "const X=true ? [1]:[2];function f(){return X;}",
@@ -97,7 +98,6 @@ fn branches_keep_owner_reentry_shutdown_and_type_checks() {
     for source in [
         "const X=true?f():1;function f() as Toybox.Lang.Number{return 1;}",
         "module T{function stop() as Toybox.Lang.Number{Toybox.System.exit();return 1;}}const X=true?T.stop():1;function f(){}",
-        "const X=1 ? 2:3;function f(){}",
         "const X=true && 1;function f(){}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");

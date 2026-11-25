@@ -68,7 +68,6 @@ fn weak_contracts_reject_nullable_receivers_wrong_arity_and_consumers() {
         "function f() as Toybox.Lang.Number { return true.weak() + 1; }",
         "function f() as Toybox.Lang.Number { return \"a\".weak(); }",
         "function f() as Toybox.Lang.Boolean { return 1.weak(); }",
-        "function f() as Toybox.Lang.Number { if (1.weak()) { return 1; } return 0; }",
     ] {
         assert!(checking::compile_function(source).is_err(), "{source}");
     }

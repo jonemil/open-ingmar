@@ -167,6 +167,11 @@ fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Typ
         }
     }
     match kind {
+        BinaryOp::LogicalAnd | BinaryOp::LogicalOr
+            if *left == Type::named("Toybox.Lang.Boolean") && left == right =>
+        {
+            Some(left.clone())
+        }
         BinaryOp::Add
             if (*left == Type::named("Toybox.Lang.String") && string_operand(right, true))
                 || (*right == Type::named("Toybox.Lang.String") && string_operand(left, true)) =>
@@ -181,6 +186,8 @@ fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Typ
         | BinaryOp::BitAnd
         | BinaryOp::BitOr
         | BinaryOp::BitXor
+        | BinaryOp::LogicalAnd
+        | BinaryOp::LogicalOr
         | BinaryOp::ShiftLeft
         | BinaryOp::ShiftRight
             if integer(left)
@@ -198,6 +205,8 @@ fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Typ
         | BinaryOp::BitAnd
         | BinaryOp::BitOr
         | BinaryOp::BitXor
+        | BinaryOp::LogicalAnd
+        | BinaryOp::LogicalOr
         | BinaryOp::ShiftLeft
         | BinaryOp::ShiftRight
             if *left == Type::named("Toybox.Lang.Number") && left == right =>

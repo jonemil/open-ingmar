@@ -148,7 +148,6 @@ fn annotated_returns_remain_uniform_and_callback_contracts_remain_separate() {
         "function f() as Void { return true; }",
         "function f() as Toybox.Lang.String { return; }",
         "function f(s as Toybox.Lang.String) as Toybox.Lang.Number { return s + 1; }",
-        "function f(s as Toybox.Lang.String) as Toybox.Lang.Number { if (s) { return 1; } else { return 2; } }",
         "function f(s as Toybox.Lang.Boolean) as Toybox.Lang.Number { return s + 1; }",
         "function f(s as Toybox.Lang.Unknown) as Toybox.Lang.Number { return 1; }",
     ] {

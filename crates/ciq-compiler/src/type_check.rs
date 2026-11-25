@@ -478,8 +478,10 @@ fn inspect(
             Operation::Return { value } => {
                 boundaries.push((crate::tuples::exact_type(&function.return_type()), *value))
             }
-            Operation::JumpValue { target, value } => {
-                boundaries.push((join_contract(&joins[target]), *value));
+            Operation::JumpValue { .. } | Operation::TruthBranch { .. } => {
+                for (target, value) in located.operation.edge_values() {
+                    boundaries.push((join_contract(&joins[&target]), value));
+                }
             }
             Operation::SharedWrite { value, .. } => {
                 if let Some((class, field)) = crate::unit::class_store(&located.operation, function)

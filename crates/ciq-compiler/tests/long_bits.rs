@@ -88,13 +88,12 @@ fn long_inversion_and_statement_updates_keep_their_type() {
 }
 
 #[test]
-fn bitwise_profiles_reject_invalid_counts_truthiness_and_update_expressions() {
+fn bitwise_profiles_reject_invalid_counts_and_update_expressions() {
     for source in [
         "function f() as Toybox.Lang.Long { return 1l << true; }",
         "function f() as Toybox.Lang.Long { return 1l & 'A'; }",
         "function f() as Toybox.Lang.Long { return 1l | null; }",
         "function f() as Toybox.Lang.Long { return 1l ^ \"one\"; }",
-        "function f() as Toybox.Lang.Number { if (!1l) { return 1; } return 0; }",
         "function f() as Toybox.Lang.Number { var value = 1; value <<= 1l; return value; }",
         "function f() as Toybox.Lang.Long { var value = 1l; return value++; }",
         "function f() as Toybox.Lang.Long { var value = 1l; return ++value; }",

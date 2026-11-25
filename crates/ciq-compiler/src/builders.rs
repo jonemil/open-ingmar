@@ -408,6 +408,9 @@ pub(crate) fn validate(
                 }
                 Operation::Branch {
                     on_true, on_false, ..
+                }
+                | Operation::TruthBranch {
+                    on_true, on_false, ..
                 } => successors.extend([on_true, on_false]),
                 Operation::Jump { target } | Operation::JumpValue { target, .. } => {
                     successors.push(target)

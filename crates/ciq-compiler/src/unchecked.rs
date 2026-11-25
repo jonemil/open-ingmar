@@ -76,8 +76,10 @@ pub(crate) fn lower(
                 }
             }
             Operation::Return { value } if !preserve_return => assert(value, Type::Any),
-            Operation::JumpValue { value, .. }
-            | Operation::ParameterAssign { value, .. }
+            Operation::JumpValue { value, .. } if types.value_type(*value).is_none() => {
+                assert(value, Type::Any)
+            }
+            Operation::ParameterAssign { value, .. }
             | Operation::SelfFieldAssign { value, .. }
             | Operation::MemberWrite { value, .. }
             | Operation::Println { value } => assert(value, Type::Any),
@@ -89,12 +91,6 @@ pub(crate) fn lower(
                 if fixed.contains(local) =>
             {
                 assert(value, Type::Any)
-            }
-            Operation::Branch { condition, .. } => {
-                let boolean = Type::named("Toybox.Lang.Boolean");
-                if types.value_type(*condition) != Some(&boolean) {
-                    assert(condition, boolean);
-                }
             }
             Operation::ArrayRead { array, index, .. } => {
                 if !types.value_type(*array).is_some_and(indexable) {

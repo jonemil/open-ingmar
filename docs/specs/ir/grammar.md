@@ -271,6 +271,7 @@ unary-directive = ".positive" | ".negate" | ".not" | ".complement"
 binary-operation = binary-directive value-id value-id value-id
 binary-directive = ".add" | ".subtract" | ".multiply" | ".divide" | ".remainder"
                  | ".bit-and" | ".bit-or" | ".bit-xor" | ".shift-left"
+                 | ".combine-and" | ".combine-or"
                  | ".shift-right"
 comparison-operation = comparison-directive value-id value-id value-id
 comparison-directive = ".equal" | ".not-equal" | ".less" | ".less-equal"
@@ -386,6 +387,8 @@ satisfy a contract; syntactic framing does not broaden those domains.
 control-operation = ".block" block-id
                   | ".block-value" value-id join-tag
                   | ".branch" value-id block-id block-id
+                  | ".branch-true" value-id block-id block-id
+                  | ".branch-value" value-id block-id block-id ("true" | "false")
                   | ".jump" block-id
                   | ".jump-value" block-id value-id
 ```

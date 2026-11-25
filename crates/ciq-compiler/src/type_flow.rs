@@ -222,6 +222,12 @@ pub(crate) fn inputs(
                 condition,
                 on_true,
                 on_false,
+            }
+            | Operation::TruthBranch {
+                condition,
+                on_true,
+                on_false,
+                ..
             } => {
                 let guard = guard_place(condition, at, structure, operations, &definitions);
                 // Each edge records its own positive or negative proof.

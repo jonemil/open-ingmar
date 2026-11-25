@@ -471,23 +471,20 @@ native binding. Negating a direct null comparison reverses its non-null proof
 edge when used by a branch. See the [runtime
 evidence](../../investigations/compiler-boolean-negation.md).
 
-Short-circuit expressions use existing `.block`, `.branch`, and `.jump` forms,
-not `.and`/`.or` directives. Each operand ends its own block; the right operand
-is entered only on the required outcome. Negated source conditions may reverse
-destinations without a `.not`. Every branch still requires Boolean; ordinary
-block-local value, effect-order, and empty-stack edge rules apply. Text resumes
-the explicit graph rather than reconstructing source operators. See the
-[source profile](../frontend/README.md#short-circuit-expressions).
+Short-circuit conditions use `.branch` and `.branch-true` with empty-stack edges.
+Numeric inversion evaluates `.not` before the truth test. Boolean predicate
+inversion can reverse the branch destinations.
 
-Value-producing logical expressions also use `.boolean`, `.local`, `.assign`,
-and `.read`. A temporary Boolean local is initialized before branching, assigned
-true on the true outcome, and read after both outcomes join. Surrounding
-operands evaluated before a later branch are stored in distinct temporary locals
-and read in the final block. Temporary locals obey the same type,
-initialization, frame-budget, and null-proof rules as source locals; no
-producer-only metadata or new directive grants special treatment. These
-logical-result edges have an empty stack. See the [value-result
-evidence](../../investigations/compiler-logical-values.md).
+Value-producing logical expressions use `.branch-value` to retain the left
+operand on either edge. The short-circuit edge enters the result join directly.
+The other edge evaluates the right operand, combines both values with
+`.combine-and` or `.combine-or`, then sends the result through `.jump-value`.
+The combination directives take `%result %left %right`, admit Boolean pairs,
+integer pairs and dynamic operands, and emit `andv` and `orv` respectively.
+Each destination carries a checked block parameter. A right operand that
+needs separate blocks stages the incoming value in a local first. Source
+type checking and evaluation follow the
+[short-circuit profile](../frontend/README.md#short-circuit-expressions).
 
 ### Number negation
 
@@ -1182,13 +1179,17 @@ ciq-ir
   Boolean, null, and unproved nullable operands. Lowering selects `eq`, `ne`,
   `lt`, `lte`, `gt`, and `gte` respectively; operand evaluation remains left to
   right. See [comparison evidence](../../investigations/compiler-number-comparisons.md).
-- `.branch` consumes a Boolean and
-  terminates the block. The two targets may be the same block.
+- `.branch` consumes a value with `bf`. `.branch-true` consumes a value with
+  `bt`. Each target receives an empty stack. Both take `%value ^true ^false`.
+  `.branch-value` uses the same target order followed by `true` for `bt` or
+  `false` for `bf`, and supplies the original operand to either target's block
+  parameter. Each branch form can target one block on both outcomes.
 - `.jump` terminates the block unconditionally.
 
 All new directives accept the existing optional source span. A body containing
 block/branch/jump operations must begin with `.block`. Every block must end in
-`.return`, `.return-void`, `.branch`, `.jump`, or `.jump-value`, with no
+`.return`, `.return-void`, `.branch`, `.branch-true`, `.branch-value`, `.jump`,
+or `.jump-value`, with no
 operations after its terminator until the next block. Targets may name earlier
 or later blocks. Every target must be declared; missing targets, duplicate
 blocks, and implicit

@@ -12,6 +12,25 @@ enum ConstructionType {
     Dictionary(crate::DictionaryType),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LogicalDomain {
+    Boolean,
+    Dynamic,
+    Other,
+}
+
+impl LogicalDomain {
+    fn of(ty: Option<&crate::api::Type>) -> Self {
+        use crate::api::Type;
+        match ty {
+            None | Some(Type::Any) => Self::Dynamic,
+            Some(Type::Named(name)) if name == "Toybox.Lang.Boolean" => Self::Boolean,
+            Some(Type::Enum(identity)) => Self::of(identity.backing()),
+            _ => Self::Other,
+        }
+    }
+}
+
 /// Resolve a supported short/canonical native module without source alias lookup.
 fn native_module_path(module: &str) -> Option<String> {
     let path = if module.starts_with("Toybox.") {
@@ -1749,14 +1768,158 @@ impl Builder<'_> {
         })
     }
 
-    /// Materialize a logical result with a Boolean local and empty-stack edges.
-    /// Both outcomes reach a join; this stored result carries no null proof.
+    /// Keep the tested operand on the short-circuit edge, or combine both operands.
     fn logical_value(
         &mut self,
-        expression: parser::Expression,
+        and: bool,
+        left: parser::Expression,
+        right: parser::Expression,
+        span: Span,
         locals: &BTreeMap<String, LocalId>,
-    ) -> Result<parser::Expression, Diagnostic> {
-        let span = expression.span;
+        expected: Option<ConstructionType>,
+    ) -> Result<ValueId, Diagnostic> {
+        self.begin_expression_flow();
+        // Logical syntax is left associative. Peel the left spine so a flat
+        // chain consumes the operation budget without recursing per operand.
+        let mut tails = vec![(and, right, span)];
+        let mut first = left;
+        while let parser::ExpressionKind::Logical { and, left, right } = first.kind {
+            tails.push((and, *right, first.span));
+            first = *left;
+        }
+        let mut value = self.value_with_context(first, locals, expected.clone())?;
+        for (and, right, span) in tails.into_iter().rev() {
+            value =
+                self.combine_logical_value(value, and, right, span, locals, expected.clone())?;
+        }
+        Ok(value)
+    }
+
+    fn combine_logical_value(
+        &mut self,
+        left: ValueId,
+        and: bool,
+        right: parser::Expression,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+        expected: Option<ConstructionType>,
+    ) -> Result<ValueId, Diagnostic> {
+        let evaluate_right = self.block_id();
+        let join = self.block_id();
+        let left_type = self.types.join_contract(left).ok_or_else(|| {
+            Diagnostic::at(
+                self.source,
+                span.start,
+                "logical left operand requires a value",
+            )
+        })?;
+        let (on_true, on_false) = if and {
+            (evaluate_right, join)
+        } else {
+            (join, evaluate_right)
+        };
+        self.push(
+            Operation::TruthBranch {
+                condition: left,
+                on_true,
+                on_false,
+                kind: if and {
+                    crate::TruthBranchKind::KeepOnFalse
+                } else {
+                    crate::TruthBranchKind::KeepOnTrue
+                },
+            },
+            Some(span),
+        );
+        self.push(
+            Operation::Block {
+                block: evaluate_right,
+            },
+            None,
+        );
+        let incoming = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::BlockParameter {
+                result: incoming,
+                value_type: left_type,
+            },
+            Some(span),
+        );
+        let (combine_left, right) = if right.needs_materialization() {
+            let saved = self.local_id(span)?;
+            self.push(
+                Operation::LocalInitialize {
+                    local: saved,
+                    value: incoming,
+                },
+                Some(span),
+            );
+            let right = self.snapshot_with_context(right, locals, expected)?;
+            let combine_left = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::LocalRead {
+                    result: combine_left,
+                    local: saved,
+                },
+                Some(span),
+            );
+            (combine_left, self.value(right, locals)?)
+        } else {
+            (incoming, self.value_with_context(right, locals, expected)?)
+        };
+        self.logical_domain(
+            LogicalDomain::of(self.types.value_type(left)),
+            LogicalDomain::of(self.types.value_type(right)),
+            span,
+        )?;
+        let kind = if and {
+            crate::BinaryOp::LogicalAnd
+        } else {
+            crate::BinaryOp::LogicalOr
+        };
+        let any = crate::api::Type::Any;
+        let right = if self.calls.unchecked
+            && crate::operators::binary_result(
+                kind,
+                self.types.value_type(combine_left).unwrap_or(&any),
+                self.types.value_type(right).unwrap_or(&any),
+            )
+            .is_none()
+        {
+            let result = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::Cast {
+                    result,
+                    operand: right,
+                    target: any,
+                },
+                Some(span),
+            );
+            result
+        } else {
+            right
+        };
+        let result = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::Binary {
+                result,
+                left: combine_left,
+                right,
+                kind,
+            },
+            Some(span),
+        );
+        self.push(
+            Operation::JumpValue {
+                target: join,
+                value: result,
+            },
+            Some(span),
+        );
+        self.join_values(join, left, result, span)
+    }
+
+    fn begin_expression_flow(&mut self) {
         if !matches!(
             self.operations.first().map(|op| &op.operation),
             Some(Operation::Block { .. })
@@ -1769,38 +1932,6 @@ impl Builder<'_> {
                 },
             );
         }
-        let local = self.local_id(span)?;
-        let value = ValueId(self.operations.len() as u32);
-        self.push(
-            Operation::Boolean {
-                result: value,
-                value: false,
-            },
-            Some(span),
-        );
-        self.push(Operation::LocalInitialize { local, value }, Some(span));
-        let on_true = self.block_id();
-        let on_false = self.block_id();
-        let join = self.block_id();
-        self.condition(expression, locals, on_true, on_false)?;
-        self.push(Operation::Block { block: on_true }, None);
-        let value = ValueId(self.operations.len() as u32);
-        self.push(
-            Operation::Boolean {
-                result: value,
-                value: true,
-            },
-            Some(span),
-        );
-        self.push(Operation::LocalAssign { local, value }, Some(span));
-        self.push(Operation::Jump { target: join }, Some(span));
-        self.push(Operation::Block { block: on_false }, None);
-        self.push(Operation::Jump { target: join }, Some(span));
-        self.push(Operation::Block { block: join }, None);
-        Ok(parser::Expression {
-            kind: parser::ExpressionKind::Temporary(local),
-            span,
-        })
     }
 
     /// Build lazy arms and a typed stack join, without a default initializer.
@@ -1810,7 +1941,7 @@ impl Builder<'_> {
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
         expected: Option<ConstructionType>,
-    ) -> Result<parser::Expression, Diagnostic> {
+    ) -> Result<ValueId, Diagnostic> {
         let parser::ExpressionKind::Conditional {
             condition,
             when_true,
@@ -1820,18 +1951,7 @@ impl Builder<'_> {
             unreachable!()
         };
         let span = expression.span;
-        if !matches!(
-            self.operations.first().map(|op| &op.operation),
-            Some(Operation::Block { .. })
-        ) {
-            self.operations.insert(
-                0,
-                LocatedOperation {
-                    operation: Operation::Block { block: BlockId(0) },
-                    span: None,
-                },
-            );
-        }
+        self.begin_expression_flow();
         let on_true = self.block_id();
         let on_false = self.block_id();
         let join = self.block_id();
@@ -1854,6 +1974,16 @@ impl Builder<'_> {
             },
             Some(span),
         );
+        self.join_values(join, left, right, span)
+    }
+
+    fn join_values(
+        &mut self,
+        join: BlockId,
+        left: ValueId,
+        right: ValueId,
+        span: Span,
+    ) -> Result<ValueId, Diagnostic> {
         let value_type = self
             .types
             .join_contract(left)
@@ -1863,16 +1993,13 @@ impl Builder<'_> {
                 Diagnostic::at(
                     self.source,
                     span.start,
-                    "conditional arms require compatible core types or the same source class, optionally with Null",
+                    "expression alternatives require supported native or source value contracts",
                 )
             })?;
         self.push(Operation::Block { block: join }, None);
         let result = ValueId(self.operations.len() as u32);
         self.push(Operation::BlockParameter { result, value_type }, Some(span));
-        Ok(parser::Expression {
-            kind: parser::ExpressionKind::Joined(result),
-            span,
-        })
+        Ok(result)
     }
 
     /// Build a Dictionary from validated scalar tokens or ordered runtime fills.
@@ -2556,7 +2683,7 @@ impl Builder<'_> {
                     "sized Array allocation requires a concrete expected nullable Array element type",
                 ));
             }
-            kind @ E::Conditional { .. } => {
+            kind @ (E::Conditional { .. } | E::Logical { .. }) => {
                 return self.snapshot(parser::Expression { kind, span }, locals);
             }
             E::DictionaryLiteral(entries) => {
@@ -2565,9 +2692,6 @@ impl Builder<'_> {
             E::ArrayLiteral(elements) => return self.array_literal(elements, None, span, locals),
             E::ByteArrayLiteral(elements) => {
                 return self.byte_array_literal(elements, span, locals);
-            }
-            kind @ E::Logical { .. } => {
-                return self.logical_value(parser::Expression { kind, span }, locals);
             }
             E::Not(operand) => E::Not(Box::new(self.prepare(*operand, locals)?)),
             E::Step { operand, increment } => E::Step {
@@ -2894,9 +3018,8 @@ impl Builder<'_> {
             .unwrap_or_default()
     }
 
-    /// Emit a Boolean condition as explicit edges. Evaluate logical operands
-    /// left to right and enter the right operand only when the left requires it.
-    /// Grouping and negation preserve this flow without cross-block value IDs.
+    /// Emit a condition as explicit edges. Boolean predicates can reverse its
+    /// destinations. Number and Long negation must run before testing the result.
     fn condition(
         &mut self,
         expression: parser::Expression,
@@ -2904,34 +3027,101 @@ impl Builder<'_> {
         on_true: BlockId,
         on_false: BlockId,
     ) -> Result<(), Diagnostic> {
+        self.condition_domain(expression, locals, on_true, on_false, false)
+            .map(|_| ())
+    }
+
+    fn condition_domain(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        on_true: BlockId,
+        on_false: BlockId,
+        branch_on_true: bool,
+    ) -> Result<LogicalDomain, Diagnostic> {
         let span = expression.span;
         match expression.kind {
             parser::ExpressionKind::Logical { and, left, right } => {
                 let next = self.block_id();
-                if and {
-                    self.condition(*left, locals, next, on_false)?;
+                let left = if and {
+                    self.condition_domain(*left, locals, next, on_false, false)?
                 } else {
-                    self.condition(*left, locals, on_true, next)?;
-                }
+                    self.condition_domain(*left, locals, on_true, next, true)?
+                };
                 self.push(Operation::Block { block: next }, None);
-                self.condition(*right, locals, on_true, on_false)?;
+                let right =
+                    self.condition_domain(*right, locals, on_true, on_false, branch_on_true)?;
+                self.logical_domain(left, right, span)
             }
-            parser::ExpressionKind::Not(operand) => {
-                self.condition(*operand, locals, on_false, on_true)?;
+            parser::ExpressionKind::Not(operand) if self.boolean_predicate(&operand, locals) => {
+                self.condition_domain(*operand, locals, on_false, on_true, branch_on_true)
             }
             kind => {
                 let condition = self.value(parser::Expression { kind, span }, locals)?;
                 self.push(
-                    Operation::Branch {
-                        condition,
-                        on_true,
-                        on_false,
+                    if branch_on_true {
+                        Operation::TruthBranch {
+                            condition,
+                            on_true,
+                            on_false,
+                            kind: crate::TruthBranchKind::True,
+                        }
+                    } else {
+                        Operation::Branch {
+                            condition,
+                            on_true,
+                            on_false,
+                        }
                     },
                     Some(span),
                 );
+                Ok(LogicalDomain::of(self.types.value_type(condition)))
             }
         }
-        Ok(())
+    }
+
+    fn logical_domain(
+        &self,
+        left: LogicalDomain,
+        right: LogicalDomain,
+        span: Span,
+    ) -> Result<LogicalDomain, Diagnostic> {
+        use LogicalDomain::{Boolean, Dynamic, Other};
+        match (left, right) {
+            (Boolean, Boolean) => Ok(Boolean),
+            (Other, _) | (_, Other) if !self.calls.unchecked => Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "checked logical operators require Boolean or dynamic operands",
+            )),
+            (Dynamic, _) | (_, Dynamic) => Ok(Dynamic),
+            _ => Ok(Other),
+        }
+    }
+
+    fn boolean_predicate(
+        &self,
+        expression: &parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> bool {
+        use parser::ExpressionKind as E;
+        match &expression.kind {
+            E::Boolean(_) | E::Compare { .. } | E::InstanceOf { .. } | E::Has { .. } => true,
+            E::Not(operand) => self.boolean_predicate(operand, locals),
+            E::Logical { left, right, .. } => {
+                self.boolean_predicate(left, locals) && self.boolean_predicate(right, locals)
+            }
+            E::Local(name) => {
+                let boolean = crate::api::Type::named("Toybox.Lang.Boolean");
+                if let Some(local) = locals.get(name) {
+                    return self.types.local_type(*local) == Some(&boolean);
+                }
+                self.parameters
+                    .get(name)
+                    .is_some_and(|index| self.calls.parameter_types[*index].api_type() == boolean)
+            }
+            _ => false,
+        }
     }
     fn push(&mut self, operation: Operation, span: Option<Span>) {
         if let Operation::Block { block } = operation {
@@ -3250,14 +3440,16 @@ impl Builder<'_> {
     ) -> Result<ValueId, Diagnostic> {
         // Constructor nesting must not retain the large general-value frame
         // while its next receiver is being evaluated.
-        if let parser::ExpressionKind::MethodNew {
-            qualifier,
-            arguments,
-        } = expression.kind
-        {
-            return self.method_construction(qualifier, arguments, expression.span, locals);
+        match expression.kind {
+            parser::ExpressionKind::MethodNew {
+                qualifier,
+                arguments,
+            } => self.method_construction(qualifier, arguments, expression.span, locals),
+            parser::ExpressionKind::Logical { and, left, right } => {
+                self.logical_value(and, *left, *right, expression.span, locals, expected)
+            }
+            _ => self.general_value_with_context(expression, locals, expected),
         }
-        self.general_value_with_context(expression, locals, expected)
     }
 
     /// Build ordinary values with container context; Method construction uses
@@ -3436,15 +3628,7 @@ impl Builder<'_> {
             }
         }
         if matches!(expression.kind, parser::ExpressionKind::Conditional { .. }) {
-            let expression = self.conditional_value(expression, locals, expected)?;
-            return emit(
-                self.source,
-                expression,
-                locals,
-                &self.parameters,
-                &mut self.operations,
-                self.calls,
-            );
+            return self.conditional_value(expression, locals, expected);
         }
         let expression = match (expression, expected) {
             (

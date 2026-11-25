@@ -79,6 +79,9 @@ pub(crate) fn prefix(operations: &[LocatedOperation]) -> Structure {
         let targets = match located.operation {
             Operation::Branch {
                 on_true, on_false, ..
+            }
+            | Operation::TruthBranch {
+                on_true, on_false, ..
             } => vec![on_true, on_false],
             Operation::Jump { target } | Operation::JumpValue { target, .. } => vec![target],
             _ => Vec::new(),
@@ -101,6 +104,7 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
             o.operation,
             Operation::Block { .. }
                 | Operation::Branch { .. }
+                | Operation::TruthBranch { .. }
                 | Operation::Jump { .. }
                 | Operation::JumpValue { .. }
         )
@@ -139,6 +143,9 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
             }
             match located.operation {
                 Operation::Branch {
+                    on_true, on_false, ..
+                }
+                | Operation::TruthBranch {
                     on_true, on_false, ..
                 } => {
                     edges.extend([(index, block, on_true), (index, block, on_false)]);

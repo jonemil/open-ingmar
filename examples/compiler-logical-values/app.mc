@@ -26,5 +26,13 @@ function start() as Void {
         flag = 3 > counter && Flags.mark("loop", true);
     }
     System.println(counter);
+    System.println(Flags.bothValues(0, 7, "bad-number"));
+    System.println(Flags.bothValues(2, 5, "and-rhs"));
+    System.println(Flags.eitherValue(0, 7, "or-rhs"));
+    System.println(Flags.eitherValue(1, 7, "bad-or"));
+    System.println(Flags.bothValues(null, 7, "bad-null") == null);
+    System.println(Flags.eitherCondition([1], true, "ref-rhs"));
+    System.println("truth " + Flags.truth(null) + Flags.truth(0l) + Flags.truth(0.0) + Flags.truth(""));
+    System.println(Flags.count(2));
     System.exit();
 }

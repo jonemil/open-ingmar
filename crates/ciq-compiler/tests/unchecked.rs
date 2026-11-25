@@ -26,7 +26,7 @@ fn unchecked_value_uses_resume_as_validated_assertions() {
         "function f(x as Toybox.Lang.String) as Toybox.Lang.Number {return -x;}",
         "function f(x as Toybox.Lang.String) as Toybox.Lang.Number {return ~x;}",
         "function f(x as Toybox.Lang.String) as Toybox.Lang.Boolean {return x<1;}",
-        "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number {if(x){return 41;}return 0;}",
+        "function f(x as Toybox.Lang.Number) {return x && \"text\";}",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number {x=\"x\";return x;}",
         "function take(x as Toybox.Lang.Number) as Toybox.Lang.Number {return x;} function f(){return take(\"x\");}",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>,i as Toybox.Lang.String){return a[i];}",

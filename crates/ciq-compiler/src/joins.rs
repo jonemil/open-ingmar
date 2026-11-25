@@ -206,7 +206,7 @@ pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
 pub(crate) fn incoming_values(operations: &[LocatedOperation]) -> BTreeMap<BlockId, Vec<ValueId>> {
     let mut incoming: BTreeMap<_, Vec<_>> = BTreeMap::new();
     for op in operations {
-        if let Operation::JumpValue { target, value } = op.operation {
+        for (target, value) in op.operation.edge_values() {
             incoming.entry(target).or_default().push(value);
         }
     }
@@ -241,7 +241,7 @@ pub(crate) fn infer_type(
 }
 
 /// Check parameter placement and every incoming edge's stack arity.
-/// Ordinary branches/jumps carry no values; a value jump supplies exactly one.
+/// A value jump or preserving branch edge supplies one stack value.
 pub(crate) fn validate(
     operations: &[LocatedOperation],
 ) -> Result<BTreeMap<BlockId, JoinType>, IrError> {
@@ -267,15 +267,23 @@ pub(crate) fn validate(
         }
     }
     for (index, op) in operations.iter().enumerate() {
-        match op.operation {
-            Operation::JumpValue { target, .. } if !parameters.contains_key(&target) => {
+        for (target, _) in op.operation.edge_values() {
+            if !parameters.contains_key(&target) {
                 return Err(fail(index, "value edge requires a target block parameter"));
             }
+        }
+        match op.operation {
             Operation::Jump { target } if parameters.contains_key(&target) => {
                 return Err(fail(index, "target block requires an incoming value"));
             }
             Operation::Branch {
                 on_true, on_false, ..
+            }
+            | Operation::TruthBranch {
+                on_true,
+                on_false,
+                kind: crate::TruthBranchKind::True,
+                ..
             } if parameters.contains_key(&on_true) || parameters.contains_key(&on_false) => {
                 return Err(fail(index, "branch targets cannot require incoming values"));
             }
@@ -321,6 +329,7 @@ pub(crate) fn validate_stack_uses(
                 | Operation::LocalAssign { .. }
                 | Operation::ParameterAssign { .. }
                 | Operation::JumpValue { .. }
+                | Operation::TruthBranch { .. }
                 | Operation::Branch { .. } => break,
                 _ => return Err(IrError {
                     operation: Some(at),

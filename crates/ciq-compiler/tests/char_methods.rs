@@ -76,7 +76,6 @@ fn char_contracts_are_exact_and_revalidated_in_text() {
         "function f() as Toybox.Lang.Number { return 65.toChar(); }",
         "function f() as Toybox.Lang.Number { return 65.toChar() + 1; }",
         "function f() as Toybox.Lang.Number { return 65.toChar() == 65.toChar(); }",
-        "function f() as Toybox.Lang.Number { if (65.toChar()) { return 1; } return 0; }",
         "function f() as Toybox.Lang.Number { return 65.toChar().toUpper(1); }",
         "function f() as Toybox.Lang.Number { return 65.toChar().compareTo(null); }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n.toChar().toNumber(); }",

@@ -99,7 +99,6 @@ fn source_conditionals_preserve_pipeline_types_and_reject_unsupported_joins() {
         assert_eq!(p, ciq_assembly::Program::parse(&p.to_text()).unwrap());
     }
     for source in [
-        "function f() as Toybox.Lang.Number { return 1 ? 1 : 2; }",
         "function f() as Toybox.Lang.Number { return true ? 'a' : 1; }",
         "function f() as Toybox.Lang.Number { return true ? 1 : \"x\"; }",
         "function f() as Toybox.Lang.Number { return true ? [1] : ['a']; }",

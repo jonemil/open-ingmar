@@ -33,6 +33,8 @@ enum Directive {
     Println,
     Block,
     Branch,
+    BranchTrue,
+    BranchValue,
     Jump,
     Equal,
     Greater,
@@ -84,6 +86,8 @@ enum Directive {
     BitAnd,
     BitOr,
     BitXor,
+    CombineAnd,
+    CombineOr,
     ShiftLeft,
     ShiftRight,
     Positive,
@@ -428,6 +432,8 @@ pub(crate) fn parse_function_ir_context(
             Some(".bit-and") => (Directive::BitAnd, 4),
             Some(".bit-or") => (Directive::BitOr, 4),
             Some(".bit-xor") => (Directive::BitXor, 4),
+            Some(".combine-and") => (Directive::CombineAnd, 4),
+            Some(".combine-or") => (Directive::CombineOr, 4),
             Some(".shift-left") => (Directive::ShiftLeft, 4),
             Some(".shift-right") => (Directive::ShiftRight, 4),
             Some(".local") => (Directive::Local, 3),
@@ -502,6 +508,8 @@ pub(crate) fn parse_function_ir_context(
             Some(".block-value") => (Directive::BlockValue, 3),
             Some(".jump-value") => (Directive::JumpValue, 3),
             Some(".branch") => (Directive::Branch, 4),
+            Some(".branch-true") => (Directive::BranchTrue, 4),
+            Some(".branch-value") => (Directive::BranchValue, 5),
             Some(".jump") => (Directive::Jump, 2),
             Some(".equal") => (Directive::Equal, 4),
             Some(".greater") => (Directive::Greater, 4),
@@ -1370,6 +1378,25 @@ pub(crate) fn parse_function_ir_context(
                     on_true: parse_block(&fields[2])?,
                     on_false: parse_block(&fields[3])?,
                 },
+                Directive::BranchTrue | Directive::BranchValue => Operation::TruthBranch {
+                    condition: parse_value(&fields[1])?,
+                    on_true: parse_block(&fields[2])?,
+                    on_false: parse_block(&fields[3])?,
+                    kind: if matches!(directive, Directive::BranchTrue) {
+                        crate::TruthBranchKind::True
+                    } else {
+                        match fields[4].as_str() {
+                            "true" => crate::TruthBranchKind::KeepOnTrue,
+                            "false" => crate::TruthBranchKind::KeepOnFalse,
+                            _ => {
+                                return Err(fail(
+                                    *at,
+                                    "value branch predicate requires true or false",
+                                ));
+                            }
+                        }
+                    },
+                },
                 Directive::Jump => Operation::Jump {
                     target: parse_block(&fields[1])?,
                 },
@@ -1578,6 +1605,8 @@ pub(crate) fn parse_function_ir_context(
                 | Directive::BitAnd
                 | Directive::BitOr
                 | Directive::BitXor
+                | Directive::CombineAnd
+                | Directive::CombineOr
                 | Directive::ShiftLeft
                 | Directive::ShiftRight => Operation::Binary {
                     result: parse_value(&fields[1])?,
@@ -1590,6 +1619,8 @@ pub(crate) fn parse_function_ir_context(
                         Directive::BitAnd => BinaryOp::BitAnd,
                         Directive::BitOr => BinaryOp::BitOr,
                         Directive::BitXor => BinaryOp::BitXor,
+                        Directive::CombineAnd => BinaryOp::LogicalAnd,
+                        Directive::CombineOr => BinaryOp::LogicalOr,
                         Directive::ShiftLeft => BinaryOp::ShiftLeft,
                         Directive::ShiftRight => BinaryOp::ShiftRight,
                         _ => unreachable!("all non-binary directives parsed above"),

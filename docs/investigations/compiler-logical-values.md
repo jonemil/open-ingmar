@@ -53,7 +53,7 @@ Experimentally observed in both applications:
 - Two logical operands compare false; guarded nullable conversion produces a
   stored Boolean true. Loop assignment evaluates its helper twice and stops at 3.
 
-Our builder snapshots surrounding operands and materializes Boolean outcomes
+The original builder snapshotted surrounding operands and materialized Boolean outcomes
 through ordinary IR locals and explicit branches. Native/text pipeline checks
 produce equal unsigned PRGs, and assembly text resumes the same program.
 This establishes our lowering's behavior without matching SDK CODE or inspecting
@@ -67,6 +67,44 @@ initialization, and wrong temporary types; this module-only runtime specimen doe
 not establish self-call behavior. Stored guards do not carry narrowing facts.
 The 254-parameter-plus-one-temporary boundary passes; an additional local fails.
 That is a compiler budget check, not proof of maximum runtime frame capacity.
+
+## Runtime truth values and operand combination
+
+**Observed, 2026-11-25:** SDK 9.2.0, Forerunner 265, `-O 0`. Typed `if` and
+`?:` probes agree. Null, zero Number and zero Long are false. Nonzero Number
+and Long are true. Zero and nonzero Float, Double, and Char are true. Empty
+String, Array, and Dictionary values and a source instance are also true.
+Object-typed parameters test the actual runtime value. Branching on `!0`, `!1`,
+and `!(-1)` gives true, true, and false respectively, consistent with Number
+complement followed by the truth test.
+
+The SDK default checker accepts Boolean and untyped logical operands. It
+rejects homogeneous Number, Long, String, and `Number or String` operands
+in both condition and value position. The same typed Number case compiles
+with `-l 0` and shows a distinction between those positions:
+
+| Use of `2 && 5` | SDK result |
+|---|---|
+| Store or return the value | Number `0` |
+| Test directly in `if` | True arm |
+
+The value form loads the left operand, uses `dup 0` and `bf`/`bt` to skip the
+right operand, and executes `andv`/`orv` when both operands run. The condition
+form branches directly on each evaluated operand and emits no combination.
+An untyped `null && value` returns Null without evaluating the right operand.
+An untyped `null || number` evaluates the right operand and then raises
+`UnexpectedTypeException` in `orv`. An unchecked Number/String pair also
+raises this exception when both operands run. These observations replace the
+earlier hypothesis that the value form always returns one of its operands.
+
+The `bt` shortcut used by OR differs from the ordinary `bf` test. An Array
+passes a standalone `if`, but `array || rhs` evaluates `rhs`. In value
+position the evaluated pair can raise `UnexpectedTypeException` at `orv`.
+
+The updated [example][example] reproduces numeric loop tests, numeric and
+reference truth values, dynamic integer combination, a retained Null operand,
+and the Array case in an OR condition. Build it using the global-start wrapper
+above.
 
 [example]: ../../examples/compiler-logical-values/README.md
 [condition specimen]: compiler-short-circuit.md

@@ -174,7 +174,7 @@ fn staged_rhs_uses_existing_local_budget_and_captured_left_value() {
         .unwrap();
     let branch = ops
         .iter()
-        .position(|op| matches!(op.operation, Operation::Branch { .. }))
+        .position(|op| matches!(op.operation, Operation::TruthBranch { .. }))
         .unwrap();
     assert!(read < branch);
     let params = (0..253)

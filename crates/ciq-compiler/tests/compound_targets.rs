@@ -174,7 +174,7 @@ fn indexed_reads_stay_before_rhs_calls_and_branching_effects() {
         .unwrap();
     let branch = ops
         .iter()
-        .position(|op| matches!(op.operation, Operation::Branch { .. }))
+        .position(|op| matches!(op.operation, Operation::TruthBranch { .. }))
         .unwrap();
     assert!(read < branch);
 }

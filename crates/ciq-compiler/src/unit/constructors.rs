@@ -342,6 +342,9 @@ impl<'a> Proof<'a, '_> {
                     }
                     Operation::Branch {
                         on_true, on_false, ..
+                    }
+                    | Operation::TruthBranch {
+                        on_true, on_false, ..
                     } => {
                         for target in [on_true, on_false] {
                             if merge_pending(&mut inputs, *target, &pending) {

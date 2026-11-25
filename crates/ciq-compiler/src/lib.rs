@@ -153,8 +153,23 @@ pub enum BinaryOp {
     BitAnd,
     BitOr,
     BitXor,
+    /// Combine two operands after an AND short-circuit test evaluated both.
+    LogicalAnd,
+    /// Combine two operands after an OR short-circuit test evaluated both.
+    LogicalOr,
     ShiftLeft,
     ShiftRight,
+}
+
+/// VM predicate and stack behavior for a nonordinary branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TruthBranchKind {
+    /// Branch with `bt` and consume its operand.
+    True,
+    /// Branch with `bt` and retain the original on either edge.
+    KeepOnTrue,
+    /// Branch with `bf` and retain the original on either edge.
+    KeepOnFalse,
 }
 
 /// Native class identities supported as non-null object references.
@@ -1893,11 +1908,18 @@ pub enum Operation {
         left: ValueId,
         right: ValueId,
     },
-    /// Consume a Boolean and terminate the block with two block targets.
+    /// Test a value and terminate the block with two empty-stack edges.
     Branch {
         condition: ValueId,
         on_true: BlockId,
         on_false: BlockId,
+    },
+    /// Test a value with the specified VM predicate and stack behavior.
+    TruthBranch {
+        condition: ValueId,
+        on_true: BlockId,
+        on_false: BlockId,
+        kind: TruthBranchKind,
     },
     /// Terminate the block with an unconditional edge.
     Jump {
@@ -2089,6 +2111,21 @@ pub enum Operation {
 }
 
 impl Operation {
+    /// Return the targets and operands of edges carrying one stack value.
+    pub(crate) fn edge_values(&self) -> impl Iterator<Item = (BlockId, ValueId)> {
+        let edges = match *self {
+            Self::JumpValue { target, value } => [Some((target, value)), None],
+            Self::TruthBranch {
+                condition,
+                on_true,
+                on_false,
+                kind: TruthBranchKind::KeepOnTrue | TruthBranchKind::KeepOnFalse,
+            } => [Some((on_true, condition)), Some((on_false, condition))],
+            _ => [None, None],
+        };
+        edges.into_iter().flatten()
+    }
+
     pub(crate) fn lexical_lookup(&self) -> bool {
         match self {
             Self::SharedRead { lexical, .. }
@@ -2222,6 +2259,7 @@ impl Operation {
             | Self::NativeModuleCallStatement { .. }
             | Self::Block { .. }
             | Self::Branch { .. }
+            | Self::TruthBranch { .. }
             | Self::Jump { .. }
             | Self::Println { .. }
             | Self::Discard { .. }
@@ -2936,34 +2974,42 @@ impl Function {
                     );
                     (Some(result), vec![])
                 }
-                Operation::JumpValue { target, value } => {
-                    let contract = &join_types[&target];
-                    let source_matches = match contract {
-                        ty if ty.source_contract().is_some() => {
-                            origins.accepts_contract(&ty.source_contract().unwrap(), value)
-                        }
-                        _ => true,
-                    };
-                    if origins.contract(value).is_none() {
-                        native::structural_api(
-                            &contract.api_type(),
-                            &type_of(value).api_type(),
-                            context,
-                        )
-                        .map_err(|message| fail(&message))?;
-                    }
-                    if !infer_joins
-                        && (!source_matches
-                            || !native::accepts_boundary(
+                Operation::JumpValue { .. }
+                | Operation::TruthBranch {
+                    kind: TruthBranchKind::KeepOnTrue | TruthBranchKind::KeepOnFalse,
+                    ..
+                } => {
+                    let mut edges = located.operation.edge_values().peekable();
+                    let operand = edges.peek().unwrap().1;
+                    for (target, value) in edges {
+                        let contract = &join_types[&target];
+                        let source_matches = match contract {
+                            ty if ty.source_contract().is_some() => {
+                                origins.accepts_contract(&ty.source_contract().unwrap(), value)
+                            }
+                            _ => true,
+                        };
+                        if origins.contract(value).is_none() {
+                            native::structural_api(
                                 &contract.api_type(),
                                 &type_of(value).api_type(),
-                            ))
-                    {
-                        return Err(fail(
-                            "edge value does not match target block parameter type",
-                        ));
+                                context,
+                            )
+                            .map_err(|message| fail(&message))?;
+                        }
+                        if !infer_joins
+                            && (!source_matches
+                                || !native::accepts_boundary(
+                                    &contract.api_type(),
+                                    &type_of(value).api_type(),
+                                ))
+                        {
+                            return Err(fail(
+                                "edge value does not match target block parameter type",
+                            ));
+                        }
                     }
-                    (None, vec![value])
+                    (None, vec![operand])
                 }
                 Operation::DictionaryConstant {
                     result,
@@ -3384,14 +3430,12 @@ impl Function {
                     types.insert(result, result_type);
                     (Some(result), vec![left, right])
                 }
-                Operation::Branch { condition, .. } => {
-                    if !matches!(type_of(condition), ValueType::Boolean | ValueType::Any)
-                        && !matches!(type_of(condition), ValueType::Enum(ref ty) if matches!(ty.backing(), Some(api::Type::Named(name)) if name == "Toybox.Lang.Boolean"))
-                    {
-                        return Err(fail("branch requires a Boolean value"));
-                    }
-                    (None, vec![condition])
-                }
+                Operation::Branch { condition, .. }
+                | Operation::TruthBranch {
+                    condition,
+                    kind: TruthBranchKind::True,
+                    ..
+                } => (None, vec![condition]),
                 Operation::Jump { .. } => (None, vec![]),
                 Operation::Char { result, .. } => {
                     types.insert(result, ValueType::Char);
@@ -5099,7 +5143,8 @@ impl Function {
                     | Operation::Return { value }
                     | Operation::Println { value }
                     | Operation::Discard { value } => vec![*value],
-                    Operation::Branch { condition, .. } => vec![*condition],
+                    Operation::Branch { condition, .. }
+                    | Operation::TruthBranch { condition, .. } => vec![*condition],
                     Operation::ObjectCallStatement {
                         receiver,
                         arguments,
@@ -5361,6 +5406,22 @@ impl Function {
                     on_true,
                     on_false,
                 } => format!(".branch %{} ^{} ^{}", condition.0, on_true.0, on_false.0),
+                Operation::TruthBranch {
+                    condition,
+                    on_true,
+                    on_false,
+                    kind,
+                } => {
+                    let (directive, predicate) = match kind {
+                        TruthBranchKind::True => (".branch-true", ""),
+                        TruthBranchKind::KeepOnTrue => (".branch-value", " true"),
+                        TruthBranchKind::KeepOnFalse => (".branch-value", " false"),
+                    };
+                    format!(
+                        "{directive} %{} ^{} ^{}{predicate}",
+                        condition.0, on_true.0, on_false.0
+                    )
+                }
                 Operation::Jump { target } => format!(".jump ^{}", target.0),
                 Operation::Compare {
                     result,
@@ -5903,6 +5964,8 @@ impl Function {
                         BinaryOp::BitAnd => "bit-and",
                         BinaryOp::BitOr => "bit-or",
                         BinaryOp::BitXor => "bit-xor",
+                        BinaryOp::LogicalAnd => "combine-and",
+                        BinaryOp::LogicalOr => "combine-or",
                         BinaryOp::ShiftLeft => "shift-left",
                         BinaryOp::ShiftRight => "shift-right",
                     },

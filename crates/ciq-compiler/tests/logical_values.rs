@@ -1,7 +1,7 @@
 #[path = "common/checking.rs"]
 mod checking;
 use ciq_compiler::{
-    Function, Operation,
+    Operation,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
     compile_function, compile_sources, compile_sources_with_api, parse_function_ir,
@@ -77,7 +77,7 @@ fn logical_temporaries_recheck_types_initialization_and_do_not_carry_null_proofs
     for source in [
         "function f() as Toybox.Lang.Boolean { return false && 1; }",
         "function f() as Toybox.Lang.Boolean { return true || null; }",
-        "function f() as Toybox.Lang.Number { var flag = true && false; flag = 1; if(flag){return 1;}return 0; }",
+        "function f() as Toybox.Lang.Number { var flag as Toybox.Lang.Boolean = true && false; flag = 1; if(flag){return 1;}return 0; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { var present = !(n == null) && n > 0; if (present) { return n; } return 0; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if ((!(n == null) && true).equals(true)) { return n; } return 0; }",
         "function f() as Toybox.Lang.Number { return -(true && false); }",
@@ -86,33 +86,25 @@ fn logical_temporaries_recheck_types_initialization_and_do_not_carry_null_proofs
     }
     let f =
         compile_function("function f() as Toybox.Lang.Boolean { return true && false; }").unwrap();
-    let mut operations = f.operations().to_vec();
-    let assigned = operations
-        .iter()
-        .find_map(|op| match op.operation {
-            Operation::LocalAssign { value, .. } => Some(value),
-            _ => None,
-        })
-        .unwrap();
-    let definition = operations
-        .iter_mut()
-        .find(|op| matches!(op.operation, Operation::Boolean { result, .. } if result == assigned))
-        .unwrap();
-    definition.operation = Operation::Integer {
-        result: assigned,
-        value: 1,
-    };
-    assert!(Function::new("bad".into(), operations).is_err());
     let text = f.to_ir_text();
-    let init = text
+    let branch = text
         .lines()
-        .find(|line| line.starts_with(".local "))
+        .find(|line| line.starts_with(".branch-value "))
         .unwrap();
-    assert!(parse_function_ir(&text.replace(init, "")).is_err());
+    assert!(
+        parse_function_ir(&text.replace(branch, &branch.replace(".branch-value", ".branch")))
+            .is_err()
+    );
+    let join = text
+        .lines()
+        .find(|line| line.starts_with(".block-value "))
+        .unwrap();
+    assert!(parse_function_ir(&text.replace(join, &join.replace(" boolean", " integer"))).is_err());
+    assert!(parse_function_ir(&text.replace(join, "")).is_err());
 }
 
 #[test]
-fn hidden_temporaries_share_the_frame_budget_with_source_locals_and_parameters() {
+fn logical_stack_edges_leave_the_frame_budget_available_to_source_locals() {
     let params = (0..254)
         .map(|n| format!("p{n}"))
         .collect::<Vec<_>>()
@@ -121,8 +113,12 @@ fn hidden_temporaries_share_the_frame_budget_with_source_locals_and_parameters()
         "function f({params}) as Toybox.Lang.Boolean {{ return true && false; }}"
     ))
     .unwrap();
-    let error = compile_function(&format!(
+    compile_function(&format!(
         "function f({params}) as Toybox.Lang.Boolean {{ var flag = true && false; return flag; }}"
+    ))
+    .unwrap();
+    let error = compile_function(&format!(
+        "function f({params}) as Toybox.Lang.Boolean {{ var flag = true && false; var second = flag; return second; }}"
     ))
     .unwrap_err();
     assert!(

@@ -75,7 +75,6 @@ fn boolean_argument_and_result_contracts_are_rechecked_in_ir() {
         "function f() as Toybox.Lang.Number { return true.toNumber(); }",
         "function f() as Toybox.Lang.Number { return true.equals(false) + 1; }",
         "function f() as Toybox.Lang.Number { return true.toString(); }",
-        "function f() as Toybox.Lang.Number { if (true.compareTo(false)) { return 1; } return 0; }",
     ] {
         assert!(checking::compile_function(source).is_err(), "{source}");
     }

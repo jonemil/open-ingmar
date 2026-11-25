@@ -34,10 +34,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### Operators, calls, and control flow
 
-- [ ] Implement non-Boolean conditions for `if`, `while`, `for`, `do`, and `?:`;
-  probe truth values for Null, zero/nonzero numbers, and reference values.
-- [ ] Implement operand-returning `&&`/`and` and `||`/`or` for non-Boolean values,
-  with short-circuit evaluation and the resulting union contracts.
 - [ ] Probe unsupported operator spellings/forms (`>>>`, logical/unsigned-shift
   compounds, and assignment expressions); implement SDK-accepted cases and
   document explicit rejection for the others.

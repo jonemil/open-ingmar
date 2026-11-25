@@ -66,8 +66,6 @@ fn number_bang_preserves_number_contract_and_uses_the_existing_inversion_opcode(
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     for source in [
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return !n; }",
-        "function f() as Toybox.Lang.Number { if (!1) { return 1; } return 0; }",
-        "function f() as Toybox.Lang.Number { return !1 ? 1 : 2; }",
         "function f() as Toybox.Lang.Number { return !'a'; }",
         "function f() as Toybox.Lang.Number { return !null; }",
     ] {

@@ -3,6 +3,8 @@
 [app.mc](app.mc) and [flags.mc](flags.mc) exercise Boolean results from `&&` and
 `||` in initialization, assignment, returns, calls, comparisons, and native
 receivers. Effectful helpers show evaluation order across joins.
+The final cases cover native truth tests, skipped dynamic operands, and the
+integer operation used when both logical operands execute.
 API context: 1.0.0; runtime validation: SDK 9.2.0 / fr265.
 
 From the repository root:
@@ -20,39 +22,12 @@ cargo run -p ciq-asm -- sign scratch/compiler-logical-values/unsigned.prg \
 sh scripts/run-simulator-container.sh --prg scratch/compiler-logical-values/generated.prg
 ```
 
-Expected output, with no `bad-*` lines:
+See [expected.txt](expected.txt) for the console output. Each `bad-*` marker
+belongs to a skipped operand.
 
-```text
-false
-true
-false
-true
-true
-true
-left
-right
-xtrue
-receiver
-native-argument
-false
-arg-first
-arg-middle
-arg-right
-arg-last
-xtrue7
-stmt-first
-stmt-second
-3false
-false
-true
-loop
-loop
-3
-```
-
-Values crossing a branch use temporary locals. Their slots count toward the
-ordinary frame limit. A stored Boolean result does not carry a null proof for
-its original operands. See the [source contract][source] and [evidence][evidence].
+A value-producing logical branch retains its tested value on the stack.
+An operand that needs extra blocks uses temporary locals that count toward the
+frame limit. See the [source contract][source] and [evidence][evidence].
 
 [source]: ../../docs/specs/frontend/README.md#short-circuit-expressions
 [evidence]: ../../docs/investigations/compiler-logical-values.md

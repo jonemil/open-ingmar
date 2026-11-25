@@ -365,6 +365,12 @@ pub(crate) fn reads(
                 condition,
                 on_true,
                 on_false,
+            }
+            | Operation::TruthBranch {
+                condition,
+                on_true,
+                on_false,
+                ..
             } => {
                 if let Some(test) = conditions.get(condition) {
                     branches.insert(structure.blocks[at], (*on_true, *on_false, test.clone()));

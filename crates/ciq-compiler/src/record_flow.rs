@@ -397,12 +397,10 @@ impl State {
                 }
             }
             Operation::Block { block } => self.block = Some(*block),
-            Operation::JumpValue {
-                target: block,
-                value,
-            } => {
-                let roots = refs(value);
-                self.edges.insert(*block, roots);
+            Operation::JumpValue { .. } | Operation::TruthBranch { .. } => {
+                for (target, value) in op.edge_values() {
+                    self.edges.entry(target).or_default().extend(refs(&value));
+                }
             }
             Operation::BlockParameter { result: r, .. } => {
                 result = Some(*r);

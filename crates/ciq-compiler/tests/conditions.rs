@@ -34,7 +34,20 @@ fn execute(function: &Function, argument: i32) -> i32 {
             Opcode::Ipush1 => stack.push(ins.operands()[0] as i8 as i32),
             Opcode::Lgetv => stack.push(locals[ins.operands()[0] as usize]),
             Opcode::Lputv => locals[ins.operands()[0] as usize] = stack.pop().unwrap(),
-            Opcode::Addv | Opcode::Subv | Opcode::Eq | Opcode::Lt | Opcode::Gt => {
+            Opcode::Dup => {
+                let depth = ins.operands()[0] as usize;
+                stack.push(stack[stack.len() - 1 - depth]);
+            }
+            Opcode::Popv => {
+                stack.pop().unwrap();
+            }
+            Opcode::Addv
+            | Opcode::Subv
+            | Opcode::Eq
+            | Opcode::Lt
+            | Opcode::Gt
+            | Opcode::Andv
+            | Opcode::Orv => {
                 let right = stack.pop().unwrap();
                 let left = stack.pop().unwrap();
                 stack.push(match ins.opcode() {
@@ -42,18 +55,23 @@ fn execute(function: &Function, argument: i32) -> i32 {
                     Opcode::Subv => left - right,
                     Opcode::Eq => i32::from(left == right),
                     Opcode::Lt => i32::from(left < right),
+                    Opcode::Andv => left & right,
+                    Opcode::Orv => left | right,
                     _ => i32::from(left > right),
                 });
             }
-            Opcode::Bf => {
+            Opcode::Bf | Opcode::Bt => {
                 let condition = stack.pop().unwrap();
-                assert!(stack.is_empty(), "branch carries expression values");
-                if condition == 0 {
+                assert!(
+                    stack.len() <= 1,
+                    "branch carries too many expression values"
+                );
+                if (condition != 0) == (ins.opcode() == Opcode::Bt) {
                     pc = located.relative_target().unwrap() as usize;
                 }
             }
             Opcode::Goto => {
-                assert!(stack.is_empty(), "jump carries expression values");
+                assert!(stack.len() <= 1, "jump carries too many expression values");
                 pc = located.relative_target().unwrap() as usize;
             }
             Opcode::Return => {
@@ -65,6 +83,54 @@ fn execute(function: &Function, argument: i32) -> i32 {
         }
     }
     panic!("bounded program did not return")
+}
+
+#[test]
+fn integer_conditions_drive_all_control_forms() {
+    let f = compile_function("function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var count = 0; if (n) { count = count + 1; } while (n) { count = count + 2; n = n - 1; } for (var i = 2; i; i = i - 1) { count = count + 3; } do { count = count + 4; } while (0); return count ? count : 100; }").unwrap();
+    assert_eq!(execute(&f, 0), 10);
+    assert_eq!(execute(&f, 2), 15);
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
+    let inverted = compile_function(
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { return !n ? 1 : 0; }",
+    )
+    .unwrap();
+    assert!(inverted.to_ir_text().contains(".not "));
+}
+
+#[test]
+fn unchecked_logical_values_combine_integers_but_conditions_test_each_operand() {
+    use ciq_compiler::{CompileOptions, TypeCheckLevel, compile_function_with_options};
+    let build = |source| {
+        compile_function_with_options(
+            source,
+            CompileOptions {
+                type_check: TypeCheckLevel::Off,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .artifact
+    };
+    let value =
+        build("function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n && 5; }");
+    let branch = build(
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { if (n && 5) { return 1; } return 0; }",
+    );
+    for (n, combined, tested) in [(0, 0, 0), (2, 0, 1), (3, 1, 1)] {
+        assert_eq!(execute(&value, n), combined);
+        assert_eq!(execute(&branch, n), tested);
+    }
+    let widths = build(
+        "function f(n as Toybox.Lang.Number, m as Toybox.Lang.Long) as Toybox.Lang.Number or Toybox.Lang.Long { return n and m; }",
+    );
+    let text = widths.to_ir_text();
+    assert!(
+        text.lines()
+            .any(|line| line.starts_with(".block-value ") && line.contains(" integer-union")),
+        "{text}"
+    );
+    assert_eq!(widths, parse_function_ir(&text).unwrap());
 }
 
 #[test]
@@ -105,7 +171,6 @@ fn conditions_choose_one_arm_with_common_locals_and_preserve_all_pipeline_stages
 #[test]
 fn unsupported_conditions_and_boolean_uses_report_source_diagnostics() {
     for source in [
-        "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x) { return 1; } else { return 2; } }",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) return 1; else return 2; }",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { return 1; } else { return 2; } return 3; }",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (\"x\" > x) { return 1; } else { return 2; } }",
@@ -134,7 +199,7 @@ fn boolean_literals_locals_and_assignments_control_branches_and_loops() {
     }
     assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     for source in [
-        "function f() as Toybox.Lang.Number { var flag = true; flag = 1; if(flag){return 1;}return 0; }",
+        "function f() as Toybox.Lang.Number { var flag as Toybox.Lang.Boolean = true; flag = 1; if(flag){return 1;}return 0; }",
         "function f() as Toybox.Lang.Number { var n = 1; n = false; return n+1; }",
         "function f() as Toybox.Lang.Number { return true + 1; }",
         "function f() as Toybox.Lang.Number { return false; }",
@@ -640,7 +705,6 @@ fn cyclic_ir_reachability_and_initialization_do_not_invent_first_iteration_value
 #[test]
 fn while_scopes_syntax_and_combined_nesting_limits_are_enforced() {
     for source in [
-        "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { while (x) {} return 1; }",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { while (x > 0) x = 1; return 1; }",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { while (x > 0) { var n = 1; } return n; }",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { while (x > 0) { var n = 1; } n = 2; return 1; }",
@@ -1173,7 +1237,6 @@ fn loop_header_scope_and_unexecuted_clauses_still_receive_diagnostics() {
         "function f() as Toybox.Lang.Number {for(var i=0;3>i;missing++){break;}return 0;}",
         "function f() as Toybox.Lang.Number {for(var i=0;3>i;i=missing){break;}return 0;}",
         "function f() as Toybox.Lang.Number {do{break;}while(missing);return 0;}",
-        "function f() as Toybox.Lang.Number {do{break;}while(1);return 0;}",
         "function f() as Toybox.Lang.Number {do{var n=0;}while(n==0);return 0;}",
         "function f() as Toybox.Lang.Number {for(var i=0;3>i;var j=0){}return 0;}",
         "function f() as Toybox.Lang.Number {do{}while(false)return 0;}",

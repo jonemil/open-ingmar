@@ -1078,15 +1078,17 @@ runs the body once, returning `2`.
 **Branch if true.** Opcode `0x28`; length **3 bytes**. Operand: the same signed
 relative displacement as `goto`. Source-derived effect consumes one condition
 value. Replacing `bf` at CODE+`0xb5` with `bt`, retaining `0006`, swaps the
-observed return values for `choose(0)` and `choose(1)`. General truth conversion
-for non-Boolean values remains unverified.
+observed return values for `choose(0)` and `choose(1)`. The SDK's OR branch
+skips its right operand for Number one and evaluates it for an Array, even
+though the Array passes an ordinary `bf`-based condition.
 
 ### bf
 
 **Branch if false.** Opcode `0x29`; length **3 bytes**. Operand: signed relative
 displacement as `goto`. Source-derived effect consumes one condition value.
 Observed `29 00 06` at CODE+`0xb5` jumps to `0xbe` when `value == 0` is false;
-otherwise execution falls through. General truth conversion is unverified.
+otherwise execution falls through. See the
+[ordinary truth-value profile](../frontend/README.md#truth-values).
 
 ### eq
 

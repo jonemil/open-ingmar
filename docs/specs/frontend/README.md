@@ -109,10 +109,9 @@ to the supported profile, including its unchecked explicit assertions.
 
 Off permits disjoint contracts at returns, declared storage writes, known user
 and native call arguments, numeric/comparison operators, Array/Dictionary index
-keys and writes, disjoint receivers, printing, and Boolean conditions. IR retains
-ordinary `.cast`
-assertions to Any at unchecked uses, or to Boolean for an otherwise non-Boolean
-condition. These assertions emit no conversion, guard, or extra evaluation.
+keys and writes, disjoint receivers, and printing. IR retains ordinary `.cast`
+assertions to Any at unchecked uses, including an unsupported logical
+combination. These assertions emit no conversion, guard, or extra evaluation.
 Actual runtime values must support the executed operation; annotations do not
 make them suitable operands or change their class.
 
@@ -2806,9 +2805,9 @@ evidence](../../investigations/compiler-number-negation.md).
 Unary `!` inverts a Boolean or complements the 32/64 bits of Number/Long,
 preserving its operand type and evaluating it once. Thus `!7` is Number `-8`,
 not Boolean; `!!7` is Number `7`. Value-producing inversion lowers directly to
-`invv`. Boolean condition negation reverses the true/false destinations. Other
-types are rejected without truth-value conversion; numeric results cannot be
-used as Boolean conditions. Nullable inputs follow the partial-union policy. Postfix
+`invv`. Boolean predicate negation can reverse the true/false destinations.
+A numeric condition tests the complemented value. Other operand types are
+rejected without conversion. Nullable inputs follow the partial-union policy. Postfix
 calls bind first: `!value.equals(1)` inverts the method result, while
 `(!value).equals(1)` calls the method on the inverted value. See the
 [Boolean evidence](../../investigations/compiler-boolean-negation.md) and
@@ -2953,19 +2952,22 @@ evidence](../../investigations/compiler-object-tests.md#lexical-casts).
 
 ### Short-circuit expressions
 
-Boolean `&&`/`and` and `||`/`or` support conditions and value-producing
-expressions, including grouping and negation. Word spellings require complete
+`&&`/`and` and `||`/`or` support conditions and value-producing expressions,
+including grouping and negation. Word spellings require complete
 identifier tokens and have identical short-circuit behavior and precedence; type
 annotations still use `or` for unions. Comparison binds before `&&`, which binds
 before `||`; each binary level is left associative. Evaluate the left operand
 once. `&&` evaluates the right only when the left is true; `||` evaluates it
-only when the left is false. Every operand must be Boolean, even when a constant
-left operand would skip it at runtime. No truth-value conversion or bitwise
-behavior is performed by logical operators.
+only when the left is false. Checked source accepts Boolean and dynamic
+operands. Typed non-Boolean operands use `--type-check off`, matching SDK
+checking disabled with `-l 0`. Both operands are checked even when the left
+operand skips the right at runtime.
 
-The builder emits explicit branches and intermediate blocks, with no eager
-binary operation or cross-block expression values. Condition negation swaps
-destinations. Nullable facts follow the selected edges; joins retain only facts
+In condition position, the builder branches on each evaluated operand. The
+left operand of `&&` uses `bf`; the left operand of `||` uses `bt`. These VM
+tests can differ for non-Boolean values. An Array passes an ordinary `if` test
+but continues to the right operand of `||`. Nullable facts follow the selected
+edges; joins retain only facts
 established on every incoming path. For example:
 
 ```monkeyc
@@ -2978,15 +2980,14 @@ The right operand and true arm of the first condition know `value` is non-null.
 The false path of the second condition knows the same. In contrast, `!(value ==
 null) || flag` does not prove non-null on its true path.
 
-Logical results are Boolean and may initialize/assign locals, feed calls,
-returns, printing, comparisons, concatenation, and native receiver calls under
-those consumers' normal type contracts. Value results initialize a temporary
-Boolean local to false, assign true on the selected outcome, then read it at the
-join. Earlier operands and receivers are evaluated and stored before later
-operands branch; fresh temporary reads feed the final operation in source order.
-This applies to expression and statement-call arguments alike. Temporaries have
-distinct local identities and count toward the existing combined frame-slot and
-operation limits. Slots are not reused.
+In value position, a short-circuit path returns the left operand unchanged.
+When the right operand runs, the runtime combines both operands with `andv` or
+`orv`. Boolean pairs give the ordinary Boolean result and integer pairs combine
+their bits with Number/Long promotion. For example, unchecked `2 && 5` produces
+Number zero in value position, while `if (2 && 5)` takes its true arm. An
+unsupported runtime pair can fail during combination. The result contract joins
+the retained left type with the combination's type and does not convert values.
+Earlier operands and receivers retain evaluation order through these branches.
 
 Storing a logical result carries no null-proof relation to the checked source
 storage. Guarded right operands may use non-null reads, but a later branch on
@@ -2998,14 +2999,14 @@ apply to parsing and generated blocks. See the
 ### Conditional expressions
 
 `condition ? whenTrue : whenFalse` binds below logical OR and associates to the
-right. The condition must be Boolean. Evaluate it once, then evaluate only the
+right. Test the [truth value](#truth-values) once, then evaluate only the
 selected arm. Both arms must type-check even with a constant condition. Preserve
 operand/argument order when an enclosing expression has earlier effects.
 
 Native arms use the [union rules](#native-unions), retaining each selected
 value/reference without copying or conversion. Different invariant container
 contracts can remain separate union alternatives; neither content type is widened.
-Void arms and non-Boolean truthiness remain unsupported. Expected container context from a declaration,
+Each arm must produce a value. Expected container context from a declaration,
 assignment, call, or
 return reaches direct literals and supported sized Array allocations in both
 arms; no element contract is inferred solely from a sibling arm.
@@ -3104,13 +3105,19 @@ Dictionary/null checks follow the
 [nullable contracts](#nullable-results).
 Arithmetic has higher precedence, so `value + 1 > 2` compares the sum. At most
 one comparison is accepted per expression level; parentheses retain their
-grouping behavior. The condition must produce a Boolean: a literal, typed
-parameter or local read, supported call, or comparison. Boolean locals,
-assignments, and print arguments are accepted. Annotated Boolean
-parameters/results and user-call arguments use these same rules. Boolean
-arithmetic, integer truthiness, mixed Boolean/Number equality and Boolean/String
-ordering are unsupported. Short-circuit operators follow the [short-circuit
+grouping behavior. Conditions use the same truth test for literals, reads,
+calls, and comparisons. Short-circuit operators follow the [short-circuit
 rules](#short-circuit-expressions).
+
+### Truth values
+
+`if`, `while`, `for`, `do/while`, and `?:` test the runtime value with `bf`.
+Null, Boolean false, and zero Number or Long are false. Boolean true and
+nonzero Number or Long are true. The tested Float, Double, and Char values are
+true even at zero. References are true, including empty String, Array, and
+Dictionary values. The operand's declared contract is preserved. Short-circuit
+OR uses `bt` rather than the ordinary `bf` test.
+See the [truth-value experiment](../../investigations/compiler-logical-values.md#runtime-truth-values-and-operand-combination).
 
 [VM lowering](../lowering/README.md#control-flow).
 
