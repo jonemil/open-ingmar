@@ -119,12 +119,37 @@ fn assignments_reuse_scalar_contracts_null_proofs_and_target_scope() {
         "function f() as Toybox.Lang.Number { var a = [1]; a[0] += true; return 0; }",
         "function f() as Toybox.Lang.Number { var a = [1]; a += [2]; return 0; }",
         "function f() as Toybox.Lang.Number { var n = 1; n + = 2; return n; }",
-        "function f() as Toybox.Lang.Number { var n = 1; n &&= true; return n; }",
-        "function f() as Toybox.Lang.Number { var n = 1; return n += 2; }",
-        "function f() as Toybox.Lang.Number { var n = 1; n += (n = 2); return n; }",
-        "function f() as Toybox.Lang.Number { var n = 1; n >>>= 2; return n; }",
     ] {
         assert!(checking::compile_function(source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn sdk_rejected_compound_spellings_are_unavailable() {
+    for operator in ["&&=", "||=", "and=", "or="] {
+        let source = format!("function f(a, b) {{ a {operator} b; return a; }}");
+        assert!(checking::compile_function(&source).is_err(), "{source}");
+    }
+    assert!(checking::compile_function("function f(a) { a >>>= 2; return a; }").is_err());
+}
+
+#[test]
+fn sdk_rejected_assignments_in_value_contexts_are_unavailable() {
+    for body in [
+        "return a = 1;",
+        "return a += 1;",
+        "var b = (a = 1); return b;",
+        "if (a = 1) { return a; } return 0;",
+        "System.println(a = 1); return a;",
+        "return [1][a = 0];",
+        "a = b = 1; return a;",
+        "a += (a = 2); return a;",
+        "return 1 + (a = 2);",
+        "return true ? (a = 1) : 0;",
+        "for (a = 0; a = 1; a += 1) { return a; } return 0;",
+    ] {
+        let source = format!("function f(a, b) {{ {body} }}");
+        assert!(checking::compile_function(&source).is_err(), "{source}");
     }
 }
 

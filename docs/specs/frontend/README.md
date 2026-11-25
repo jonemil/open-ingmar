@@ -2732,8 +2732,8 @@ Number-only bitwise operators use non-null signed 32-bit bit patterns. Mixed
 Long operations follow the [Long contracts](#long-values). Floating, Char,
 Boolean, and String alone are rejected by bitwise operations. Partial unions
 follow the [shared operator rules](#native-unions). `>>` is an arithmetic right
-shift in the tested VM. Complement retains a unary IR operation and lowers to
-`invv`, evaluating its operand once.
+shift in the tested VM. The source grammar rejects `>>>`. Complement retains a
+unary IR operation and lowers to `invv`, evaluating its operand once.
 
 For Number-only shifts, counts are non-null Numbers. Mixed Long shifts follow
 the [Long contracts](#long-values). The compiler passes counts unchanged,
@@ -3170,9 +3170,11 @@ scoping and shadowing rules remain future work.
 `<identifier> = <expression>;` assigns an earlier declared, in-scope local.
 The local target must be a bare identifier. Unknown/forward names and arm locals
 used outside their scope are rejected. Parameters follow the
-[parameter storage contract](#parameters-and-positional-arguments). Assignment is a statement,
-not an expression. Local compound and increment/decrement statements are
-specified below. Class methods additionally support [explicit self field
+[parameter storage contract](#parameters-and-positional-arguments). Assignments
+are allowed as statements and as `for` initializer or update effects. The grammar
+rejects assignments within value expressions, including chained assignments
+and parenthesized assignments. Local compound and increment/decrement statements
+are specified below. Class methods additionally support [explicit self field
 assignment](#instance-fields).
 
 Assignments may change a local's inferred type, including its source-class
@@ -3225,9 +3227,9 @@ evidence](../../investigations/compiler-increments.md).
 A bare in-scope initialized local or parameter supports `+=`, `-=`, `*=`, `/=`, `%=`, `&=`,
 `|=`, `^=`, `<<=`, and `>>=` as statements. Operator characters must be
 contiguous. Grouped local targets and unknown or out-of-scope names
-are rejected. Field/indexed compound targets are specified below. Assignment
-expressions, logical compounds, and unsigned-right-shift compounds remain
-unsupported.
+are rejected. Field/indexed compound targets are specified below. The grammar
+rejects `>>>=`, `&&=`, `||=`, `and=`, and `or=`. See the
+[SDK syntax probes](../../investigations/compiler-operator-coverage.md#assignment-and-shift-syntax).
 
 `n op= rhs;` reads the existing storage once, evaluates `rhs` once, applies the
 corresponding supported binary operator, then writes the result to the existing

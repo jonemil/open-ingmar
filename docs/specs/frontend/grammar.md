@@ -195,9 +195,9 @@ after a standalone scoped block does not permit semicolons after control-flow
 body blocks such as an `if` arm or `while` body.
 A `for` initializer permits one declaration list sharing a `var`, or an
 assignment/update list; its update permits only assignment/update lists.
-Standalone calls and trailing commas in either list are rejected. Calls inside
-initializer or assignment expressions remain supported. Present
-loop conditions must be Boolean. [Statement
+Standalone calls and trailing commas in either list are rejected. Calls are
+allowed in a local initializer or on the right of an assignment. Loop
+conditions use runtime truth tests. [Statement
 contracts](README.md#statements-and-control-flow) define scope, reachability,
 loop targets, and evaluation order.
 

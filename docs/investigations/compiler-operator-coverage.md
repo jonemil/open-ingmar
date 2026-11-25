@@ -58,4 +58,40 @@ and a fresh output directory. Run its simulation phase in the SDK environment.
 The minimal probe uses the same wrapper with the expressions in the table;
 separate Boolean-returning calls print their labels to expose short-circuiting.
 
+## Assignment and shift syntax
+
+**Officially documented:** the [Monkey C reference][reference] lists `<<`,
+`>>`, and their compound forms. The [control-flow guide][control-flow] excludes
+assignment from `if` conditions. Reviewed 2026-11-25.
+
+**Experimentally observed:** SDK 9.2.0 for `fr265` with `-O 0` rejected the
+following forms with parser diagnostics and exit status 100. `>>>=`, `&&=`,
+`||=`, `and=`, and `or=` were tested in assignment statements, where `>>=` and
+ordinary compound assignments are supported.
+
+| Position | Rejected form |
+|---|---|
+| Shift expression | `n >>> 1` |
+| Compound statement | `n >>>= 1`, `n &&= r`, `n ||= r`, `n and= r`, `n or= r` |
+| Return or local initializer | `return n = 4;`, `var a = n = 5;` |
+| Predicate | `if (n = 1) { ... }`, `for (i = 0; i = 1; i += 1) { ... }` |
+| Call argument | `show(n = 3)`, `show(a[i] = 5)` |
+| Index expression | `a[i = 0]` |
+| Chained write | `a = b = 5 + 2 * 3;` |
+| Conditional arm | `true ? (a = 1) : (a = 2)` |
+
+The `>>>` probe also failed with a signed Number parameter. Changing only
+type checking to Off (`-l 0`) reproduced the parser failures for `>>>`, `&&=`,
+return assignment, and assignment within a conditional arm.
+
+For reproduction, put each form in its own SDK console scaffold and build with
+`sh scripts/build-example.sh <probe-directory> fr265`. Declare `n`, `a`, `b`,
+`i`, and `r` as needed, initialize `a` as `[0]` for the indexed cases, and use
+a one-argument printing function for `show`. As positive controls, run
+`for (i = 0; i < 2; i = i + 1) { System.println(i); }` and the equivalent
+update `i += 1`. Both loops print `0` and `1`, then printing `i` after each loop
+yields `2`. The compound statements `a += b * c;` and `a += (b + c) * 2;`
+produce `7` and `17` in sequence with `a = 1`, `b = 2`, and `c = 3` initially.
+
 [reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
+[control-flow]: https://developer.garmin.com/connect-iq/monkey-c/functions/

@@ -34,9 +34,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### Operators, calls, and control flow
 
-- [ ] Probe unsupported operator spellings/forms (`>>>`, logical/unsigned-shift
-  compounds, and assignment expressions); implement SDK-accepted cases and
-  document explicit rejection for the others.
 - [ ] Support reference `==`/`!=` and String concatenation with object/container
   operands where accepted by the SDK; preserve runtime equality/conversion.
 - [ ] Support runtime source-subclass targets and union refinement for
