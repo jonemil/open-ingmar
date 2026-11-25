@@ -103,11 +103,76 @@ fn allocation_defaults_and_argument_effects_cannot_read_unready_ancestors() {
         "class Leaf extends Root{var copy as Toybox.Lang.Number=n;function initialize(){Root.initialize(1);}}",
         "class Leaf extends Root{function initialize(){Root.initialize(n);}}",
         "class Leaf extends Root{var copy=self;function initialize(){Root.initialize(1);}}",
-        "class Leaf extends Root{function initialize(){Root.initialize(true?1:2);}}",
     ] {
         assert!(
             compile_sources(&[root, leaf, "function make(){return new Leaf();}"]).is_err(),
             "{leaf}"
+        );
+    }
+    let conditional = "class Leaf extends Root{function initialize(flag as Toybox.Lang.Boolean){Root.initialize(flag?1:2);}}";
+    common::pipeline(
+        compile_sources(&[root, conditional, "function make(){return new Leaf(true);}"]).unwrap(),
+    );
+}
+
+#[test]
+fn field_readiness_is_required_on_every_reachable_path() {
+    let source = r#"
+        class C {
+            var value as Toybox.Lang.Number;
+            function read() as Toybox.Lang.Number { return value; }
+            function initialize(flag as Toybox.Lang.Boolean) {
+                if (flag) { value = 1; } else { value = 2; }
+                var ready = self;
+                Toybox.System.println(ready.read());
+            }
+        }
+        function make() { return new C(true); }
+    "#;
+    let unit = compile_sources(&[source]).unwrap();
+    let saved = unit.to_ir_text();
+    let missing_write = saved.replacen(".assign-self value ", ".discard ", 1);
+    assert_ne!(saved, missing_write);
+    let error = parse_unit_ir(&missing_write).unwrap_err();
+    assert!(
+        error.to_string().contains("before exposing self"),
+        "{error}"
+    );
+    for replacement in [
+        "",
+        "return;",
+        "Toybox.System.println(value); value = 2;",
+        "Toybox.System.exit(); value = 2;",
+    ] {
+        let bad = source.replace("value = 2;", replacement);
+        assert!(compile_sources(&[&bad]).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn allocation_hook_checks_the_child_body_and_its_pending_fields() {
+    let source = r#"
+        function makeNumber() as Toybox.Lang.Number { return 7; }
+        class Parent {
+            var snapshot as Toybox.Lang.Number = read();
+            function read() as Toybox.Lang.Number { return 10; }
+        }
+        class Child extends Parent {
+            var child as Toybox.Lang.Number = 7;
+            function read() as Toybox.Lang.Number { return child; }
+        }
+        function make() { return new Child(); }
+    "#;
+    common::pipeline(compile_sources(&[source]).unwrap());
+    for bad in [
+        source.replace("= 7;", "; function initialize() { child = 7; }"),
+        source.replace("= 7;", "= makeNumber();"),
+        source.replace("return child;", "var escaped = self; return child;"),
+    ] {
+        let error = compile_sources(&[&bad]).unwrap_err();
+        assert!(
+            error.to_string().contains("allocation hook Parent"),
+            "{error}"
         );
     }
 }

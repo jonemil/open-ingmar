@@ -84,7 +84,7 @@ fn unsupported_parent_initialization_and_receiver_escape_stay_explicit() {
     for parent in [
         "var value as Toybox.Lang.Number;function initialize(){value=1;}",
         "var value=self;",
-        "var value=f();function f() as Toybox.Lang.Number{return 1;}",
+        "var value as Toybox.Lang.Number=f();function f() as Toybox.Lang.Number{return value;}",
     ] {
         let source = format!(
             "class Root{{{parent}}}class Leaf extends Root{{}}function f(){{return new Leaf();}}"

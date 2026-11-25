@@ -76,6 +76,7 @@ fn declarations_share_inference_context_and_initialization_readiness() {
         "class C{var A as Toybox.Lang.Comparable or Null=1;var B as Toybox.Lang.Object=\"value\";}",
         "class C{var A as Toybox.Lang.Number or Toybox.Lang.String=1;var B as Toybox.Lang.Number or Toybox.Lang.String or Null=1;}",
         "class C{var A as Toybox.Lang.Array<Toybox.Lang.String> = [];var B as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Number> = {};}",
+        "class C{var A=self.f();function f() as Toybox.Lang.Number{return 1;}}",
     ] {
         common::pipeline(compile_sources(&[source]).unwrap_or_else(|e| panic!("{source}: {e}")));
     }
@@ -86,7 +87,7 @@ fn declarations_share_inference_context_and_initialization_readiness() {
         "class C{var A=self.B;var B=self.A;}",
         "class C{var A=self.B;var B=1+2;}",
         "class C{var A as Toybox.Lang.Number;var B=self.A;function initialize(){self.A=1;}}",
-        "class C{var A=self.f();function f() as Toybox.Lang.Number{return 1;}}",
+        "class C{var A as Toybox.Lang.Number=self.f();function f() as Toybox.Lang.Number{return A;}}",
         "function stop() as Toybox.Lang.Number{Toybox.System.exit();return 1;}class C{var A=stop();}",
         "class C{var A=1;var A=2;}",
         "class C{var A=\"x\";const A=\"y\";}",

@@ -72,7 +72,7 @@ fn reference_initialization_and_assignment_are_checked_before_exposure() {
         ),
         CONTROLLER.replace(
             "self.target = view;",
-            "if (true) { self.target = view; } else { self.target = view; }",
+            "if (view != null) { self.target = view; }",
         ),
         CONTROLLER.replace("self.target = view;", "self.target = null;"),
         CONTROLLER.replace("self.target = view;", "System.exit(); self.target = view;"),

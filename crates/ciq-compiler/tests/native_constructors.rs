@@ -184,7 +184,7 @@ fn native_calls_do_not_bypass_required_fields_or_initializer_scope() {
                 "class C extends Toybox.WatchUi.{base}{{var n as Toybox.Lang.Number;}}function make(){{return new C();}}"
             ),
             format!(
-                "class C extends Toybox.WatchUi.{base}{{var n as Toybox.Lang.Number;function initialize(){{if(true){{{base}.initialize();}}n=1;}}}}"
+                "class C extends Toybox.WatchUi.{base}{{var n as Toybox.Lang.Number;function initialize(flag as Toybox.Lang.Boolean){{if(flag){{{base}.initialize();n=1;}}}}}}"
             ),
             format!(
                 "class C extends Toybox.WatchUi.{base}{{function other(){{{base}.initialize();}}}}"

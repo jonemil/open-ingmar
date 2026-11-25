@@ -4,11 +4,10 @@
 
 Priority order:
 
-1. [Source inheritance and construction](#1-source-inheritance-and-construction).
-2. [Operators, calls, and control flow](#2-operators-calls-and-control-flow).
-3. [Toybox.Lang](#toyboxlang-worklist), with classes ordered within the module.
-4. [Exception handling](#exceptions).
-5. [Lexical compatibility and annotations](#lexical-compatibility-and-annotations).
+1. [Operators, calls, and control flow](#operators-calls-and-control-flow).
+2. [Toybox.Lang](#toyboxlang-worklist), with classes ordered within the module.
+3. [Exception handling](#exceptions).
+4. [Lexical compatibility and annotations](#lexical-compatibility-and-annotations).
 
 Items within each scope are also prioritized. Implement a named prerequisite
 before its consumer, and batch related items when they share implementation and
@@ -33,14 +32,7 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ## Core language worklist
 
-### 1. Source inheritance and construction
-
-- [ ] Permit receiver exposure, branches, and early exits in initializers when
-  required-field initialization is proven on every relevant path, replacing the
-  current mandatory straight-line initialization prefix. Extend that proof to
-  ancestor allocation hooks exposing a receiver before descendant fields are ready.
-
-### 2. Operators, calls, and control flow
+### Operators, calls, and control flow
 
 - [ ] Implement non-Boolean conditions for `if`, `while`, `for`, `do`, and `?:`;
   probe truth values for Null, zero/nonzero numbers, and reference values.

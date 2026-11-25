@@ -84,7 +84,7 @@ fn method_fields_check_initialization_and_assignment_contracts() {
         "class C {var callback as Toybox.Lang.Method; function initialize(m as Toybox.Lang.Method){self.callback=m;} function clear() as Void {self.callback=null;}}",
         "class C {var callback as Toybox.Lang.Method or Null; function set() as Void {self.callback=1;}}",
         "class C {var callback as Toybox.Lang.Method; function initialize(m as Toybox.Lang.Method or Null){self.callback=m;}}",
-        "class C {var callback as Toybox.Lang.Method; function initialize(m as Toybox.Lang.Method,b as Toybox.Lang.Boolean){if(b){self.callback=m;}else{self.callback=m;}}}",
+        "class C {var callback as Toybox.Lang.Method; function initialize(m as Toybox.Lang.Method,b as Toybox.Lang.Boolean){if(b){self.callback=m;}}}",
     ] {
         assert!(
             checking::compile_sources(&[source]).is_err(),
@@ -99,6 +99,9 @@ fn method_fields_check_initialization_and_assignment_contracts() {
         let error = compile_sources(&[source]).unwrap_err();
         assert!(error.diagnostic.message.contains("shutdown"), "{error:?}");
     }
+    let branched = "class C {var callback as Toybox.Lang.Method;function initialize(m as Toybox.Lang.Method,b as Toybox.Lang.Boolean){if(b){self.callback=m;}else{self.callback=m;}m.invoke();}}";
+    let branched = compile_sources(&[branched]).unwrap();
+    assert_eq!(branched, parse_unit_ir(&branched.to_ir_text()).unwrap());
     let source = "class C {var callback as Toybox.Lang.Method;function initialize(m as Toybox.Lang.Method){self.callback=m;m.invoke();}}";
     let unit = compile_sources(&[source]).unwrap();
     let text = unit.to_ir_text();

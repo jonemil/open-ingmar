@@ -115,7 +115,9 @@ fn qualified_calls_preserve_pending_field_and_ancestor_escape_checks() {
             .contains("required fields")
     );
     let ancestor = "class Root{var first as Toybox.Lang.Number=1+1;var last as Toybox.Lang.Number=Root.read();function read() as Toybox.Lang.Number{return first;}}class Leaf extends Root{}function make(){return new Leaf();}";
-    assert!(compile_sources(&[ancestor]).is_err());
+    common::pipeline(compile_sources(&[ancestor]).unwrap());
+    let pending = ancestor.replace("return first;", "return last;");
+    assert!(compile_sources(&[&pending]).is_err());
     // A static call does not expose the instance, even before its fields are ready.
     let safe = source.replace(
         "function read() as Toybox.Lang.Number{return n;}",

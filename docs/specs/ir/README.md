@@ -2298,9 +2298,10 @@ same ancestry. Object-, View-, and BehaviorDelegate-rooted allocation proves
 required instance fields ready
 across the source chain, from defaults and ordinary constructor assignments.
 Ancestor ordinary initializers need not be empty or zero-argument: allocation
-never calls them implicitly. Ancestor allocation hooks must not expose the
-receiver before descendant state is initialized or read constructor-required
-fields. Ancestor static storage is allowed.
+never calls them implicitly. The allocation proof starts with metadata defaults
+ready and checks expression writes in root-to-leaf order. It inspects known
+same-receiver calls on the allocated class for early reads, escapes, and
+shutdown. Ancestor static storage is allowed.
 
 Unit validation follows fixed own/ancestor `.call-class-discard ... initialize`
 calls with one pending-field set for the actual object. Captures execute no
@@ -2310,9 +2311,10 @@ virtual calls, and possible shutdown are checked against the still-pending
 fields, including descendant state while inspecting a parent body. A declared
 initializer must establish its own fields; `.new-source` additionally requires
 all ancestor fields ready. Recursive calls cannot discharge pending requirements.
-This proof accepts a straight-line prefix; branches and jumps with pending
-fields remain rejected. It is derived from declarations and bodies after reload,
-not stored as trusted IR metadata. See the
+The proof joins pending sets by union at reachable block entries and follows
+backedges to a fixed point. Only reachable returning paths contribute state
+to the caller of a fixed initializer. Reload derives the proof from the same
+declarations and bodies. See the
 [frontend rules](../frontend/README.md#source-superclasses).
 
 Each class stores only its own fields and method bodies. Unit construction derives

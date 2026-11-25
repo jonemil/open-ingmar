@@ -56,6 +56,36 @@ class PreparedLeaf extends PreparedMiddle {
     function initialize() { M.Root.initialize(30); PreparedMiddle.initialize(); }
     function result() as Lang.Number { return combined; }
 }
+class BranchRoot {
+    var value as Lang.Number;
+    function initialize(first as Lang.Boolean) {
+        if (first) { value = 11; } else { value = 22; }
+        if (first) { return; }
+        value = value + 11;
+    }
+}
+class BranchChild extends BranchRoot {
+    var total as Lang.Number;
+    function initialize(first as Lang.Boolean) {
+        BranchRoot.initialize(first);
+        if (first) {
+            total = value + 1;
+            self.report();
+            return;
+        }
+        total = value + 2;
+        self.report();
+    }
+    function report() as Void { System.println(total); }
+}
+class SnapshotRoot {
+    var snapshot as Lang.Number = read();
+    function read() as Lang.Number { return 10; }
+}
+class SnapshotChild extends SnapshotRoot {
+    var child as Lang.Number = 7;
+    function read() as Lang.Number { return child; }
+}
 class MinimalConsoleApp extends Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state as Lang.Dictionary or Null) as Void {
@@ -68,6 +98,10 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(virtualLeaf.read());
         var prepared = new PreparedLeaf();
         System.println(prepared.result());
+        var first = new BranchChild(true);
+        var second = new BranchChild(false);
+        var snapshot = new SnapshotChild();
+        System.println(snapshot.snapshot);
         System.exit();
     }
 }

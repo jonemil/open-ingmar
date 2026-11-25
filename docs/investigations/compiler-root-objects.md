@@ -650,7 +650,8 @@ constructor-required ancestor-field restriction.
 **Observed, 2026-11-23:** SDK/simulator 9.2.0, `fr265`, minimum API 3.0.0,
 target API 5.2.0, `-O 0`. The
 [ancestor-constructor specimen](../../examples/compiler-ancestor-constructors/README.md)
-matches all 21 SDK/generated lines with structured CODE/DATA reconstruction.
+matches the SDK and generated console output with structured CODE/DATA
+reconstruction.
 Use the minimal-console scaffold and [console checker][check] with that source
 and its expected output.
 
@@ -675,6 +676,23 @@ The initial SDK source also accepted `using M as Types;` after the global marker
 function and module M, with the alias used by subsequent classes. Our parser
 requires file imports before declarations. Visibility in earlier declarations
 and the corresponding `import` ordering remain unverified.
+
+### Reachable paths and allocation-time dispatch
+
+**Observed, 2026-11-25:** SDK 9.2.0, `fr265`, minimum API 3.0.0, `-O 0`.
+The extended ancestor-constructor specimen adds assignments in both `if` arms
+and an explicit early return in both a parent and child `initialize`. In
+isolated negative variants, the SDK diagnoses a read before assignment and a
+return path that leaves a non-null Number field unset.
+
+An allocation-time `snapshot = read()` in the parent dispatches to the child's
+override. With a child literal default of 7, the snapshot is 7. Replacing the
+literal with a constructor-required Number field gives a Null snapshot in the
+SDK and leaves the final field value 7 after ordinary initialization. Replacing
+it with `makeNumber()` prints that expression's marker before the snapshot,
+yet the snapshot is still Null and the final field value is 7. The observation
+distinguishes expression evaluation from the installation of its field value.
+Open Ingmar rejects the latter two reads while their fields are pending.
 
 ## Native-rooted defaults and source-parent allocation
 

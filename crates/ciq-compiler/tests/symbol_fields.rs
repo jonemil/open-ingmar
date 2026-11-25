@@ -140,7 +140,7 @@ fn required_symbols_must_be_assigned_before_reads_calls_or_return() {
         "var s=self.value;self.value=:alpha;",
         "self.call();self.value=:alpha;",
         "var s=self;self.value=:alpha;",
-        "if(true){self.value=:alpha;}else{self.value=:beta;}",
+        "if(true){self.value=:alpha;}",
         "self.value=null;",
         "self.value=1;",
         "Toybox.System.exit();self.value=:alpha;",

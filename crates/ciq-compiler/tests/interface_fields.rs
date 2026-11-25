@@ -94,7 +94,7 @@ fn non_null_field_initialization_and_signature_proofs_are_required() {
         "var x=self.value; self.value=c;",
         "self.call(); self.value=c;",
         "var x=self; self.value=c;",
-        "if(true) { self.value=c; } else { self.value=c; }",
+        "if (c != null) { self.value=c; }",
         "self.value=null;",
         "System.exit(); self.value=c;",
         "var n=c.compareTo(1); self.value=c;",

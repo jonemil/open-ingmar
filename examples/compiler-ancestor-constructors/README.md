@@ -7,6 +7,10 @@ replaying allocation defaults, and virtual calls after descendant fields are
 ready. A final chain establishes root fields before invoking an intermediate
 initializer that reads them. See [expected.txt](expected.txt).
 
+BranchChild and its parent assign fields on both paths and return early on one
+path. SnapshotRoot calls a virtual method from its allocation hook. The child
+override reads the child's literal metadata default during that hook.
+
 ```sh
 mkdir -p scratch/compiler-ancestor-constructors
 cargo run -p ciq-compiler -- --unit --emit prg \

@@ -27,7 +27,7 @@ fn constant_writes_and_allocation_metadata_are_checked() {
         "class C{const A=B;const B=A;}",
         "class C{const X=missing;}",
         "class C{const X=self.Y; var Y as Toybox.Lang.Number; function initialize(){self.Y=1;}}",
-        "class C{const X=self.f();function f() as Toybox.Lang.Number{return 1;}}",
+        "class C{const X as Toybox.Lang.Number=self.f();function f() as Toybox.Lang.Number{return X;}}",
         "function stop() as Toybox.Lang.Number{Toybox.System.exit();return 1;} class C{const X=stop();}",
         "typedef T as interface {var X as Toybox.Lang.Number;}; class C{const X=1;} function set(x as T){x.X=2;} function f(){set(new C());}",
     ] {

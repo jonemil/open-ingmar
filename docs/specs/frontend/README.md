@@ -2051,10 +2051,12 @@ Allocation hooks run parent before child, applying each declaring class's own
 expression defaults once. Literal metadata defaults exist before these hooks;
 a parent expression can therefore overwrite a child's literal default, while
 a child expression runs after parent expressions. Inherited arrays/containers
-are allocated separately for each instance. An ancestor allocation hook cannot expose self or make virtual
-self calls while descendant initialization is unproven. Allocation defaults
-cannot read constructor-required fields, including inherited ones. Ancestor
-static storage is permitted under the inherited-static lookup rules above.
+are allocated separately for each instance. During an ancestor allocation hook,
+descendant fields with expression defaults and fields assigned by ordinary
+initializers remain pending. A call on `self` may use ready fields when the
+compiler can check the method selected on the allocated class. Each checked
+callee must preserve receiver readiness at reads, exposure, and shutdown.
+Ancestor static storage follows the inherited-static lookup rules above.
 The allocated class uses its own ordinary initializer, synthesized as empty
 when absent for constructible classes. A parent initializer runs only when
 explicitly called. Source AppBase construction remains outside this profile.
@@ -2071,12 +2073,12 @@ requires descendant fields ready too; assigning child fields before that call
 can establish this. Capturing a parent initializer does not itself execute its
 assignments. Recursive initialization cannot prove pending fields ready.
 
-The initialization prefix remains straight-line: branches and jumps before all
-required fields are ready are rejected. Declared initializers must establish
-their own required fields; constructing a class additionally proves the whole
-source chain. An unused empty child declaration is allowed, but cannot allocate
-with uninitialized inherited fields. Saved IR rechecks the same proof without
-serialized readiness claims. See the
+Branches and loops carry pending fields along each reachable path. At a join,
+a field is ready only if every incoming path has initialized it. Each reachable
+return from a declared initializer requires its own fields ready. Construction
+also requires all ancestor fields ready before it publishes the instance.
+An unused empty child declaration is allowed. Allocation checks its inherited
+field requirements. Saved IR derives the same proof from the bodies. See the
 [ancestor-constructor specimen](../../../examples/compiler-ancestor-constructors/README.md).
 
 Signature/access checks select the declaration from the receiver's static bound.
@@ -2210,9 +2212,10 @@ A declared class may supply `function initialize(...)`. It must return Void.
 Object-rooted classes have no native base call. The bounded AppBase profile
 requires exactly one first native base call and no initializer parameters.
 View/delegate initializers accept ordinary supported parameters and need no
-native base call. Matching native calls may be late, repeated, or conditional;
-required-field readiness and the straight-line initialization prefix still
-apply. Initialization cannot be selected as the generated onStart entry.
+native base call. Matching native calls may be late, repeated, or conditional.
+The [constructor readiness proof](#source-superclasses) applies to all
+reachable paths. Initialization cannot be selected as the generated onStart
+entry.
 
 Object-, View-, and BehaviorDelegate-rooted classes without an initializer gain
 an empty public zero-argument Void initializer. It does not inherit a source
@@ -2514,14 +2517,10 @@ contract before user `initialize()`. Comparison interfaces follow their
 Metadata creates a null slot (key bits zero, type `0x00`, value zero). Nullable
 source fields need no source assignment before use. Without a declaration
 initializer, a source initialize method is required to establish a non-null field
-contract. It must
-assign every required non-null reference field before exposing `self` as an
-Object, binding a self callback, making a self call, branching, jumping, or
-returning. A reference read before that field's assignment is rejected.
-Assignment must use the exact declared source class; native erasure, another
-class, and Null cannot satisfy it. Requiring this straight-line initialization
-prefix is our bounded checking policy, not Garmin's complete
-definite-initialization rules. Calls that may request System.exit, including
+contract. Every reachable path must assign required fields before exposing
+`self` as an Object, binding a self callback, making an ordinary self call, or
+returning. A read needs that field ready on all incoming paths. Assignment
+must establish the exact declared source class. Calls that may request System.exit, including
 transitive source calls and constructors and source comparator callbacks reached
 through Array sorting, are also rejected until all required fields are
 established. Erased Method invocation, interface calls, and sorting through
@@ -2562,10 +2561,10 @@ conflict, and 256-field limits. Exact source-instance receivers can also use
 [`receiver.field`](#source-instance-field-access).
 
 Metadata creates ordinary Null slots (type `0x00`, value zero). A non-null field
-requires a source initializer and follows the straight-line
-[reference-initialization requirements](#source-reference-fields). It cannot
-be read until assigned, and must be filled before self exposure, self calls,
-control flow, return, or calls that may request shutdown. Nullable fields start
+requires a source initializer and follows the
+[reference-initialization requirements](#source-reference-fields). Reads,
+receiver exposure, returns, and shutdown use the same readiness checks.
+Nullable fields start
 as Null and do not require assignment; an explicit literal `= null` is
 equivalent. A compatible [declaration initializer](#field-declaration-initializers)
 can instead establish the contract before `initialize()`.
@@ -2687,7 +2686,7 @@ Annotations accept canonical, imported, and aliased Symbol names. Literal Symbol
 defaults are permitted with either nullability. An omitted type retains Any
 with a Symbol metadata default. Nullable fields default to Null when no Symbol is supplied. Non-null
 fields without defaults must be assigned in source `initialize`, using the same
-straight-line prefix and exposure/callback restrictions as required reference
+path and exposure/callback rules as required reference
 fields. A literal default already satisfies initialization. Null requires an
 explicit nullable declaration. Other
 [declaration expressions](#field-declaration-initializers) must produce the

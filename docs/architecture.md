@@ -168,11 +168,11 @@ BehaviorDelegate-rooted chains; only a root invokes the native allocation hook.
 Constructible classes without ordinary initializers receive an explicit empty
 method before signature collection, keeping source and saved IR consistent.
 
-`unit/constructors.rs` checks straight-line constructor readiness across explicit
-parent calls, sharing the pending declarations of the allocated object. It
-reuses unit member selection and shutdown summaries; source and saved IR use the
-same proof. Allocation-hook validation also excludes reads of inherited fields
-that still require ordinary constructor assignment.
+`unit/constructors.rs` checks constructor readiness across reachable CFG paths
+and explicit parent calls, sharing the pending declarations of the allocated
+object. It reuses unit member selection and shutdown summaries. The allocation
+proof also checks known receiver calls with the allocated class's pending
+fields. Source and saved IR use the same proof.
 
 Function bodies retain a single ordinary/instance/static receiver category.
 Class declarations hold both kinds of member bodies; application generation

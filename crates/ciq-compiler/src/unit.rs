@@ -1803,27 +1803,9 @@ impl CompilationUnit {
             .iter()
             .filter(|c| self.is_subclass(&c.name, bound))
         {
-            let identity = &self.member_index.classes[&class.name];
-            let candidates = std::iter::once(&class.name)
-                .chain(&identity.ancestors)
-                .filter_map(|owner| self.method(owner, member).filter(|(d, _)| d.name == *owner))
-                .filter(|(owner, _)| {
-                    let access = self.member_visibility(&owner.name, member);
-                    access != crate::Visibility::Private
-                        && (access != crate::Visibility::Protected
-                            || receiver != MethodReceiver::Value
-                            || caller.is_some_and(|c| self.is_subclass(c, &owner.name)))
-                })
-                .collect::<Vec<_>>();
-            let selected = if receiver == MethodReceiver::StaticSelf {
-                candidates.iter().find(|(_, f)| f.is_static_method())
-            } else {
-                candidates
-                    .iter()
-                    .find(|(_, f)| !f.is_static_method())
-                    .or_else(|| candidates.first())
-            };
-            if let Some((declaration, method)) = selected {
+            if let Some((declaration, method)) =
+                self.ordinary_runtime_method(&class.name, member, caller, receiver)
+            {
                 targets.insert((declaration.name.clone(), method.name().to_owned()));
             }
         }
@@ -1831,6 +1813,37 @@ impl CompilationUnit {
             .into_iter()
             .filter_map(|(class, member)| self.method(&class, &member))
             .collect()
+    }
+
+    /// Resolve an ordinary selector on one concrete runtime class.
+    fn ordinary_runtime_method(
+        &self,
+        class: &str,
+        member: &str,
+        caller: Option<&str>,
+        receiver: MethodReceiver,
+    ) -> Option<(&ClassDeclaration, &Function)> {
+        let identity = &self.member_index.classes[class];
+        let mut candidates = std::iter::once(&identity.name)
+            .chain(&identity.ancestors)
+            .filter_map(|owner| self.method(owner, member).filter(|(d, _)| d.name == *owner))
+            .filter(|(owner, _)| {
+                let access = self.member_visibility(&owner.name, member);
+                access != crate::Visibility::Private
+                    && (access != crate::Visibility::Protected
+                        || receiver != MethodReceiver::Value
+                        || caller.is_some_and(|c| self.is_subclass(c, &owner.name)))
+            });
+        if receiver == MethodReceiver::StaticSelf {
+            return candidates.find(|(_, f)| f.is_static_method());
+        }
+        let first = candidates.next()?;
+        if !first.1.is_static_method() {
+            return Some(first);
+        }
+        candidates
+            .find(|(_, f)| f.is_instance_method())
+            .or(Some(first))
     }
     fn method_owner<'a>(&'a self, class: &'a str, member: &str) -> &'a str {
         self.method(class, member)
@@ -2947,9 +2960,7 @@ impl CompilationUnit {
                     .fields
                     .iter()
                     .filter(|field| {
-                        field.kind.requires_initialization()
-                            || (function.name() == STATIC_INITIALIZER
-                                && field.kind.allocation_write())
+                        field.kind.requires_initialization() || field.kind.allocation_write()
                     })
                     .map(|field| field.name.as_str())
                     .collect::<BTreeSet<_>>();
@@ -2966,14 +2977,15 @@ impl CompilationUnit {
                         .map_err(|error| fail(Some(index), error.operation, error.message))
                     })
                     .collect::<Result<BTreeMap<_, _>, _>>()?;
-                let constructor_required = constructors::Proof {
-                    unit: self,
-                    bodies: &bodies,
-                    exits: &exit_callers,
+                if function.name() == FIELD_INITIALIZER {
+                    constructors::Proof {
+                        unit: self,
+                        bodies: &bodies,
+                        exits: &exit_callers,
+                    }
+                    .check_declared_hook(&declaration.name, function)
+                    .map_err(|(operation, message)| fail(Some(index), Some(operation), message))?;
                 }
-                .required(&declaration.name);
-                let instance_unready =
-                    function.name() != STATIC_INITIALIZER && !constructor_required.is_empty();
                 for (operation, located) in function.operations().iter().enumerate() {
                     if function.name() == STATIC_INITIALIZER {
                         let mut required = BTreeSet::new();
@@ -3015,7 +3027,8 @@ impl CompilationUnit {
                         }
                     }
                     let incomplete = states.values().any(|states| states[operation].unwritten);
-                    if (incomplete || !unreadable.is_empty() || instance_unready)
+                    if function.name() == STATIC_INITIALIZER
+                        && (incomplete || !unreadable.is_empty())
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
                             || activation_callees(
@@ -3038,32 +3051,7 @@ impl CompilationUnit {
                                 .into(),
                         ));
                     }
-                    if function.name() != STATIC_INITIALIZER
-                        && (incomplete || !unreadable.is_empty() || instance_unready)
-                        && self.instance_class_call(owner, function, &located.operation)
-                    {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            "initialize required fields before qualified instance calls".into(),
-                        ));
-                    }
                     let message = match &located.operation {
-                        Operation::SelfFieldRead { field, .. }
-                            if instance_unready
-                                && self
-                                    .bound_instance_field(
-                                        &declaration.name,
-                                        field,
-                                        Some(&declaration.name),
-                                    )
-                                    .is_some_and(|(owner, f)| {
-                                        constructor_required
-                                            .contains(&(owner.name.clone(), f.name.clone()))
-                                    }) =>
-                        {
-                            Some("field read before required initialization")
-                        }
                         Operation::SelfFieldAssign { field, .. }
                             if !pending.contains(field.as_str()) =>
                         {
@@ -3072,22 +3060,13 @@ impl CompilationUnit {
                             )
                         }
                         Operation::SelfFieldRead { field, .. }
-                            if states
-                                .get(field.as_str())
-                                .is_some_and(|states| states[operation].unwritten)
-                                || unreadable.contains(field.as_str()) =>
+                            if function.name() == STATIC_INITIALIZER
+                                && (states
+                                    .get(field.as_str())
+                                    .is_some_and(|states| states[operation].unwritten)
+                                    || unreadable.contains(field.as_str())) =>
                         {
                             Some("field read before required initialization")
-                        }
-                        Operation::SelfValue { .. }
-                        | Operation::SelfCall { .. }
-                        | Operation::SelfCallStatement { .. }
-                            if function.name() != STATIC_INITIALIZER
-                                && (incomplete || !unreadable.is_empty() || instance_unready) =>
-                        {
-                            Some(
-                                "initialize required fields before exposing the initializer receiver",
-                            )
                         }
                         _ => None,
                     };
@@ -4081,34 +4060,6 @@ impl CompilationUnit {
                                     class.name
                                 ),
                             ));
-                        }
-                        for ancestor in &class.ancestors {
-                            let parent = self.classes.iter().find(|c| c.name == *ancestor).unwrap();
-                            if parent
-                                .methods
-                                .iter()
-                                .filter(|f| f.name() == FIELD_INITIALIZER)
-                                .any(|f| {
-                                    f.operations().iter().any(|op| {
-                                        matches!(
-                                            op.operation,
-                                            Operation::SelfValue { .. }
-                                                | Operation::SelfCall { .. }
-                                                | Operation::SelfCallStatement { .. }
-                                        ) || self.instance_class_call(
-                                            Owner::Class(&parent.name),
-                                            f,
-                                            &op.operation,
-                                        )
-                                    })
-                                })
-                            {
-                                return Err(fail(
-                                    Some(index),
-                                    Some(operation),
-                                    "source ancestors require non-escaping allocation hooks".into(),
-                                ));
-                            }
                         }
                         constructors::Proof {
                             unit: self,
